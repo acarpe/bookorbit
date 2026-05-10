@@ -643,13 +643,35 @@ export class BookRepository {
     return this.db.select({ id: books.id, libraryId: books.libraryId }).from(books).where(inArray(books.id, bookIds));
   }
 
-  async findRecommendationTitlesByBookIds(bookIds: number[]): Promise<{ id: number; title: string | null }[]> {
+  async findRecommendationTitlesByBookIds(bookIds: number[]): Promise<{ id: number; title: string | null; hasCover: boolean; authors: string[] }[]> {
     if (bookIds.length === 0) return [];
-    return this.db
-      .select({ id: books.id, title: bookMetadata.title })
-      .from(books)
-      .leftJoin(bookMetadata, eq(bookMetadata.bookId, books.id))
-      .where(inArray(books.id, bookIds));
+
+    const [rows, authorRows] = await Promise.all([
+      this.db
+        .select({ id: books.id, title: bookMetadata.title, coverSource: bookMetadata.coverSource })
+        .from(books)
+        .leftJoin(bookMetadata, eq(bookMetadata.bookId, books.id))
+        .where(inArray(books.id, bookIds)),
+      this.db
+        .select({ bookId: bookAuthors.bookId, name: authors.name })
+        .from(bookAuthors)
+        .innerJoin(authors, eq(authors.id, bookAuthors.authorId))
+        .where(inArray(bookAuthors.bookId, bookIds)),
+    ]);
+
+    const authorsByBook = new Map<number, string[]>();
+    for (const row of authorRows) {
+      const names = authorsByBook.get(row.bookId) ?? [];
+      names.push(row.name);
+      authorsByBook.set(row.bookId, names);
+    }
+
+    return rows.map((r) => ({
+      id: r.id,
+      title: r.title,
+      hasCover: r.coverSource !== null,
+      authors: authorsByBook.get(r.id) ?? [],
+    }));
   }
 
   async findPatternMetadataByBookIds(bookIds: number[]): Promise<PatternMetadataRow[]> {

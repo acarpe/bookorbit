@@ -25,6 +25,8 @@ import {
 } from 'lucide-vue-next'
 import type { AudiobookChapter, BookDetail, BookDetailFile } from '@bookorbit/types'
 import { api } from '@/lib/api'
+import BookCoverPlaceholder from '@/features/book/components/BookCoverPlaceholder.vue'
+import { bookCoverPalette } from '@/features/book/lib/book-cover'
 import { useAudioProgress } from './composables/useAudioProgress'
 import { useAudioQueue } from './composables/useAudioQueue'
 import { useAudioSettings } from './composables/useAudioSettings'
@@ -216,6 +218,9 @@ const displayTitle = computed(() => {
   if (currentFile?.filename) return currentFile.filename
   return detail.value.folderPath.split('/').pop() || 'Untitled'
 })
+
+const coverSeed = computed(() => detail.value?.title ?? detail.value?.folderPath.split('/').pop() ?? String(props.bookId))
+const coverPalette = computed(() => bookCoverPalette(coverSeed.value))
 
 // ── Media Session ─────────────────────────────────────────────────────────────
 
@@ -724,7 +729,7 @@ onMounted(async () => {
         class="absolute inset-0 scale-110"
         :style="{ backgroundImage: `url(/api/v1/books/${props.bookId}/cover)`, backgroundSize: 'cover', backgroundPosition: 'center' }"
       />
-      <div v-else class="absolute inset-0 bg-gradient-to-br from-slate-900 via-slate-800 to-indigo-950" />
+      <div v-else class="absolute inset-0" :style="{ background: coverPalette.gradient }" />
       <div class="absolute inset-0 backdrop-blur-3xl bg-black/60" />
     </div>
 
@@ -784,15 +789,19 @@ onMounted(async () => {
               :style="
                 detail.coverSource
                   ? { backgroundImage: `url(/api/v1/books/${props.bookId}/cover)`, backgroundSize: 'cover', backgroundPosition: 'center' }
-                  : { background: 'rgba(255,255,255,0.2)' }
+                  : { background: coverPalette.gradient }
               "
             />
             <!-- Cover -->
             <div class="absolute inset-0 rounded-2xl overflow-hidden ring-1 ring-white/10 shadow-2xl">
               <img v-if="detail.coverSource" :src="`/api/v1/books/${props.bookId}/cover`" class="w-full h-full object-cover" :alt="displayTitle" />
-              <div v-else class="w-full h-full flex items-center justify-center bg-white/5">
-                <BookOpen class="w-16 h-16 text-white/25" />
-              </div>
+              <BookCoverPlaceholder
+                v-else
+                :title="detail.title"
+                :author-line="detail.authors.map((a) => a.name).join(', ') || null"
+                :is-audio="true"
+                :seed="coverSeed"
+              />
             </div>
           </div>
 

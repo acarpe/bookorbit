@@ -216,9 +216,45 @@ describe('BookRepository', () => {
     expect(db.select).not.toHaveBeenCalled();
   });
 
+  it('maps hasCover from coverSource and aggregates authors per book in recommendation rows', async () => {
+    const bookRows = [
+      { id: 10, title: 'Dune', coverSource: 'extracted' },
+      { id: 11, title: 'Foundation', coverSource: null },
+    ];
+    const authorRows = [
+      { bookId: 10, name: 'Frank Herbert' },
+      { bookId: 11, name: 'Isaac Asimov' },
+      { bookId: 11, name: 'Robert Heinlein' },
+    ];
+    const db = {
+      select: vi.fn().mockReturnValueOnce(makeSelectChain('where', bookRows)).mockReturnValueOnce(makeSelectChain('where', authorRows)),
+    };
+    const repo = new BookRepository(db as never);
+
+    const result = await repo.findRecommendationTitlesByBookIds([10, 11]);
+
+    expect(result).toEqual([
+      { id: 10, title: 'Dune', hasCover: true, authors: ['Frank Herbert'] },
+      { id: 11, title: 'Foundation', hasCover: false, authors: ['Isaac Asimov', 'Robert Heinlein'] },
+    ]);
+  });
+
+  it('returns hasCover false when coverSource is null in recommendation rows', async () => {
+    const bookRows = [{ id: 5, title: 'No Cover', coverSource: null }];
+    const db = {
+      select: vi.fn().mockReturnValueOnce(makeSelectChain('where', bookRows)).mockReturnValueOnce(makeSelectChain('where', [])),
+    };
+    const repo = new BookRepository(db as never);
+
+    const result = await repo.findRecommendationTitlesByBookIds([5]);
+
+    expect(result).toEqual([{ id: 5, title: 'No Cover', hasCover: false, authors: [] }]);
+  });
+
   it('maps id-list helper rows and primary-file lookups', async () => {
     const libraryRows = [{ id: 1, libraryId: 7 }];
-    const recommendationRows = [{ id: 1, title: 'Dune' }];
+    const recommendationBookRows = [{ id: 1, title: 'Dune', coverSource: 'extracted' }];
+    const recommendationAuthorRows = [{ bookId: 1, name: 'Frank Herbert' }];
     const allIdsRows = [{ id: 3 }, { id: 4 }];
     const primaryFileRows = [{ absolutePath: '/books/a.epub', format: 'epub' }];
     const missingPrimaryRows: unknown[] = [];
@@ -231,7 +267,8 @@ describe('BookRepository', () => {
       select: vi
         .fn()
         .mockReturnValueOnce(makeSelectChain('where', libraryRows))
-        .mockReturnValueOnce(makeSelectChain('where', recommendationRows))
+        .mockReturnValueOnce(makeSelectChain('where', recommendationBookRows))
+        .mockReturnValueOnce(makeSelectChain('where', recommendationAuthorRows))
         .mockReturnValueOnce(makeSelectChain('orderBy', primaryFilesByIds))
         .mockReturnValueOnce(makeSelectChain('orderBy', allFilesByIds))
         .mockReturnValueOnce(allIdsChain)
@@ -241,7 +278,9 @@ describe('BookRepository', () => {
     const repo = new BookRepository(db as never);
 
     await expect(repo.findLibraryIdsByBookIds([1])).resolves.toEqual(libraryRows);
-    await expect(repo.findRecommendationTitlesByBookIds([1])).resolves.toEqual(recommendationRows);
+    await expect(repo.findRecommendationTitlesByBookIds([1])).resolves.toEqual([
+      { id: 1, title: 'Dune', hasCover: true, authors: ['Frank Herbert'] },
+    ]);
     await expect(repo.findPrimaryFilesByBookIds([1])).resolves.toEqual(primaryFilesByIds);
     await expect(repo.findAllFilesByBookIds([1])).resolves.toEqual(allFilesByIds);
     await expect(repo.findAllIds()).resolves.toEqual([3, 4]);

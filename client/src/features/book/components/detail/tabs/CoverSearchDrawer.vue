@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { Search, Loader2, Image as ImageIcon, Check } from 'lucide-vue-next'
 import type { CoverSearchResult } from '@bookorbit/types'
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet'
@@ -19,9 +19,12 @@ const emit = defineEmits<{
 const searchTitle = ref(props.initialTitle)
 const searchAuthor = ref(props.initialAuthor)
 const searchProvider = ref<'duckduckgo' | 'itunes' | 'all'>('duckduckgo')
+const isAudiobookSearch = ref(props.isAudiobook)
 const isSearching = ref(false)
 const searchResults = ref<CoverSearchResult[]>([])
 const hasSearched = ref(false)
+
+const resultAspectClass = computed(() => (isAudiobookSearch.value ? 'aspect-square' : 'aspect-[2/3]'))
 
 watch(
   () => props.open,
@@ -29,11 +32,16 @@ watch(
     if (val) {
       searchTitle.value = props.initialTitle
       searchAuthor.value = props.initialAuthor
+      isAudiobookSearch.value = props.isAudiobook
       searchResults.value = []
       hasSearched.value = false
     }
   },
 )
+
+function toggleAudiobookSearch() {
+  isAudiobookSearch.value = !isAudiobookSearch.value
+}
 
 async function performSearch() {
   if (!searchTitle.value.trim()) return
@@ -44,7 +52,7 @@ async function performSearch() {
     const params = new URLSearchParams({
       title: searchTitle.value.trim(),
       author: searchAuthor.value.trim(),
-      isAudiobook: String(props.isAudiobook),
+      isAudiobook: String(isAudiobookSearch.value),
       provider: searchProvider.value,
     })
     const res = await fetch(`/api/v1/books/cover/search?${params}`)
@@ -125,6 +133,22 @@ function handleOpenChange(val: boolean) {
             </button>
           </div>
         </div>
+
+        <!-- Audiobook cover toggle -->
+        <label class="flex items-center gap-2 cursor-pointer select-none w-fit">
+          <input
+            type="checkbox"
+            class="w-3.5 h-3.5 shrink-0"
+            style="accent-color: var(--primary)"
+            :checked="isAudiobookSearch"
+            @change="toggleAudiobookSearch"
+          />
+          <span class="text-xs text-muted-foreground">
+            Audiobook covers
+            <span class="text-[10px] font-semibold text-primary/70 ml-0.5">(square)</span>
+          </span>
+        </label>
+
         <button
           class="hidden md:flex items-center justify-center gap-2 w-full h-10 rounded-lg bg-primary text-primary-foreground text-sm font-semibold hover:bg-primary/90 transition-all shadow-sm active:scale-[0.98]"
           :disabled="isSearching"
@@ -139,14 +163,17 @@ function handleOpenChange(val: boolean) {
       <!-- Results -->
       <div class="flex-1 overflow-y-auto p-4">
         <div v-if="isSearching" class="grid grid-cols-3 gap-4">
-          <div v-for="i in 9" :key="i" class="aspect-[2/3] rounded-lg bg-muted animate-pulse" />
+          <div v-for="i in 9" :key="i" :class="[resultAspectClass, 'rounded-lg bg-muted animate-pulse']" />
         </div>
 
         <div v-else-if="searchResults.length > 0" class="grid grid-cols-3 gap-4">
           <div
             v-for="res in searchResults"
             :key="String(res.url)"
-            class="group relative aspect-[2/3] rounded-lg overflow-hidden bg-muted border border-border/50 hover:border-primary/50 hover:ring-4 hover:ring-primary/10 transition-all cursor-pointer"
+            :class="[
+              resultAspectClass,
+              'group relative rounded-lg overflow-hidden bg-muted border border-border/50 hover:border-primary/50 hover:ring-4 hover:ring-primary/10 transition-all cursor-pointer',
+            ]"
             @click="handleSelect(String(res.url))"
           >
             <img :src="res.previewUrl" class="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" loading="lazy" />
@@ -192,7 +219,7 @@ function handleOpenChange(val: boolean) {
 
       <!-- Footer -->
       <div class="p-4 border-t bg-muted/10 shrink-0">
-        <p class="text-[10px] text-center text-muted-foreground flex items-center justify-center gap-1">
+        <p class="text-[11px] text-center text-muted-foreground flex items-center justify-center gap-1">
           <ImageIcon class="size-3" />
           Tip: High resolution covers are marked in green
         </p>

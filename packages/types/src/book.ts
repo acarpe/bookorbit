@@ -153,12 +153,16 @@ export type BooksPage = {
 export type BookRecommendation = {
   id: number;
   title: string | null;
+  hasCover: boolean;
+  authors: string[];
 };
 
 export type SeriesBookRecommendation = {
   id: number;
   title: string | null;
   seriesIndex: number | null;
+  hasCover: boolean;
+  authors: string[];
 };
 
 export type CoverSearchResult = {

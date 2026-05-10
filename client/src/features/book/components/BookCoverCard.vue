@@ -40,6 +40,7 @@ import {
 import { useCoverVersions } from '../composables/useCoverVersions'
 import { useRefreshMetadata } from '../composables/useRefreshMetadata'
 import { useRefreshingBooks } from '../composables/useRefreshingBooks'
+import { mergeBookCardWithDetail } from '../lib/book-card-mapper'
 import { usePermissions } from '@/features/auth/composables/usePermissions'
 import { useDisplaySettings } from '@/composables/useDisplaySettings'
 import { COVER_ASPECT_RATIO_KEY, DEFAULT_COVER_ASPECT_RATIO } from '../lib/cover-aspect-ratio'
@@ -59,6 +60,7 @@ type BookActionType = 'quick-view' | 'add-to-collection' | 'delete'
 const emit = defineEmits<{
   action: [type: BookActionType]
   select: [event: MouseEvent]
+  'update:book': [updated: BookCard]
 }>()
 
 const coverStyle = computed(() => bookCoverStyle(props.book.title ?? String(props.book.id)))
@@ -101,6 +103,11 @@ async function reExtractCover() {
   } finally {
     reExtractingCover.value = false
   }
+}
+
+async function handleRefreshMetadata() {
+  const updated = await refreshWithFeedback(props.book.id)
+  if (updated) emit('update:book', mergeBookCardWithDetail(props.book, updated))
 }
 const { hasPermission } = usePermissions()
 const { cardOverlays } = useDisplaySettings()
@@ -460,7 +467,7 @@ async function handleSetStatus(status: ReadStatus) {
                     <Pencil class="size-4 mr-2" />
                     Edit Metadata
                   </DropdownMenuItem>
-                  <DropdownMenuItem :disabled="anyRefreshing" @click="refreshWithFeedback(book.id)">
+                  <DropdownMenuItem :disabled="anyRefreshing" @click="handleRefreshMetadata">
                     <Loader2 v-if="anyRefreshing" class="size-4 mr-2 animate-spin" />
                     <RefreshCw v-else class="size-4 mr-2" />
                     Refresh Metadata

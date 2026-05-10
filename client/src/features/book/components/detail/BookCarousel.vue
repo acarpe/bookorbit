@@ -5,11 +5,14 @@ import { ChevronLeft, ChevronRight } from 'lucide-vue-next'
 
 import { bookCoverStyle } from '@/features/book/lib/book-cover'
 import { useCoverVersions } from '@/features/book/composables/useCoverVersions'
+import BookCoverPlaceholder from '@/features/book/components/BookCoverPlaceholder.vue'
 
 export interface CarouselBook {
   id: number
   title: string | null
   seriesIndex?: number | null
+  hasCover: boolean
+  authors: string[]
 }
 
 const props = withDefaults(
@@ -100,11 +103,19 @@ defineExpose({ scroll })
           :style="bookCoverStyle(book.title ?? String(book.id))"
         >
           <img
+            v-if="book.hasCover"
             :src="coverUrl(book.id, 'thumbnail')"
             :alt="book.title ?? ''"
             class="w-full h-full object-cover transition-opacity duration-300 ease-out"
             loading="lazy"
             @error="(e) => ((e.target as HTMLImageElement).style.display = 'none')"
+          />
+          <BookCoverPlaceholder
+            v-else
+            :title="book.title"
+            :author-line="book.authors.length > 0 ? book.authors.join(', ') : null"
+            :is-audio="false"
+            :seed="book.title ?? String(book.id)"
           />
           <span
             v-if="showSeriesIndex && book.seriesIndex != null"

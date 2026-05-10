@@ -1,9 +1,10 @@
-import { open } from 'fs/promises';
-
-import mediaInfoFactory from 'mediainfo.js';
-import * as mm from 'music-metadata';
-
+import { execFile as execFileCallback, spawn } from 'child_process';
+import { promisify } from 'util';
+import ffprobeInstaller from '@ffprobe-installer/ffprobe';
+import ffmpegInstaller from '@ffmpeg-installer/ffmpeg';
 import type { AudiobookChapter } from '@bookorbit/types';
+
+const execFile = promisify(execFileCallback);
 
 export interface AudioExtractResult {
   title: string | null;
@@ -18,120 +19,122 @@ export interface AudioExtractResult {
   coverBytes: Buffer | null;
 }
 
+interface FfprobeStream {
+  codec_type: string;
+  codec_name: string;
+  tags?: Record<string, string>;
+}
+
+interface FfprobeChapter {
+  start_time: string;
+  tags?: Record<string, string>;
+}
+
+interface FfprobeOutput {
+  format: {
+    duration?: string;
+    tags?: Record<string, string>;
+  };
+  streams?: FfprobeStream[];
+  chapters?: FfprobeChapter[];
+}
+
 export async function extractAudioMetadata(absolutePath: string): Promise<AudioExtractResult> {
   try {
-    const metadata = await mm.parseFile(absolutePath, {
-      duration: true,
-      skipCovers: false,
-      includeChapters: true,
-    });
-    const { common, format } = metadata;
+    const { stdout } = await execFile(ffprobeInstaller.path, [
+      '-v',
+      'quiet',
+      '-print_format',
+      'json',
+      '-show_format',
+      '-show_chapters',
+      '-show_streams',
+      absolutePath,
+    ]);
+
+    const data: FfprobeOutput = JSON.parse(stdout);
+    const tags = normalizeTags(data.format.tags ?? {});
+    const streams = data.streams ?? [];
+    const chapters = data.chapters ?? [];
 
     // albumartist = book author, artist = narrator.
     // If only artist is set, it is the author.
-    const rawAlbumArtist = common.albumartist;
-    const rawArtists = common.artists ?? (common.artist ? [common.artist] : []);
+    const rawAlbumArtist = tags.albumartist ?? tags.album_artist ?? null;
+    const rawArtist = tags.artist ?? null;
 
-    const authors = rawAlbumArtist ? splitArtists(rawAlbumArtist) : rawArtists.flatMap(splitArtists);
+    const authorNames = rawAlbumArtist ? splitArtists(rawAlbumArtist) : rawArtist ? splitArtists(rawArtist) : [];
+    const narratorNames = rawAlbumArtist && rawArtist ? splitArtists(rawArtist) : [];
 
-    const narrators = rawAlbumArtist ? rawArtists.flatMap(splitArtists) : [];
+    // Album tag is the audiobook title; fall back to track title.
+    const title = tags.album ?? tags.title ?? null;
 
-    // Album tag is the book title for audiobooks; fall back to track title.
-    const title = common.album ?? common.title ?? null;
+    const publisher = tags.publisher ?? null;
+    const publishedYear = parseYear(tags.date ?? tags.year ?? null);
+    const description = tags.comment ?? tags.description ?? null;
+    const language = resolveLanguage(tags, streams);
+    const durationSeconds = data.format.duration ? Math.round(parseFloat(data.format.duration)) : null;
 
-    const publisher = common.label?.[0] ?? null;
-    const publishedYear = common.year ?? null;
-    const description = extractCommentText(common.comment as unknown);
-    const language = common.language ?? null;
+    const mappedChapters: AudiobookChapter[] = chapters.map((ch) => ({
+      title: ch.tags?.title ?? '',
+      startMs: Math.round(parseFloat(ch.start_time) * 1000),
+    }));
 
-    const durationSeconds = format.duration !== undefined ? Math.round(format.duration) : null;
-
-    // music-metadata fails to read M4B chapter tracks reliably (iterates chunks not samples).
-    // Try mediainfo first; fall back to music-metadata's chapter data.
-    let chapters: AudiobookChapter[] = await extractChaptersWithMediainfo(absolutePath);
-    if (chapters.length === 0) {
-      chapters = (format.chapters ?? [])
-        .filter((ch) => ch.sampleOffset != null || ch.start != null)
-        .map((ch) => {
-          const startSec = ch.sampleOffset != null ? ch.sampleOffset / (format.sampleRate ?? 44100) : ch.start;
-          return { title: ch.title, startMs: Math.round(startSec * 1000) };
-        });
-    }
-
-    let coverBytes: Buffer | null = null;
-    const picture = common.picture?.[0];
-    if (picture?.data) {
-      coverBytes = Buffer.from(picture.data);
-    }
+    const coverBytes = await extractCoverBytes(absolutePath, streams);
 
     return {
       title,
-      authors: authors.map((name) => ({ name, sortName: null })),
-      narrators,
+      authors: authorNames.map((name) => ({ name, sortName: null })),
+      narrators: narratorNames,
       publisher,
       publishedYear,
       description,
       language,
       durationSeconds,
-      chapters,
+      chapters: mappedChapters,
       coverBytes,
     };
   } catch {
-    return {
-      title: null,
-      authors: [],
-      narrators: [],
-      publisher: null,
-      publishedYear: null,
-      description: null,
-      language: null,
-      durationSeconds: null,
-      chapters: [],
-      coverBytes: null,
-    };
+    return emptyResult();
   }
 }
 
 export async function parseAudioDuration(absolutePath: string): Promise<number | null> {
   try {
-    const metadata = await mm.parseFile(absolutePath, { duration: true, skipCovers: true });
-    if (metadata.format.duration === undefined) return null;
-    return Math.round(metadata.format.duration);
+    const { stdout } = await execFile(ffprobeInstaller.path, ['-v', 'quiet', '-print_format', 'json', '-show_format', absolutePath]);
+    const data: FfprobeOutput = JSON.parse(stdout);
+    if (!data.format.duration) return null;
+    return Math.round(parseFloat(data.format.duration));
   } catch {
     return null;
   }
 }
 
-async function extractChaptersWithMediainfo(absolutePath: string): Promise<AudiobookChapter[]> {
-  let fileHandle: Awaited<ReturnType<typeof open>> | null = null;
-  const mi = await mediaInfoFactory({ format: 'object' });
-  try {
-    fileHandle = await open(absolutePath, 'r');
-    const { size } = await fileHandle.stat();
-    const readChunk = async (chunkSize: number, offset: number): Promise<Uint8Array> => {
-      const buf = new Uint8Array(chunkSize);
-      await fileHandle!.read(buf, 0, chunkSize, offset);
-      return buf;
-    };
-    const result = await mi.analyzeData(() => size, readChunk);
-    const menus = (result.media?.track ?? []).filter((t) => t['@type'] === 'Menu' && t.extra);
-    const extra = menus.flatMap((t) => Object.entries(t.extra as Record<string, string>));
-    return extra
-      .filter(([key]) => /^_\d{2}_\d{2}_\d{2}_\d{3}$/.test(key))
-      .map(([key, title]) => ({ title, startMs: parseMediainfoTimestamp(key) }))
-      .sort((a, b) => a.startMs - b.startMs);
-  } catch {
-    return [];
-  } finally {
-    await fileHandle?.close();
-    mi.close();
-  }
+async function extractCoverBytes(absolutePath: string, streams: FfprobeStream[]): Promise<Buffer | null> {
+  const hasEmbeddedImage = streams.some((s) => s.codec_type === 'video');
+  if (!hasEmbeddedImage) return null;
+
+  return new Promise<Buffer | null>((resolve) => {
+    const chunks: Buffer[] = [];
+    const proc = spawn(
+      ffmpegInstaller.path,
+      ['-y', '-i', absolutePath, '-map', '0:v', '-frames:v', '1', '-f', 'image2pipe', '-vcodec', 'mjpeg', 'pipe:1'],
+      { stdio: ['ignore', 'pipe', 'ignore'] },
+    );
+
+    proc.stdout.on('data', (chunk: Buffer) => chunks.push(chunk));
+    proc.on('close', (code) => {
+      if (code === 0 && chunks.length > 0) {
+        resolve(Buffer.concat(chunks));
+      } else {
+        resolve(null);
+      }
+    });
+    proc.on('error', () => resolve(null));
+  });
 }
 
-function parseMediainfoTimestamp(key: string): number {
-  // Key format: _HH_MM_SS_mmm (e.g. _00_13_24_850 = 13 min 24 sec 850 ms)
-  const [h, m, s, ms] = key.replace(/^_/, '').split('_').map(Number);
-  return h * 3_600_000 + m * 60_000 + s * 1_000 + ms;
+function normalizeTags(tags: Record<string, string>): Record<string, string> {
+  return Object.fromEntries(Object.entries(tags).map(([k, v]) => [k.toLowerCase(), v]));
 }
 
 function splitArtists(raw: string): string[] {
@@ -141,18 +144,33 @@ function splitArtists(raw: string): string[] {
     .filter(Boolean);
 }
 
-function extractCommentText(rawComments: unknown): string | null {
-  if (!Array.isArray(rawComments)) return null;
+function parseYear(raw: string | null): number | null {
+  if (!raw) return null;
+  const match = raw.match(/\d{4}/);
+  return match ? parseInt(match[0], 10) : null;
+}
 
-  for (const comment of rawComments) {
-    if (typeof comment === 'string' && comment.trim().length > 0) {
-      return comment;
-    }
-
-    if (typeof comment === 'object' && comment !== null && 'text' in comment && typeof comment.text === 'string' && comment.text.trim().length > 0) {
-      return comment.text;
+function resolveLanguage(tags: Record<string, string>, streams: FfprobeStream[]): string | null {
+  if (tags.language) return tags.language;
+  for (const stream of streams) {
+    if (stream.codec_type === 'audio' && stream.tags?.language) {
+      return stream.tags.language;
     }
   }
-
   return null;
+}
+
+function emptyResult(): AudioExtractResult {
+  return {
+    title: null,
+    authors: [],
+    narrators: [],
+    publisher: null,
+    publishedYear: null,
+    description: null,
+    language: null,
+    durationSeconds: null,
+    chapters: [],
+    coverBytes: null,
+  };
 }

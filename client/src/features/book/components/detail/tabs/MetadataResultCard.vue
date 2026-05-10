@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import { computed, inject, ref } from 'vue'
-import { BookOpen } from 'lucide-vue-next'
 import type { MetadataCandidate, MetadataProviderInfo } from '@bookorbit/types'
 import { getProviderLabel, hideOnError, providerBadgeStyle, toDisplayCoverUrl } from '../../../lib/metadata-fetch'
 import { COVER_ASPECT_RATIO_KEY, DEFAULT_COVER_ASPECT_RATIO } from '../../../lib/cover-aspect-ratio'
+import BookCoverPlaceholder from '@/features/book/components/BookCoverPlaceholder.vue'
 
 const props = defineProps<{
   candidate: MetadataCandidate
@@ -16,6 +16,8 @@ const coverAspectRatio = inject(COVER_ASPECT_RATIO_KEY, ref(DEFAULT_COVER_ASPECT
 
 const providerLabel = computed(() => getProviderLabel(props.candidate.provider, props.providers))
 const displayCoverUrl = computed(() => toDisplayCoverUrl(props.candidate.coverUrl))
+const candidateSeed = computed(() => props.candidate.title ?? props.candidate.provider)
+const candidateAuthorLine = computed(() => props.candidate.authors?.join(', ') || null)
 
 function handleSelect() {
   emit('select', props.candidate)
@@ -36,9 +38,7 @@ function handleSelect() {
         class="w-full h-full object-contain transition-transform duration-500 group-hover:scale-105"
         @error="hideOnError"
       />
-      <span v-else class="absolute inset-0 flex items-center justify-center bg-linear-to-br from-surface-2 to-surface-4">
-        <BookOpen class="size-6 text-muted-foreground/25" />
-      </span>
+      <BookCoverPlaceholder v-else :title="candidateSeed" :author-line="candidateAuthorLine" :is-audio="false" :seed="candidateSeed" />
     </span>
 
     <!-- Info -->

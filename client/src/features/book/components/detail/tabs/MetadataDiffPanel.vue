@@ -99,6 +99,11 @@ const { fields, picksPerProvider, toggleField, pickFieldFromProvider, clearPicks
 const activeProviderLabel = computed(() => getProviderLabel(activeProvider.value, props.providers))
 const resultsForActiveProvider = computed(() => props.filteredResults.filter((candidate) => candidate.provider === activeProvider.value))
 
+const bookSeed = computed(() => props.current.title ?? 'Untitled')
+const bookAuthorLine = computed(() => props.current.authors.join(', ') || null)
+const candidateSeed = computed(() => activeCandidate.value.title ?? 'Untitled')
+const candidateAuthorLine = computed(() => activeCandidate.value.authors?.join(', ') || null)
+
 const selectedFieldCount = computed(() => {
   let total = 0
   for (const count of picksPerProvider.value.values()) {
@@ -352,6 +357,10 @@ onBeforeUnmount(() => {
         :field="field"
         :active-provider="activeProvider"
         :providers="providers"
+        :book-seed="bookSeed"
+        :book-author-line="bookAuthorLine"
+        :candidate-seed="candidateSeed"
+        :candidate-author-line="candidateAuthorLine"
         @toggle="toggleField"
         @pick-from-provider="handlePickFromProvider"
       />

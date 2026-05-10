@@ -805,6 +805,7 @@ async function handleToggleCollapse() {
           :new-book-ids="newBookIds"
           @action="handleBookAction"
           @select="handleSelect"
+          @update:book="handleTableBookUpdate"
         />
 
         <!-- List view -->

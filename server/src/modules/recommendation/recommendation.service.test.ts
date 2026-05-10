@@ -80,9 +80,9 @@ describe('RecommendationService', () => {
     libraryService.findAll.mockResolvedValue([{ id: 7 }, { id: 9 }]);
     recRepo.findAnnCandidates.mockResolvedValue([{ bookId: 91, cosineSim: 0.78, seriesName: null, rating: null }]);
     recRepo.getCandidateMetadata.mockResolvedValue([{ bookId: 91, authorNames: [], genreTagNames: [] }]);
-    bookRepo.findRecommendationTitlesByBookIds.mockResolvedValue([{ id: 91, title: 'Fallback Match' }]);
+    bookRepo.findRecommendationTitlesByBookIds.mockResolvedValue([{ id: 91, title: 'Fallback Match', hasCover: false, authors: [] }]);
 
-    await expect(service.getRecommendations(55, makeUser())).resolves.toEqual([{ id: 91, title: 'Fallback Match' }]);
+    await expect(service.getRecommendations(55, makeUser())).resolves.toEqual([{ id: 91, title: 'Fallback Match', hasCover: false, authors: [] }]);
     expect(embedder.embedBook).toHaveBeenCalledWith(55);
     expect(recRepo.findAnnCandidates).toHaveBeenCalledWith([0.4, 0.6], 55, [7, 9]);
   });
@@ -135,15 +135,15 @@ describe('RecommendationService', () => {
       { bookId: 200, authorNames: [], genreTagNames: [] },
     ]);
     bookRepo.findRecommendationTitlesByBookIds.mockResolvedValue([
-      { id: 200, title: 'Second' },
-      { id: 100, title: 'First' },
+      { id: 200, title: 'Second', hasCover: true, authors: [] },
+      { id: 100, title: 'First', hasCover: false, authors: ['Frank Herbert'] },
     ]);
 
     const result = await service.getRecommendations(9, makeUser());
 
     expect(result).toHaveLength(2);
-    expect(result[0]).toEqual({ id: 100, title: 'First' });
-    expect(result[1]).toEqual({ id: 200, title: 'Second' });
+    expect(result[0]).toEqual({ id: 100, title: 'First', hasCover: false, authors: ['Frank Herbert'] });
+    expect(result[1]).toEqual({ id: 200, title: 'Second', hasCover: true, authors: [] });
   });
 
   it('normalizes author and genre-tag metadata before similarity scoring', async () => {
@@ -166,15 +166,15 @@ describe('RecommendationService', () => {
       { bookId: 2, authorNames: [], genreTagNames: [] },
     ]);
     bookRepo.findRecommendationTitlesByBookIds.mockResolvedValue([
-      { id: 1, title: 'Token Match' },
-      { id: 2, title: 'Cosine Only' },
+      { id: 1, title: 'Token Match', hasCover: true, authors: ['frank herbert'] },
+      { id: 2, title: 'Cosine Only', hasCover: false, authors: [] },
     ]);
 
     const result = await service.getRecommendations(13, makeUser());
 
     expect(result).toHaveLength(2);
-    expect(result[0]).toEqual({ id: 1, title: 'Token Match' });
-    expect(result[1]).toEqual({ id: 2, title: 'Cosine Only' });
+    expect(result[0]).toEqual({ id: 1, title: 'Token Match', hasCover: true, authors: ['frank herbert'] });
+    expect(result[1]).toEqual({ id: 2, title: 'Cosine Only', hasCover: false, authors: [] });
   });
 
   it('filters out ANN results that cannot be mapped to cards', async () => {
@@ -196,12 +196,12 @@ describe('RecommendationService', () => {
       { bookId: 10, authorNames: [], genreTagNames: [] },
       { bookId: 11, authorNames: [], genreTagNames: [] },
     ]);
-    bookRepo.findRecommendationTitlesByBookIds.mockResolvedValue([{ id: 11, title: 'Only Card' }]);
+    bookRepo.findRecommendationTitlesByBookIds.mockResolvedValue([{ id: 11, title: 'Only Card', hasCover: true, authors: [] }]);
 
     const result = await service.getRecommendations(2, makeUser());
 
     expect(result).toHaveLength(1);
-    expect(result[0]).toEqual({ id: 11, title: 'Only Card' });
+    expect(result[0]).toEqual({ id: 11, title: 'Only Card', hasCover: true, authors: [] });
   });
 
   it('returns empty recommendations when user has no accessible libraries with ANN candidates', async () => {
@@ -244,7 +244,9 @@ describe('RecommendationService', () => {
 
     recRepo.findAnnCandidates.mockResolvedValue(candidates);
     recRepo.getCandidateMetadata.mockResolvedValue(candidates.map((c) => ({ bookId: c.bookId, authorNames: [], genreTagNames: [] })));
-    bookRepo.findRecommendationTitlesByBookIds.mockResolvedValue(Array.from({ length: 30 }, (_, i) => ({ id: i + 1, title: `Book ${i + 1}` })));
+    bookRepo.findRecommendationTitlesByBookIds.mockResolvedValue(
+      Array.from({ length: 30 }, (_, i) => ({ id: i + 1, title: `Book ${i + 1}`, hasCover: false, authors: [] })),
+    );
 
     const result = await service.getRecommendations(8, makeUser());
 
@@ -285,17 +287,17 @@ describe('RecommendationService', () => {
       recRepo.getSeriesName.mockResolvedValue('Stormlight Archive');
       libraryService.findAccessibleLibraryIds.mockResolvedValue([5, 6]);
       recRepo.findSeriesBooks.mockResolvedValue([
-        { bookId: 1, title: 'The Way of Kings', seriesIndex: 1 },
-        { bookId: 2, title: 'Words of Radiance', seriesIndex: 2 },
-        { bookId: 3, title: 'Oathbringer', seriesIndex: 3 },
+        { bookId: 1, title: 'The Way of Kings', seriesIndex: 1, coverSource: 'extracted', authorNames: ['Brandon Sanderson'] },
+        { bookId: 2, title: 'Words of Radiance', seriesIndex: 2, coverSource: null, authorNames: [] },
+        { bookId: 3, title: 'Oathbringer', seriesIndex: 3, coverSource: 'custom', authorNames: ['Brandon Sanderson'] },
       ]);
 
       const result = await service.getSeriesBooks(2, makeUser());
 
       expect(result).toEqual([
-        { id: 1, title: 'The Way of Kings', seriesIndex: 1 },
-        { id: 2, title: 'Words of Radiance', seriesIndex: 2 },
-        { id: 3, title: 'Oathbringer', seriesIndex: 3 },
+        { id: 1, title: 'The Way of Kings', seriesIndex: 1, hasCover: true, authors: ['Brandon Sanderson'] },
+        { id: 2, title: 'Words of Radiance', seriesIndex: 2, hasCover: false, authors: [] },
+        { id: 3, title: 'Oathbringer', seriesIndex: 3, hasCover: true, authors: ['Brandon Sanderson'] },
       ]);
       expect(recRepo.findSeriesBooks).toHaveBeenCalledWith('Stormlight Archive', [5, 6]);
     });
@@ -337,15 +339,15 @@ describe('RecommendationService', () => {
       bookRepo.findLibraryIdByBookId.mockResolvedValue(5);
       libraryService.findAccessibleLibraryIds.mockResolvedValue([5]);
       recRepo.findAuthorBooks.mockResolvedValue([
-        { bookId: 10, title: 'Other Book A' },
-        { bookId: 20, title: 'Other Book B' },
+        { bookId: 10, title: 'Other Book A', coverSource: 'extracted', authorNames: ['Jane Austen'] },
+        { bookId: 20, title: 'Other Book B', coverSource: null, authorNames: [] },
       ]);
 
       const result = await service.getAuthorBooks(1, makeUser());
 
       expect(result).toEqual([
-        { id: 10, title: 'Other Book A' },
-        { id: 20, title: 'Other Book B' },
+        { id: 10, title: 'Other Book A', hasCover: true, authors: ['Jane Austen'] },
+        { id: 20, title: 'Other Book B', hasCover: false, authors: [] },
       ]);
       expect(recRepo.findAuthorBooks).toHaveBeenCalledWith(1, [5]);
     });

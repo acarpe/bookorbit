@@ -86,7 +86,7 @@ export class RecommendationService {
       const rowMap = new Map(rows.map((row) => [row.id, row]));
       const recommendations = rescored
         .map((rescoredCandidate) => rowMap.get(rescoredCandidate.bookId))
-        .filter((row): row is { id: number; title: string | null } => row != null);
+        .filter((row): row is { id: number; title: string | null; hasCover: boolean; authors: string[] } => row != null);
 
       this.logger.log(
         `[${RECOMMENDATION_EVENT}] [end] bookId=${bookId} userId=${user.id} libraryId=${libraryId} durationMs=${Date.now() - startedAt} accessibleLibraryCount=${accessibleLibraryIds.length} candidateCount=${candidates.length} rescoredCount=${rescored.length} resultCount=${recommendations.length} - recommendation lookup completed`,
@@ -126,7 +126,13 @@ export class RecommendationService {
         `[${SERIES_BOOKS_EVENT}] [end] bookId=${bookId} durationMs=${Date.now() - startedAt} seriesName="${meta}" resultCount=${rows.length} - series books lookup completed`,
       );
 
-      return rows.map((r) => ({ id: r.bookId, title: r.title, seriesIndex: r.seriesIndex }));
+      return rows.map((r) => ({
+        id: r.bookId,
+        title: r.title,
+        seriesIndex: r.seriesIndex,
+        hasCover: r.coverSource !== null,
+        authors: r.authorNames,
+      }));
     } catch (err) {
       const { errorClass, errorMessage } = this.parseError(err);
       this.logger.error(
@@ -152,7 +158,7 @@ export class RecommendationService {
         `[${AUTHOR_BOOKS_EVENT}] [end] bookId=${bookId} durationMs=${Date.now() - startedAt} resultCount=${rows.length} - author books lookup completed`,
       );
 
-      return rows.map((r) => ({ id: r.bookId, title: r.title }));
+      return rows.map((r) => ({ id: r.bookId, title: r.title, hasCover: r.coverSource !== null, authors: r.authorNames }));
     } catch (err) {
       const { errorClass, errorMessage } = this.parseError(err);
       this.logger.error(

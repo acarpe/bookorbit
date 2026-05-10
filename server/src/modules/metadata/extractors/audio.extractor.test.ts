@@ -1,168 +1,185 @@
-import { vi, describe, it, expect, beforeEach } from 'vitest';
-import type { IAudioMetadata } from 'music-metadata';
+import { vi, describe, it, expect, beforeEach, type Mock } from 'vitest';
 
-vi.mock('music-metadata', () => ({
-  parseFile: vi.fn(),
-}));
-
-vi.mock('fs/promises', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('fs/promises')>();
-  return {
-    ...actual,
-    open: vi.fn(),
-  };
+vi.mock('child_process', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('child_process')>();
+  return { ...actual, execFile: vi.fn(), spawn: vi.fn() };
 });
 
-vi.mock('mediainfo.js', () => ({
-  default: vi.fn(),
-}));
+vi.mock('@ffprobe-installer/ffprobe', () => ({ default: { path: '/mock/ffprobe' } }));
+vi.mock('@ffmpeg-installer/ffmpeg', () => ({ default: { path: '/mock/ffmpeg' } }));
 
-import * as mm from 'music-metadata';
-import { open } from 'fs/promises';
-import mediaInfoFactory from 'mediainfo.js';
+import { execFile as execFileCallback, spawn } from 'child_process';
 import { extractAudioMetadata, parseAudioDuration } from './audio.extractor';
+import { EventEmitter } from 'events';
 
-const mockParseFile = mm.parseFile as ReturnType<typeof vi.fn>;
-const mockOpen = open as unknown as ReturnType<typeof vi.fn>;
-const mockMediaInfoFactory = mediaInfoFactory as unknown as ReturnType<typeof vi.fn>;
+const mockExecFile = execFileCallback as unknown as Mock;
+const mockSpawn = spawn as unknown as Mock;
 
-function makeMetadata(overrides: Partial<IAudioMetadata> = {}): IAudioMetadata {
-  const base = {
-    common: {
-      track: { no: null, of: null },
-      disk: { no: null, of: null },
-      movementIndex: {},
-    },
-    format: {
-      tagTypes: [],
-      lossless: false,
-    },
-    native: {},
-    quality: { warnings: [] },
+interface FfprobeOutput {
+  format?: {
+    duration?: string;
+    tags?: Record<string, string>;
   };
-
-  return {
-    ...base,
-    ...overrides,
-    common: { ...base.common, ...(overrides.common ?? {}) },
-    format: { ...base.format, ...(overrides.format ?? {}) },
-  } as unknown as IAudioMetadata;
+  streams?: Array<{ codec_type: string; codec_name?: string; tags?: Record<string, string> }>;
+  chapters?: Array<{ start_time: string; tags?: { title?: string } }>;
 }
 
-function resetAudioMocks() {
-  vi.resetAllMocks();
-  mockOpen.mockRejectedValue(new Error('no mediainfo file handle'));
-  mockMediaInfoFactory.mockResolvedValue({
-    analyzeData: vi.fn().mockResolvedValue({ media: { track: [] } }),
-    close: vi.fn(),
+function makeProbeOutput(overrides: FfprobeOutput = {}): string {
+  const base: FfprobeOutput = {
+    format: { duration: '3600', tags: {} },
+    streams: [{ codec_type: 'audio', codec_name: 'aac' }],
+    chapters: [],
+  };
+  return JSON.stringify({
+    format: { ...base.format, ...overrides.format, tags: { ...(base.format?.tags ?? {}), ...(overrides.format?.tags ?? {}) } },
+    streams: overrides.streams ?? base.streams,
+    chapters: overrides.chapters ?? base.chapters,
   });
+}
+
+type ExecFileCallback = (err: Error | null, result: { stdout: string; stderr: string } | string) => void;
+
+function makeExecFileSuccess(stdout: string) {
+  mockExecFile.mockImplementation((_bin: string, _args: string[], callback: ExecFileCallback) => {
+    callback(null, { stdout, stderr: '' });
+  });
+}
+
+function makeExecFileError(message: string) {
+  mockExecFile.mockImplementation((_bin: string, _args: string[], callback: ExecFileCallback) => {
+    callback(new Error(message), '');
+  });
+}
+
+function makeSpawnProcess(coverBytes: Buffer | null): EventEmitter & { stdout: EventEmitter } {
+  const proc = new EventEmitter() as EventEmitter & { stdout: EventEmitter };
+  proc.stdout = new EventEmitter();
+  setImmediate(() => {
+    if (coverBytes) proc.stdout.emit('data', coverBytes);
+    proc.emit('close', coverBytes ? 0 : 1);
+  });
+  return proc;
+}
+
+function makeSpawnError() {
+  const proc = new EventEmitter() as EventEmitter & { stdout: EventEmitter };
+  proc.stdout = new EventEmitter();
+  setImmediate(() => proc.emit('error', new Error('spawn failed')));
+  return proc;
+}
+
+function resetMocks() {
+  vi.resetAllMocks();
+  mockSpawn.mockReturnValue(makeSpawnProcess(null));
 }
 
 // ── AUTHOR / NARRATOR SPLIT ───────────────────────────────────────────────────
 
 describe('extractAudioMetadata — author/narrator split', () => {
-  beforeEach(() => resetAudioMocks());
+  beforeEach(() => resetMocks());
 
-  it('uses albumartist as author and artists as narrators', async () => {
-    mockParseFile.mockResolvedValue(
-      makeMetadata({
-        common: {
-          albumartist: 'J.R.R. Tolkien',
-          artists: ['Andy Serkis'],
-          album: 'The Lord of the Rings',
-        } as unknown as IAudioMetadata['common'],
-      }),
+  it('uses albumartist as author and artist as narrator', async () => {
+    makeExecFileSuccess(
+      makeProbeOutput({ format: { tags: { album: 'The Lord of the Rings', albumartist: 'J.R.R. Tolkien', artist: 'Andy Serkis' } } }),
     );
 
     const result = await extractAudioMetadata('/path/lotr.m4b');
+
     expect(result.authors).toEqual([{ name: 'J.R.R. Tolkien', sortName: null }]);
     expect(result.narrators).toEqual(['Andy Serkis']);
   });
 
   it('uses artist as author and leaves narrators empty when albumartist is absent', async () => {
-    mockParseFile.mockResolvedValue(
-      makeMetadata({
-        common: {
-          artist: 'Douglas Adams',
-          album: "The Hitchhiker's Guide",
-        } as unknown as IAudioMetadata['common'],
-      }),
-    );
+    makeExecFileSuccess(makeProbeOutput({ format: { tags: { album: "The Hitchhiker's Guide", artist: 'Douglas Adams' } } }));
 
     const result = await extractAudioMetadata('/path/hhg.mp3');
+
     expect(result.authors).toEqual([{ name: 'Douglas Adams', sortName: null }]);
     expect(result.narrators).toEqual([]);
   });
 
-  it('splits multiple albumartists by semicolons and slashes', async () => {
-    mockParseFile.mockResolvedValue(
-      makeMetadata({
-        common: {
-          albumartist: 'Terry Pratchett; Neil Gaiman',
-          album: 'Good Omens',
-        } as unknown as IAudioMetadata['common'],
-      }),
-    );
+  it('splits albumartist by semicolons', async () => {
+    makeExecFileSuccess(makeProbeOutput({ format: { tags: { album: 'Good Omens', albumartist: 'Terry Pratchett; Neil Gaiman' } } }));
 
     const result = await extractAudioMetadata('/path/good-omens.m4b');
+
     expect(result.authors).toHaveLength(2);
     expect(result.authors[0].name).toBe('Terry Pratchett');
     expect(result.authors[1].name).toBe('Neil Gaiman');
   });
 
-  it('splits narrators by slash', async () => {
-    mockParseFile.mockResolvedValue(
-      makeMetadata({
-        common: {
-          albumartist: 'Frank Herbert',
-          artists: ['Scott Brick / Oliver Wyman'],
-          album: 'Dune',
-        } as unknown as IAudioMetadata['common'],
-      }),
-    );
+  it('splits albumartist by slashes', async () => {
+    makeExecFileSuccess(makeProbeOutput({ format: { tags: { albumartist: 'Auth A / Auth B', artist: 'Narrator' } } }));
+
+    const result = await extractAudioMetadata('/path/book.m4b');
+
+    expect(result.authors).toHaveLength(2);
+    expect(result.authors[0].name).toBe('Auth A');
+    expect(result.authors[1].name).toBe('Auth B');
+  });
+
+  it('splits narrators by slash when albumartist is set', async () => {
+    makeExecFileSuccess(makeProbeOutput({ format: { tags: { album: 'Dune', albumartist: 'Frank Herbert', artist: 'Scott Brick / Oliver Wyman' } } }));
 
     const result = await extractAudioMetadata('/path/dune.m4b');
+
     expect(result.narrators).toHaveLength(2);
     expect(result.narrators[0]).toBe('Scott Brick');
     expect(result.narrators[1]).toBe('Oliver Wyman');
+  });
+
+  it('returns empty authors and narrators when neither albumartist nor artist is set', async () => {
+    makeExecFileSuccess(makeProbeOutput({ format: { tags: { album: 'Unknown Book' } } }));
+
+    const result = await extractAudioMetadata('/path/unknown.m4b');
+
+    expect(result.authors).toEqual([]);
+    expect(result.narrators).toEqual([]);
+  });
+
+  it('handles album_artist tag as fallback for albumartist', async () => {
+    makeExecFileSuccess(makeProbeOutput({ format: { tags: { album: 'Foundation', album_artist: 'Isaac Asimov' } } }));
+
+    const result = await extractAudioMetadata('/path/foundation.m4b');
+
+    expect(result.authors).toEqual([{ name: 'Isaac Asimov', sortName: null }]);
+  });
+
+  it('all sortNames are null', async () => {
+    makeExecFileSuccess(makeProbeOutput({ format: { tags: { albumartist: 'Author One' } } }));
+
+    const result = await extractAudioMetadata('/path/book.m4b');
+
+    result.authors.forEach((a) => expect(a.sortName).toBeNull());
   });
 });
 
 // ── TITLE RESOLUTION ─────────────────────────────────────────────────────────
 
 describe('extractAudioMetadata — title', () => {
-  beforeEach(() => resetAudioMocks());
+  beforeEach(() => resetMocks());
 
-  it('prefers album tag over track title', async () => {
-    mockParseFile.mockResolvedValue(
-      makeMetadata({
-        common: {
-          album: 'Foundation',
-          title: 'Part 1',
-        } as unknown as IAudioMetadata['common'],
-      }),
-    );
+  it('prefers album tag over title tag', async () => {
+    makeExecFileSuccess(makeProbeOutput({ format: { tags: { album: 'Foundation', title: 'Part 1' } } }));
 
     const result = await extractAudioMetadata('/path/file.mp3');
+
     expect(result.title).toBe('Foundation');
   });
 
-  it('falls back to track title when album is absent', async () => {
-    mockParseFile.mockResolvedValue(
-      makeMetadata({
-        common: {
-          title: 'Standalone Track',
-        } as unknown as IAudioMetadata['common'],
-      }),
-    );
+  it('falls back to title tag when album is absent', async () => {
+    makeExecFileSuccess(makeProbeOutput({ format: { tags: { title: 'Standalone Track' } } }));
 
     const result = await extractAudioMetadata('/path/track.mp3');
+
     expect(result.title).toBe('Standalone Track');
   });
 
   it('returns null title when neither album nor title is present', async () => {
-    mockParseFile.mockResolvedValue(makeMetadata());
+    makeExecFileSuccess(makeProbeOutput({ format: { tags: {} } }));
+
     const result = await extractAudioMetadata('/path/noname.flac');
+
     expect(result.title).toBeNull();
   });
 });
@@ -170,22 +187,21 @@ describe('extractAudioMetadata — title', () => {
 // ── DURATION ─────────────────────────────────────────────────────────────────
 
 describe('extractAudioMetadata — duration', () => {
-  beforeEach(() => resetAudioMocks());
+  beforeEach(() => resetMocks());
 
   it('rounds duration to integer seconds', async () => {
-    mockParseFile.mockResolvedValue(
-      makeMetadata({
-        format: { duration: 3661.7 } as unknown as IAudioMetadata['format'],
-      }),
-    );
+    makeExecFileSuccess(makeProbeOutput({ format: { duration: '3661.7', tags: {} } }));
 
     const result = await extractAudioMetadata('/path/book.m4b');
+
     expect(result.durationSeconds).toBe(3662);
   });
 
-  it('returns null duration when not present', async () => {
-    mockParseFile.mockResolvedValue(makeMetadata());
-    const result = await extractAudioMetadata('/path/book.m4b');
+  it('returns null duration when format.duration is absent', async () => {
+    makeExecFileSuccess(JSON.stringify({ format: { tags: {} }, streams: [], chapters: [] }));
+
+    const result = await extractAudioMetadata('/path/no-duration.m4b');
+
     expect(result.durationSeconds).toBeNull();
   });
 });
@@ -193,76 +209,44 @@ describe('extractAudioMetadata — duration', () => {
 // ── CHAPTERS ─────────────────────────────────────────────────────────────────
 
 describe('extractAudioMetadata — chapters', () => {
-  beforeEach(() => resetAudioMocks());
+  beforeEach(() => resetMocks());
 
-  it('prefers chapter markers extracted by mediainfo and sorts them by timestamp', async () => {
-    const close = vi.fn();
-    const read = vi.fn().mockResolvedValue(undefined);
-    const stat = vi.fn().mockResolvedValue({ size: 4096 });
-    mockOpen.mockResolvedValue({ stat, read, close });
-    mockMediaInfoFactory.mockResolvedValue({
-      analyzeData: vi.fn().mockResolvedValue({
-        media: {
-          track: [
-            {
-              '@type': 'Menu',
-              extra: {
-                _00_00_10_500: 'Chapter 2',
-                _00_00_00_000: 'Introduction',
-              },
-            },
-          ],
-        },
-      }),
-      close: vi.fn(),
-    });
-    mockParseFile.mockResolvedValue(makeMetadata());
-
-    const result = await extractAudioMetadata('/path/mediainfo.m4b');
-    expect(result.chapters).toEqual([
-      { title: 'Introduction', startMs: 0 },
-      { title: 'Chapter 2', startMs: 10500 },
-    ]);
-    expect(close).toHaveBeenCalledTimes(1);
-  });
-
-  it('converts chapter sampleOffset to startMs using sampleRate', async () => {
-    mockParseFile.mockResolvedValue(
-      makeMetadata({
-        format: {
-          sampleRate: 44100,
-          chapters: [
-            { title: 'Introduction', sampleOffset: 0, sampleLength: 44100 },
-            { title: 'Chapter 1', sampleOffset: 44100, sampleLength: 88200 },
-            { title: 'Chapter 2', sampleOffset: 132300, sampleLength: 44100 },
-          ],
-        } as unknown as IAudioMetadata['format'],
+  it('maps ffprobe chapters to startMs and title', async () => {
+    makeExecFileSuccess(
+      makeProbeOutput({
+        chapters: [
+          { start_time: '0.000000', tags: { title: 'Introduction' } },
+          { start_time: '945.530000', tags: { title: 'Chapter 2' } },
+          { start_time: '2263.696667', tags: { title: 'Chapter 3' } },
+        ],
       }),
     );
 
     const result = await extractAudioMetadata('/path/book.m4b');
+
     expect(result.chapters).toHaveLength(3);
     expect(result.chapters[0]).toEqual({ title: 'Introduction', startMs: 0 });
-    expect(result.chapters[1]).toEqual({ title: 'Chapter 1', startMs: 1000 });
-    expect(result.chapters[2]).toEqual({ title: 'Chapter 2', startMs: 3000 });
+    expect(result.chapters[1]).toEqual({ title: 'Chapter 2', startMs: 945530 });
+    expect(result.chapters[2]).toEqual({ title: 'Chapter 3', startMs: 2263697 });
   });
 
-  it('uses default sampleRate of 44100 when not specified', async () => {
-    mockParseFile.mockResolvedValue(
-      makeMetadata({
-        format: {
-          chapters: [{ title: 'Ch1', sampleOffset: 44100, sampleLength: 44100 }],
-        } as unknown as IAudioMetadata['format'],
+  it('handles chapters with no title tag', async () => {
+    makeExecFileSuccess(
+      makeProbeOutput({
+        chapters: [{ start_time: '100.000', tags: {} }],
       }),
     );
 
-    const result = await extractAudioMetadata('/path/book.mp3');
-    expect(result.chapters[0].startMs).toBe(1000);
+    const result = await extractAudioMetadata('/path/book.m4b');
+
+    expect(result.chapters[0]).toEqual({ title: '', startMs: 100000 });
   });
 
-  it('returns empty chapters when none are present', async () => {
-    mockParseFile.mockResolvedValue(makeMetadata());
+  it('returns empty chapters array when none present', async () => {
+    makeExecFileSuccess(makeProbeOutput({ chapters: [] }));
+
     const result = await extractAudioMetadata('/path/no-chapters.mp3');
+
     expect(result.chapters).toEqual([]);
   });
 });
@@ -270,87 +254,193 @@ describe('extractAudioMetadata — chapters', () => {
 // ── COVER ─────────────────────────────────────────────────────────────────────
 
 describe('extractAudioMetadata — cover', () => {
-  beforeEach(() => resetAudioMocks());
+  beforeEach(() => resetMocks());
 
-  it('extracts cover bytes from embedded picture', async () => {
-    const imageData = Buffer.from('fake-image-data');
-    mockParseFile.mockResolvedValue(
-      makeMetadata({
-        common: {
-          picture: [{ format: 'image/jpeg', data: new Uint8Array(imageData) }],
-        } as unknown as IAudioMetadata['common'],
+  it('extracts cover bytes when a video stream is present', async () => {
+    const fakeJpeg = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0x01, 0x02]);
+    makeExecFileSuccess(
+      makeProbeOutput({
+        streams: [
+          { codec_type: 'audio', codec_name: 'aac' },
+          { codec_type: 'video', codec_name: 'mjpeg' },
+        ],
+      }),
+    );
+    mockSpawn.mockReturnValue(makeSpawnProcess(fakeJpeg));
+
+    const result = await extractAudioMetadata('/path/with-cover.m4b');
+
+    expect(result.coverBytes).toBeInstanceOf(Buffer);
+    expect(result.coverBytes).toEqual(fakeJpeg);
+  });
+
+  it('returns null cover when no video stream present', async () => {
+    makeExecFileSuccess(
+      makeProbeOutput({
+        streams: [{ codec_type: 'audio', codec_name: 'aac' }],
       }),
     );
 
-    const result = await extractAudioMetadata('/path/book.m4b');
-    expect(result.coverBytes).toBeInstanceOf(Buffer);
-    expect(result.coverBytes?.toString()).toBe('fake-image-data');
+    const result = await extractAudioMetadata('/path/no-cover.mp3');
+
+    expect(result.coverBytes).toBeNull();
+    expect(mockSpawn).not.toHaveBeenCalled();
   });
 
-  it('returns null cover when no embedded picture', async () => {
-    mockParseFile.mockResolvedValue(makeMetadata());
-    const result = await extractAudioMetadata('/path/no-cover.mp3');
+  it('returns null cover when ffmpeg exits with non-zero code', async () => {
+    makeExecFileSuccess(
+      makeProbeOutput({
+        streams: [{ codec_type: 'video', codec_name: 'mjpeg' }],
+      }),
+    );
+    mockSpawn.mockReturnValue(makeSpawnProcess(null));
+
+    const result = await extractAudioMetadata('/path/broken-cover.m4b');
+
     expect(result.coverBytes).toBeNull();
+  });
+
+  it('returns null cover when ffmpeg spawn emits an error', async () => {
+    makeExecFileSuccess(
+      makeProbeOutput({
+        streams: [{ codec_type: 'video', codec_name: 'mjpeg' }],
+      }),
+    );
+    mockSpawn.mockReturnValue(makeSpawnError());
+
+    const result = await extractAudioMetadata('/path/spawn-error.m4b');
+
+    expect(result.coverBytes).toBeNull();
+  });
+
+  it('spawns ffmpeg with correct arguments', async () => {
+    const fakeJpeg = Buffer.from([0xff, 0xd8]);
+    makeExecFileSuccess(
+      makeProbeOutput({
+        streams: [{ codec_type: 'video', codec_name: 'mjpeg' }],
+      }),
+    );
+    mockSpawn.mockReturnValue(makeSpawnProcess(fakeJpeg));
+
+    await extractAudioMetadata('/books/test.m4b');
+
+    expect(mockSpawn).toHaveBeenCalledWith(
+      '/mock/ffmpeg',
+      ['-y', '-i', '/books/test.m4b', '-map', '0:v', '-frames:v', '1', '-f', 'image2pipe', '-vcodec', 'mjpeg', 'pipe:1'],
+      expect.objectContaining({ stdio: ['ignore', 'pipe', 'ignore'] }),
+    );
   });
 });
 
 // ── OTHER FIELDS ─────────────────────────────────────────────────────────────
 
 describe('extractAudioMetadata — misc fields', () => {
-  beforeEach(() => resetAudioMocks());
+  beforeEach(() => resetMocks());
 
-  it('maps publisher, publishedYear, description, language', async () => {
-    mockParseFile.mockResolvedValue(
-      makeMetadata({
-        common: {
-          label: ['Macmillan Audio'],
-          year: 2006,
-          comment: ['An epic sci-fi audiobook'],
-          language: 'eng',
-        } as unknown as IAudioMetadata['common'],
+  it('maps publisher, publishedYear from date tag, description, and language from tags', async () => {
+    makeExecFileSuccess(
+      makeProbeOutput({
+        format: { duration: '100', tags: { publisher: 'Macmillan Audio', date: '2006-04-15', comment: 'An epic sci-fi audiobook', language: 'eng' } },
       }),
     );
 
     const result = await extractAudioMetadata('/path/book.m4b');
+
     expect(result.publisher).toBe('Macmillan Audio');
     expect(result.publishedYear).toBe(2006);
     expect(result.description).toBe('An epic sci-fi audiobook');
     expect(result.language).toBe('eng');
   });
 
-  it('reads description from object comments and returns null when comment entries are blank', async () => {
-    mockParseFile.mockResolvedValueOnce(
-      makeMetadata({
-        common: {
-          comment: [{ text: 'Object-based comment' }],
-        } as unknown as IAudioMetadata['common'],
-      }),
-    );
-    mockParseFile.mockResolvedValueOnce(
-      makeMetadata({
-        common: {
-          comment: ['  ', { text: '   ' }],
-        } as unknown as IAudioMetadata['common'],
+  it('parses year from a plain year string', async () => {
+    makeExecFileSuccess(makeProbeOutput({ format: { tags: { year: '1984' } } }));
+
+    const result = await extractAudioMetadata('/path/book.m4b');
+
+    expect(result.publishedYear).toBe(1984);
+  });
+
+  it('returns null publishedYear when date tag is absent', async () => {
+    makeExecFileSuccess(makeProbeOutput({ format: { tags: {} } }));
+
+    const result = await extractAudioMetadata('/path/no-year.mp3');
+
+    expect(result.publishedYear).toBeNull();
+  });
+
+  it('returns null publisher when tag is absent', async () => {
+    makeExecFileSuccess(makeProbeOutput({ format: { tags: {} } }));
+
+    const result = await extractAudioMetadata('/path/book.mp3');
+
+    expect(result.publisher).toBeNull();
+  });
+
+  it('returns null description when comment tag is absent', async () => {
+    makeExecFileSuccess(makeProbeOutput({ format: { tags: {} } }));
+
+    const result = await extractAudioMetadata('/path/no-desc.mp3');
+
+    expect(result.description).toBeNull();
+  });
+
+  it('resolves language from audio stream tags when format tag is absent', async () => {
+    makeExecFileSuccess(
+      makeProbeOutput({
+        streams: [{ codec_type: 'audio', codec_name: 'aac', tags: { language: 'fra' } }],
       }),
     );
 
-    const withObjectComment = await extractAudioMetadata('/path/object-comment.m4b');
-    const withBlankComments = await extractAudioMetadata('/path/blank-comment.m4b');
+    const result = await extractAudioMetadata('/path/french.m4b');
 
-    expect(withObjectComment.description).toBe('Object-based comment');
-    expect(withBlankComments.description).toBeNull();
+    expect(result.language).toBe('fra');
+  });
+
+  it('prefers format language tag over stream language', async () => {
+    makeExecFileSuccess(
+      makeProbeOutput({
+        format: { duration: '100', tags: { language: 'eng' } },
+        streams: [{ codec_type: 'audio', codec_name: 'aac', tags: { language: 'fra' } }],
+      }),
+    );
+
+    const result = await extractAudioMetadata('/path/book.m4b');
+
+    expect(result.language).toBe('eng');
+  });
+
+  it('returns null language when neither format nor stream has a language tag', async () => {
+    makeExecFileSuccess(
+      makeProbeOutput({
+        streams: [{ codec_type: 'audio', codec_name: 'aac' }],
+      }),
+    );
+
+    const result = await extractAudioMetadata('/path/no-lang.mp3');
+
+    expect(result.language).toBeNull();
+  });
+
+  it('handles uppercase tag keys by normalizing to lowercase', async () => {
+    makeExecFileSuccess(makeProbeOutput({ format: { tags: { ALBUM: 'Normalized Title', ARTIST: 'Normalized Author' } } }));
+
+    const result = await extractAudioMetadata('/path/uppercase-tags.mp3');
+
+    expect(result.title).toBe('Normalized Title');
+    expect(result.authors).toEqual([{ name: 'Normalized Author', sortName: null }]);
   });
 });
 
 // ── FAILURE TOLERANCE ────────────────────────────────────────────────────────
 
 describe('extractAudioMetadata — failure tolerance', () => {
-  beforeEach(() => resetAudioMocks());
+  beforeEach(() => resetMocks());
 
-  it('returns safe empty result when parseFile throws', async () => {
-    mockParseFile.mockRejectedValue(new Error('Cannot read file'));
+  it('returns all-null safe result when ffprobe exits with an error', async () => {
+    makeExecFileError('ffprobe: command not found');
 
     const result = await extractAudioMetadata('/path/corrupted.mp3');
+
     expect(result.title).toBeNull();
     expect(result.authors).toEqual([]);
     expect(result.narrators).toEqual([]);
@@ -359,40 +449,75 @@ describe('extractAudioMetadata — failure tolerance', () => {
     expect(result.coverBytes).toBeNull();
   });
 
-  it('returns safe empty result for a non-audio file', async () => {
-    mockParseFile.mockRejectedValue(new Error('Not an audio file'));
+  it('returns all-null safe result when ffprobe outputs invalid JSON', async () => {
+    makeExecFileSuccess('not valid json at all {{}}');
 
-    const result = await extractAudioMetadata('/path/notaudio.txt');
+    const result = await extractAudioMetadata('/path/bad-output.mp3');
+
     expect(result.title).toBeNull();
     expect(result.durationSeconds).toBeNull();
+  });
+
+  it('returns all-null safe result for a non-audio file', async () => {
+    makeExecFileError('Invalid data found when processing input');
+
+    const result = await extractAudioMetadata('/path/notaudio.txt');
+
+    expect(result.title).toBeNull();
+    expect(result.durationSeconds).toBeNull();
+  });
+
+  it('invokes ffprobe with correct arguments', async () => {
+    makeExecFileSuccess(makeProbeOutput());
+
+    await extractAudioMetadata('/books/my-audiobook.m4b');
+
+    expect(mockExecFile).toHaveBeenCalledWith(
+      '/mock/ffprobe',
+      ['-v', 'quiet', '-print_format', 'json', '-show_format', '-show_chapters', '-show_streams', '/books/my-audiobook.m4b'],
+      expect.any(Function),
+    );
   });
 });
 
 // ── parseAudioDuration ────────────────────────────────────────────────────────
 
 describe('parseAudioDuration', () => {
-  beforeEach(() => resetAudioMocks());
+  beforeEach(() => resetMocks());
 
   it('returns rounded duration in seconds', async () => {
-    mockParseFile.mockResolvedValue(
-      makeMetadata({
-        format: { duration: 7200.4 } as unknown as IAudioMetadata['format'],
-      }),
-    );
+    makeExecFileSuccess(JSON.stringify({ format: { duration: '7200.4' } }));
 
     const result = await parseAudioDuration('/path/book.m4b');
+
     expect(result).toBe(7200);
   });
 
-  it('returns null when duration is undefined', async () => {
-    mockParseFile.mockResolvedValue(makeMetadata());
-    const result = await parseAudioDuration('/path/book.mp3');
+  it('returns null when format.duration is missing', async () => {
+    makeExecFileSuccess(JSON.stringify({ format: {} }));
+
+    const result = await parseAudioDuration('/path/no-duration.mp3');
+
     expect(result).toBeNull();
   });
 
-  it('returns null when parseFile throws', async () => {
-    mockParseFile.mockRejectedValue(new Error('read error'));
+  it('returns null when ffprobe throws', async () => {
+    makeExecFileError('read error');
+
     const result = await parseAudioDuration('/path/bad.mp3');
+
     expect(result).toBeNull();
+  });
+
+  it('invokes ffprobe with format-only arguments (no chapters or streams)', async () => {
+    makeExecFileSuccess(JSON.stringify({ format: { duration: '100' } }));
+
+    await parseAudioDuration('/books/test.mp3');
+
+    expect(mockExecFile).toHaveBeenCalledWith(
+      '/mock/ffprobe',
+      ['-v', 'quiet', '-print_format', 'json', '-show_format', '/books/test.mp3'],
+      expect.any(Function),
+    );
   });
 });

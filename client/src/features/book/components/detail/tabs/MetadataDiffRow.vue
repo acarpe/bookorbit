@@ -6,11 +6,16 @@ import type { DiffField, DiffFieldKey } from '../../../composables/useMetadataDi
 import { hideOnError, providerBadgeStyle } from '../../../lib/metadata-fetch'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { COVER_ASPECT_RATIO_KEY, DEFAULT_COVER_ASPECT_RATIO } from '../../../lib/cover-aspect-ratio'
+import BookCoverPlaceholder from '@/features/book/components/BookCoverPlaceholder.vue'
 
 const props = defineProps<{
   field: DiffField
   activeProvider: MetadataProviderKey
   providers: MetadataProviderInfo[]
+  bookSeed?: string
+  bookAuthorLine?: string | null
+  candidateSeed?: string
+  candidateAuthorLine?: string | null
 }>()
 
 const emit = defineEmits<{
@@ -113,7 +118,9 @@ watch(
           <img :src="field.bookValue" alt="" aria-hidden="true" class="absolute inset-0 w-full h-full object-cover scale-110 blur-md brightness-75" />
           <img :src="field.bookValue" alt="Current cover" class="relative w-full h-full object-contain" @error="hideOnError" />
         </template>
-        <div v-else class="w-full h-full bg-linear-to-br from-muted to-muted-foreground/10" />
+        <div v-else class="absolute inset-0">
+          <BookCoverPlaceholder :title="bookSeed ?? null" :author-line="bookAuthorLine ?? null" :is-audio="false" :seed="bookSeed ?? 'book'" />
+        </div>
         <div
           v-if="field.isPicked || field.bookValue"
           class="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center"
@@ -205,7 +212,14 @@ watch(
           />
           <img :src="field.candidateDisplay" alt="New cover" class="relative w-full h-full object-contain" @error="hideOnError" />
         </template>
-        <div v-else class="w-full h-full bg-linear-to-br from-muted to-muted-foreground/10" />
+        <div v-else class="absolute inset-0">
+          <BookCoverPlaceholder
+            :title="candidateSeed ?? null"
+            :author-line="candidateAuthorLine ?? null"
+            :is-audio="false"
+            :seed="candidateSeed ?? 'candidate'"
+          />
+        </div>
         <div
           v-if="field.candidateDisplay"
           class="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center"

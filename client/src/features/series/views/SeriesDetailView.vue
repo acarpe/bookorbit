@@ -559,6 +559,7 @@ watch(
           :cover-size="seriesBooksCoverSize"
           :grid-gap="gridGap"
           @action="handleBookAction"
+          @update:book="handleTableBookUpdate"
         />
 
         <div v-if="effectiveViewMode === 'list' && books.length > 0" class="flex flex-col divide-y divide-border">

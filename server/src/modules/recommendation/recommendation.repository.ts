@@ -15,11 +15,15 @@ export interface SeriesBookRow {
   bookId: number;
   title: string | null;
   seriesIndex: number | null;
+  coverSource: string | null;
+  authorNames: string[];
 }
 
 export interface AuthorBookRow {
   bookId: number;
   title: string | null;
+  coverSource: string | null;
+  authorNames: string[];
 }
 
 export interface AnnCandidate {
@@ -132,17 +136,32 @@ export class RecommendationRepository {
 
     const normalized = seriesName.trim().toLowerCase();
 
-    return this.db
+    const rows = await this.db
       .select({
         bookId: books.id,
         title: bookMetadata.title,
         seriesIndex: bookMetadata.seriesIndex,
+        coverSource: bookMetadata.coverSource,
       })
       .from(books)
       .leftJoin(bookMetadata, eq(bookMetadata.bookId, books.id))
       .where(and(inArray(books.libraryId, libraryIds), sql`lower(trim(${bookMetadata.seriesName})) = ${normalized}`))
       .orderBy(sql`${bookMetadata.seriesIndex} ASC NULLS LAST`, asc(bookMetadata.title), asc(books.id))
       .limit(SERIES_BOOKS_LIMIT);
+
+    const bookIds = rows.map((r) => r.bookId);
+    const authorRows =
+      bookIds.length === 0
+        ? []
+        : await this.db
+            .select({ bookId: bookAuthors.bookId, name: authors.name })
+            .from(bookAuthors)
+            .innerJoin(authors, eq(authors.id, bookAuthors.authorId))
+            .where(inArray(bookAuthors.bookId, bookIds));
+
+    const authorsByBook = this.groupNamesByBook(authorRows);
+
+    return rows.map((r) => ({ ...r, authorNames: authorsByBook.get(r.bookId) ?? [] }));
   }
 
   async findAuthorBooks(bookId: number, libraryIds: number[]): Promise<AuthorBookRow[]> {
@@ -150,19 +169,34 @@ export class RecommendationRepository {
 
     const authorIds = this.db.select({ authorId: bookAuthors.authorId }).from(bookAuthors).where(eq(bookAuthors.bookId, bookId));
 
-    return this.db
+    const rows = await this.db
       .select({
         bookId: books.id,
         title: bookMetadata.title,
+        coverSource: bookMetadata.coverSource,
         sharedAuthors: sql<number>`count(*)::int`.as('shared_authors'),
       })
       .from(bookAuthors)
       .innerJoin(books, eq(books.id, bookAuthors.bookId))
       .leftJoin(bookMetadata, eq(bookMetadata.bookId, books.id))
       .where(and(inArray(bookAuthors.authorId, authorIds), inArray(books.libraryId, libraryIds), ne(books.id, bookId)))
-      .groupBy(books.id, bookMetadata.title)
+      .groupBy(books.id, bookMetadata.title, bookMetadata.coverSource)
       .orderBy(desc(sql`shared_authors`), asc(bookMetadata.title), asc(books.id))
       .limit(AUTHOR_BOOKS_LIMIT);
+
+    const bookIds = rows.map((r) => r.bookId);
+    const authorRows =
+      bookIds.length === 0
+        ? []
+        : await this.db
+            .select({ bookId: bookAuthors.bookId, name: authors.name })
+            .from(bookAuthors)
+            .innerJoin(authors, eq(authors.id, bookAuthors.authorId))
+            .where(inArray(bookAuthors.bookId, bookIds));
+
+    const authorsByBook = this.groupNamesByBook(authorRows);
+
+    return rows.map((r) => ({ bookId: r.bookId, title: r.title, coverSource: r.coverSource, authorNames: authorsByBook.get(r.bookId) ?? [] }));
   }
 
   private groupNamesByBook(rows: Array<{ bookId: number; name: string }>): Map<number, string[]> {

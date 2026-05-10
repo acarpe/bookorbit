@@ -28,6 +28,7 @@ const props = withDefaults(
 const emit = defineEmits<{
   action: [book: BookCard, action: BookActionType]
   select: [bookId: number, event: MouseEvent]
+  'update:book': [updated: BookCard]
 }>()
 
 const containerRef = ref<HTMLElement | null>(null)
@@ -104,6 +105,7 @@ const scrollerStyle = computed(() => ({
             :selected="isSelected?.(book.id) ?? false"
             @action="emit('action', book, $event)"
             @select="emit('select', book.id, $event)"
+            @update:book="emit('update:book', $event)"
           />
         </div>
       </template>

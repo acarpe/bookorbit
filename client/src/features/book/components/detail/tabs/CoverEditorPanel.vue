@@ -8,6 +8,7 @@ import { useCoverEditor } from '../../../composables/useCoverEditor'
 import { useCoverVersions } from '../../../composables/useCoverVersions'
 import { usePermissions } from '@/features/auth/composables/usePermissions'
 import { COVER_ASPECT_RATIO_KEY, DEFAULT_COVER_ASPECT_RATIO } from '../../../lib/cover-aspect-ratio'
+import BookCoverPlaceholder from '@/features/book/components/BookCoverPlaceholder.vue'
 import CoverSearchDrawer from './CoverSearchDrawer.vue'
 
 const props = defineProps<{ book: BookDetail; locked?: boolean }>()
@@ -43,6 +44,8 @@ const activeSrc = computed(() => previewSrc.value ?? coverUrl(props.book.id, 'co
 const hasPending = computed(() => !!pendingFile.value || !!pendingUrl.value)
 const primaryFile = computed(() => props.book.files.find((f) => f.role === 'primary') ?? props.book.files[0] ?? null)
 const isPrimaryAudio = computed(() => primaryFile.value?.format != null && FORMAT_TO_GROUP[primaryFile.value.format] === 'audio')
+const hasCover = computed(() => !!props.book.coverSource || !!previewSrc.value)
+const coverSeed = computed(() => props.book.title ?? props.book.folderPath.split('/').pop() ?? String(props.book.id))
 const coverAspectRatio = inject(COVER_ASPECT_RATIO_KEY, ref(DEFAULT_COVER_ASPECT_RATIO))
 
 function cancelPending() {
@@ -97,11 +100,19 @@ onUnmounted(() => clearTimeout(debounceTimer))
   <div class="flex flex-row gap-5 md:gap-3 lg:flex-col">
     <!-- Cover image -->
     <div
-      class="relative w-36 shrink-0 lg:w-full overflow-hidden rounded-lg bg-muted shadow-md cursor-zoom-in"
+      class="relative w-36 shrink-0 lg:w-full overflow-hidden rounded-lg bg-muted shadow-md"
+      :class="hasCover ? 'cursor-zoom-in' : ''"
       :style="{ aspectRatio: coverAspectRatio }"
-      @click="lightboxOpen = true"
+      @click="hasCover ? (lightboxOpen = true) : undefined"
     >
-      <img :src="activeSrc" :alt="book.title ?? ''" class="w-full h-full object-contain" @error="hideOnError" />
+      <img v-if="hasCover" :src="activeSrc" :alt="book.title ?? ''" class="w-full h-full object-contain" @error="hideOnError" />
+      <BookCoverPlaceholder
+        v-else
+        :title="book.title"
+        :author-line="book.authors.map((a) => a.name).join(', ') || null"
+        :is-audio="isPrimaryAudio"
+        :seed="coverSeed"
+      />
       <button
         type="button"
         class="absolute bottom-2 right-2 flex items-center justify-center size-6 rounded-md bg-background/90 shadow-sm border border-input hover:bg-muted transition-colors"
@@ -115,7 +126,11 @@ onUnmounted(() => clearTimeout(debounceTimer))
 
     <!-- Lightbox -->
     <Teleport to="body">
-      <div v-if="lightboxOpen" class="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm" @click="lightboxOpen = false">
+      <div
+        v-if="lightboxOpen && hasCover"
+        class="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm"
+        @click="lightboxOpen = false"
+      >
         <button
           class="absolute top-4 right-4 p-2 rounded-full bg-white/10 hover:bg-white/20 text-white transition-colors"
           @click="lightboxOpen = false"

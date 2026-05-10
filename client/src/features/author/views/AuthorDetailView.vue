@@ -129,6 +129,11 @@ function handleBookAction(book: BookCard, action: 'quick-view' | 'edit-metadata'
   }
 }
 
+function handleBookUpdate(updated: BookCard) {
+  const idx = books.value.findIndex((b) => b.id === updated.id)
+  if (idx !== -1) books.value = books.value.map((b, i) => (i === idx ? updated : b))
+}
+
 function loadIfSentinelVisible() {
   if (loadingBooks.value || !hasMore.value || !sentinel.value) return
   if (sentinel.value.getBoundingClientRect().top < window.innerHeight + 250) {
@@ -546,6 +551,7 @@ watch(authorName, () => {
           :cover-size="authorBookCoverSize"
           :grid-gap="authorBookGridGap"
           @action="handleBookAction"
+          @update:book="handleBookUpdate"
         />
 
         <div v-if="viewMode === 'list' && books.length > 0" class="flex flex-col divide-y divide-border">
