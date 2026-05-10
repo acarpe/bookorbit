@@ -1,5 +1,5 @@
 {
-  "id": "e41a5371-e23c-4057-a76d-45de20282652",
+  "id": "f21407be-d464-4652-9f86-fae9dfd803f5",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -2655,7 +2655,7 @@
       "checkConstraints": {
         "books_status_chk": {
           "name": "books_status_chk",
-          "value": "\"books\".\"status\" in ('present', 'missing')"
+          "value": "\"books\".\"status\" in ('present', 'missing', 'processing')"
         }
       },
       "isRLSEnabled": false

@@ -14,12 +14,16 @@ type BenchResult = {
   avgMs: number;
   maxMs: number;
   failures: number;
+  statusCounts: Record<string, number>;
 };
 
-const BASE_URL = process.env.BENCH_BASE_URL ?? 'http://localhost:3010';
-const REQUESTS = Number.parseInt(process.env.BENCH_REQUESTS ?? '60', 10);
-const WARMUP = Number.parseInt(process.env.BENCH_WARMUP ?? '5', 10);
+const REQUESTS = Number.parseInt(process.env.BENCH_REQUESTS ?? '8', 10);
+const WARMUP = Number.parseInt(process.env.BENCH_WARMUP ?? '1', 10);
+const REQUEST_DELAY_MS = Number.parseInt(process.env.BENCH_REQUEST_DELAY_MS ?? '0', 10);
+const MAX_429_RETRIES = Number.parseInt(process.env.BENCH_MAX_429_RETRIES ?? '2', 10);
 const OUTPUT_PATH = process.env.BENCH_OUTPUT_PATH ?? '';
+const BENCH_BASE_URL = process.env.BENCH_BASE_URL;
+const CANDIDATE_BASE_URLS = ['http://localhost:3010', 'http://localhost:3000'];
 
 const CASES: BenchCase[] = [
   { name: 'summary', path: '/api/v1/user-statistics/summary' },
@@ -40,6 +44,40 @@ function percentile(sorted: number[], p: number): number {
   if (sorted.length === 0) return 0;
   const idx = Math.ceil((p / 100) * sorted.length) - 1;
   return sorted[Math.min(sorted.length - 1, Math.max(0, idx))];
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function normalizeBaseUrl(url: string): string {
+  return url.replace(/\/+$/, '');
+}
+
+function parseRetryAfterMs(value: string | null): number | null {
+  if (!value) return null;
+  const seconds = Number.parseInt(value, 10);
+  if (Number.isFinite(seconds) && seconds > 0) return seconds * 1000;
+  return null;
+}
+
+async function isHealthy(baseUrl: string): Promise<boolean> {
+  try {
+    const response = await fetch(`${baseUrl}/api/v1/health`, { signal: AbortSignal.timeout(1500) });
+    return response.ok;
+  } catch {
+    return false;
+  }
+}
+
+async function resolveBaseUrl(): Promise<string> {
+  if (BENCH_BASE_URL) return normalizeBaseUrl(BENCH_BASE_URL);
+
+  for (const candidate of CANDIDATE_BASE_URLS.map(normalizeBaseUrl)) {
+    if (await isHealthy(candidate)) return candidate;
+  }
+
+  throw new Error('Could not detect a running API base URL. Set BENCH_BASE_URL (for example: http://localhost:3000).');
 }
 
 async function getBenchUser(): Promise<{ id: number; tokenVersion: number }> {
@@ -73,24 +111,40 @@ function signToken(userId: number, tokenVersion: number): string {
 }
 
 async function hit(url: string, token: string): Promise<{ ok: boolean; ms: number; status: number }> {
-  const startedAt = performance.now();
-  const response = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
-  const ms = performance.now() - startedAt;
-  return { ok: response.ok, ms, status: response.status };
+  let attempt = 0;
+  while (true) {
+    const startedAt = performance.now();
+    const response = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+    const ms = performance.now() - startedAt;
+
+    if (response.status !== 429 || attempt >= MAX_429_RETRIES) {
+      return { ok: response.ok, ms, status: response.status };
+    }
+
+    const retryAfterMs = parseRetryAfterMs(response.headers.get('retry-after')) ?? Math.min(5000, 1000 * (attempt + 1));
+    await sleep(retryAfterMs);
+    attempt += 1;
+  }
 }
 
-async function benchCase(testCase: BenchCase, token: string): Promise<BenchResult> {
-  const url = `${BASE_URL}${testCase.path}`;
+async function benchCase(testCase: BenchCase, token: string, baseUrl: string): Promise<BenchResult> {
+  const url = `${baseUrl}${testCase.path}`;
   for (let i = 0; i < WARMUP; i += 1) {
     await hit(url, token);
   }
 
   const timings: number[] = [];
   let failures = 0;
+  const statusCounts = new Map<number, number>();
+
   for (let i = 0; i < REQUESTS; i += 1) {
     const result = await hit(url, token);
-    if (!result.ok) failures += 1;
+    if (!result.ok) {
+      failures += 1;
+      statusCounts.set(result.status, (statusCounts.get(result.status) ?? 0) + 1);
+    }
     timings.push(result.ms);
+    if (REQUEST_DELAY_MS > 0) await sleep(REQUEST_DELAY_MS);
   }
 
   const sorted = [...timings].sort((a, b) => a - b);
@@ -104,27 +158,31 @@ async function benchCase(testCase: BenchCase, token: string): Promise<BenchResul
     avgMs: Number((total / timings.length).toFixed(2)),
     maxMs: Number(Math.max(...timings).toFixed(2)),
     failures,
+    statusCounts: Object.fromEntries([...statusCounts.entries()].map(([status, count]) => [String(status), count])),
   };
 }
 
 async function main() {
+  const baseUrl = await resolveBaseUrl();
   const benchUser = await getBenchUser();
   const token = signToken(benchUser.id, benchUser.tokenVersion);
   const results: BenchResult[] = [];
 
   for (const testCase of CASES) {
-    const result = await benchCase(testCase, token);
+    const result = await benchCase(testCase, token, baseUrl);
     results.push(result);
+    const statusSuffix = Object.keys(result.statusCounts).length > 0 ? ` statuses=${JSON.stringify(result.statusCounts)}` : '';
     console.log(
-      `${result.name.padEnd(28)} p50=${result.p50Ms.toFixed(2)}ms p95=${result.p95Ms.toFixed(2)}ms avg=${result.avgMs.toFixed(2)}ms max=${result.maxMs.toFixed(2)}ms failures=${result.failures}`,
+      `${result.name.padEnd(28)} p50=${result.p50Ms.toFixed(2)}ms p95=${result.p95Ms.toFixed(2)}ms avg=${result.avgMs.toFixed(2)}ms max=${result.maxMs.toFixed(2)}ms failures=${result.failures}${statusSuffix}`,
     );
   }
 
   const payload = {
     generatedAt: new Date().toISOString(),
-    baseUrl: BASE_URL,
+    baseUrl,
     requestsPerCase: REQUESTS,
     warmupPerCase: WARMUP,
+    requestDelayMs: REQUEST_DELAY_MS,
     benchmarkUserId: benchUser.id,
     results,
   };

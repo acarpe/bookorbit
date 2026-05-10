@@ -284,7 +284,7 @@ CREATE TABLE "books" (
 	"added_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
 	CONSTRAINT "books_id_library_folder_id_unique" UNIQUE("id","library_folder_id"),
-	CONSTRAINT "books_status_chk" CHECK ("books"."status" in ('present', 'missing'))
+	CONSTRAINT "books_status_chk" CHECK ("books"."status" in ('present', 'missing', 'processing'))
 );
 --> statement-breakpoint
 CREATE TABLE "collection_books" (

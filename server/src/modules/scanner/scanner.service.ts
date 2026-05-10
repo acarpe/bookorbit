@@ -58,7 +58,6 @@ interface LibraryScanSettings {
 type TargetedScanJob = { type: 'book'; path: string; libraryId: number } | { type: 'directory'; path: string; libraryId: number };
 
 const METADATA_FORMATS = new Set(['epub', 'mobi', 'azw3', 'azw', 'cbz', 'cbr', 'cb7', 'fb2', 'pdf', 'm4b', 'mp3', 'm4a', 'opus', 'ogg', 'flac']);
-const BATCH_SIZE = 10;
 const COVER_REFRESH_BATCH_SIZE = 5;
 const BOOK_EMIT_BUFFER_SIZE = 20;
 const BOOK_EMIT_FLUSH_INTERVAL_MS = 1000;
@@ -652,18 +651,13 @@ export class ScannerService implements OnApplicationBootstrap {
     const totals = { added: 0, updated: 0 };
     const allRetainedFileIds = new Set<number>();
     const seenBookIds = new Set<number>();
-    for (let i = 0; i < candidates.length; i += BATCH_SIZE) {
-      const batch = candidates.slice(i, i + BATCH_SIZE);
-      const results = await Promise.all(
-        batch.map((candidate) => this.processCandidate(candidate, libraryId, libraryFolder.id, maps, settings.formatPriority, false)),
-      );
-      for (const result of results) {
-        seenBookIds.add(result.bookId);
-        for (const fid of result.retainedFileIds) allRetainedFileIds.add(fid);
-        totals.added += result.added;
-        totals.updated += result.updated;
-        this.emitTargetedScanResult(libraryId, result);
-      }
+    for (const candidate of candidates) {
+      const result = await this.processCandidate(candidate, libraryId, libraryFolder.id, maps, settings.formatPriority, false);
+      this.emitTargetedScanResult(libraryId, result);
+      seenBookIds.add(result.bookId);
+      for (const fid of result.retainedFileIds) allRetainedFileIds.add(fid);
+      totals.added += result.added;
+      totals.updated += result.updated;
     }
 
     const pruneCounts = { added: 0, updated: 0 };
@@ -695,10 +689,12 @@ export class ScannerService implements OnApplicationBootstrap {
     );
   }
 
-  private emitTargetedScanResult(libraryId: number, result: { added: number; bookId: number }): void {
-    if (result.added > 0) {
+  private emitTargetedScanResult(libraryId: number, result: { becameVisible: boolean; added: number; bookId: number }): void {
+    if (result.becameVisible) {
       this.bufferBookForEmit(libraryId, result.bookId);
       this.flushBookEmitBuffer(libraryId);
+    }
+    if (result.added > 0) {
       this.bufferWatcherNotification(libraryId, { added: result.added });
     }
   }
@@ -1072,22 +1068,18 @@ export class ScannerService implements OnApplicationBootstrap {
       const seenBookIds = new Set<number>();
       const allRetainedFileIds = new Set<number>();
 
-      for (let i = 0; i < candidates.length; i += BATCH_SIZE) {
-        const batch = candidates.slice(i, i + BATCH_SIZE);
-
-        const results = await Promise.all(batch.map((c) => this.processCandidate(c, libraryId, libraryFolderId, maps, formatPriority, isFirstScan)));
-
-        for (const r of results) {
-          seenBookIds.add(r.bookId);
-          for (const fid of r.retainedFileIds) allRetainedFileIds.add(fid);
-          counts.addedCount += r.added;
-          counts.updatedCount += r.updated;
-          if (r.added > 0) {
-            this.bufferBookForEmit(libraryId, r.bookId);
-          }
+      for (const candidate of candidates) {
+        const result = await this.processCandidate(candidate, libraryId, libraryFolderId, maps, formatPriority, isFirstScan);
+        seenBookIds.add(result.bookId);
+        for (const fid of result.retainedFileIds) allRetainedFileIds.add(fid);
+        counts.addedCount += result.added;
+        counts.updatedCount += result.updated;
+        if (result.becameVisible) {
+          this.bufferBookForEmit(libraryId, result.bookId);
+          this.flushBookEmitBuffer(libraryId);
         }
 
-        const entry = this.scanJobStore.increment(libraryId, { processed: batch.length });
+        const entry = this.scanJobStore.increment(libraryId, { processed: 1 });
         if (entry && this.scanJobStore.shouldEmit(entry)) {
           this.emitFromStore(libraryId, jobId, 'running');
           this.scanJobStore.markEmitted(entry);
@@ -1150,7 +1142,7 @@ export class ScannerService implements OnApplicationBootstrap {
     maps: ScanLookupMaps,
     formatPriority: string[],
     isFirstScan: boolean,
-  ): Promise<{ bookId: number; added: number; updated: number; retainedFileIds: Set<number> }> {
+  ): Promise<{ bookId: number; added: number; updated: number; retainedFileIds: Set<number>; becameVisible: boolean }> {
     const { bookByFolderPath, booksByParentDir, fileByPath, fileByIno } = maps;
     const counts = { added: 0, updated: 0 };
     const fileCounts: ScanCounts = { addedCount: 0, updatedCount: 0, missingCount: 0 };
@@ -1303,7 +1295,8 @@ export class ScannerService implements OnApplicationBootstrap {
       }
     }
 
-    return { bookId: book.id, ...counts, retainedFileIds };
+    const becameVisible = await this.scannerRepo.promoteProcessingBookToPresent(book.id);
+    return { bookId: book.id, ...counts, retainedFileIds, becameVisible };
   }
 
   private async upsertBook(
@@ -1349,7 +1342,7 @@ export class ScannerService implements OnApplicationBootstrap {
         libraryId,
         libraryFolderId,
         folderPath: candidate.folderPath,
-        status: 'present',
+        status: 'processing',
       });
       counts.addedCount++;
       this.autoFetchOrchestrator

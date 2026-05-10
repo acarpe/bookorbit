@@ -33,7 +33,7 @@ export const books = pgTable(
       foreignColumns: [libraryFolders.id, libraryFolders.libraryId],
       name: 'books_library_folder_library_fk',
     }),
-    check('books_status_chk', sql`${t.status} in ('present', 'missing')`),
+    check('books_status_chk', sql`${t.status} in ('present', 'missing', 'processing')`),
   ],
 );
 

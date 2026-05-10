@@ -114,7 +114,12 @@ export class ScannerRepository {
       .values(data)
       .onConflictDoUpdate({
         target: [books.libraryId, books.folderPath],
-        set: { status: 'present', updatedAt: new Date() },
+        set: {
+          // Keep processing rows hidden until candidate processing completes.
+          // Only restore missing rows to present on conflict.
+          status: sql`CASE WHEN ${books.status} = 'missing' THEN 'present' ELSE ${books.status} END`,
+          updatedAt: new Date(),
+        },
       })
       .returning();
     const book = rows[0]!;
@@ -125,6 +130,15 @@ export class ScannerRepository {
 
   async updateBookStatus(id: number, status: 'present' | 'missing') {
     await this.db.update(books).set({ status, updatedAt: new Date() }).where(eq(books.id, id));
+  }
+
+  async promoteProcessingBookToPresent(bookId: number): Promise<boolean> {
+    const rows = await this.db
+      .update(books)
+      .set({ status: 'present', updatedAt: new Date() })
+      .where(and(eq(books.id, bookId), eq(books.status, 'processing')))
+      .returning({ id: books.id });
+    return rows.length > 0;
   }
 
   async updateBookPrimaryFile(bookId: number, primaryFileId: number | null) {

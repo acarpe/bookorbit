@@ -1,5 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { SQL, and, asc, count, eq, inArray, isNotNull, or, sql } from 'drizzle-orm';
+import { SQL, and, asc, count, eq, inArray, isNotNull, ne, or, sql } from 'drizzle-orm';
 import { SUPPORTED_BOOK_FORMATS } from '../upload/upload-validator.service';
 import { NodePgDatabase } from 'drizzle-orm/node-postgres';
 
@@ -80,12 +80,17 @@ type PatternMetadataRow = {
 export class BookRepository {
   constructor(@Inject(DB) private readonly db: Db) {}
 
+  private visibleWhere(where: SQL | undefined): SQL {
+    return where ? and(where, ne(books.status, 'processing'))! : ne(books.status, 'processing');
+  }
+
   async withTransaction<T>(callback: (tx: DbTransaction) => Promise<T>): Promise<T> {
     return this.db.transaction((tx) => callback(tx));
   }
 
   async findCards(opts: { where: SQL | undefined; orderBy: SQL[]; limit: number; offset: number; userId: number }) {
     const { where, orderBy, limit, offset, userId } = opts;
+    const visibleWhere = this.visibleWhere(where);
 
     const rows = await this.db
       .select({
@@ -113,12 +118,12 @@ export class BookRepository {
       .from(books)
       .leftJoin(bookMetadata, eq(bookMetadata.bookId, books.id))
       .leftJoin(userBookRatings, and(eq(userBookRatings.bookId, books.id), eq(userBookRatings.userId, userId)))
-      .where(where)
+      .where(visibleWhere)
       .orderBy(...orderBy)
       .limit(limit)
       .offset(offset);
 
-    const total = rows.length > 0 ? rows[0]._total : await this.countWhere(where);
+    const total = rows.length > 0 ? rows[0]._total : await this.countWhere(visibleWhere);
 
     const bookIds = rows.map((r) => r.id);
     const primaryFileIds = rows.map((r) => r.primaryFileId).filter((id): id is number => id != null);
@@ -263,7 +268,7 @@ export class BookRepository {
     total: number;
   }> {
     const { where, sort, limit, offset, userId } = opts;
-    const whereFragment = where ?? sql`1=1`;
+    const whereFragment = this.visibleWhere(where);
     const orderBy = BookQueryBuilder.buildCollapseOrderBy(sort, userId);
 
     const result = await this.db.execute<CollapsedRawRow>(sql`
@@ -570,6 +575,7 @@ export class BookRepository {
       .where(
         and(
           inArray(books.libraryId, libraryIds),
+          ne(books.status, 'processing'),
           or(sql`${bookMetadata.title} ILIKE ${pattern}`, sql`${bookMetadata.seriesName} ILIKE ${pattern}`, isNotNull(matchedAuthors.bookId)),
         ),
       )
@@ -624,7 +630,11 @@ export class BookRepository {
   }
 
   async countWhere(where: SQL | undefined): Promise<number> {
-    const [{ total }] = await this.db.select({ total: count() }).from(books).leftJoin(bookMetadata, eq(bookMetadata.bookId, books.id)).where(where);
+    const [{ total }] = await this.db
+      .select({ total: count() })
+      .from(books)
+      .leftJoin(bookMetadata, eq(bookMetadata.bookId, books.id))
+      .where(this.visibleWhere(where));
     return Number(total);
   }
 
@@ -685,7 +695,7 @@ export class BookRepository {
   }
 
   async findIdsByWhere(where: SQL | undefined): Promise<number[]> {
-    const rows = await this.db.select({ id: books.id }).from(books).where(where);
+    const rows = await this.db.select({ id: books.id }).from(books).where(this.visibleWhere(where));
     return rows.map((r) => r.id);
   }
 
