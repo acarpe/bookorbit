@@ -915,6 +915,27 @@ CREATE TABLE "dismissed_inline_duplicate_pairs" (
 	CONSTRAINT "dismissed_inline_duplicate_pairs_unique" UNIQUE("entity_type","value_a","value_b")
 );
 --> statement-breakpoint
+CREATE TABLE "entity_duplicate_candidates" (
+	"id" serial PRIMARY KEY NOT NULL,
+	"entity_type" varchar(50) NOT NULL,
+	"entity_id_a" integer NOT NULL,
+	"entity_id_b" integer NOT NULL,
+	"sim_score" real NOT NULL,
+	"computed_at" timestamp with time zone DEFAULT now() NOT NULL,
+	CONSTRAINT "entity_duplicate_candidates_unique" UNIQUE("entity_type","entity_id_a","entity_id_b")
+);
+--> statement-breakpoint
+CREATE TABLE "entity_duplicate_scan_status" (
+	"entity_type" varchar(50) PRIMARY KEY NOT NULL,
+	"is_computing" boolean DEFAULT false NOT NULL,
+	"computed_at" timestamp with time zone,
+	"total_pairs" integer,
+	"threshold" real,
+	"processed_count" integer,
+	"total_count" integer,
+	"error_message" text
+);
+--> statement-breakpoint
 CREATE TABLE "user_fonts" (
 	"id" serial PRIMARY KEY NOT NULL,
 	"user_id" integer NOT NULL,
@@ -1175,5 +1196,8 @@ CREATE INDEX "dismissed_duplicate_pairs_entity_a_idx" ON "dismissed_duplicate_pa
 CREATE INDEX "dismissed_duplicate_pairs_entity_b_idx" ON "dismissed_duplicate_pairs" USING btree ("entity_type","entity_id_b");--> statement-breakpoint
 CREATE INDEX "dismissed_inline_pairs_entity_a_idx" ON "dismissed_inline_duplicate_pairs" USING btree ("entity_type","value_a");--> statement-breakpoint
 CREATE INDEX "dismissed_inline_pairs_entity_b_idx" ON "dismissed_inline_duplicate_pairs" USING btree ("entity_type","value_b");--> statement-breakpoint
+CREATE INDEX "entity_dup_candidates_type_sim_idx" ON "entity_duplicate_candidates" USING btree ("entity_type","sim_score");--> statement-breakpoint
+CREATE INDEX "entity_dup_candidates_entity_a_idx" ON "entity_duplicate_candidates" USING btree ("entity_type","entity_id_a");--> statement-breakpoint
+CREATE INDEX "entity_dup_candidates_entity_b_idx" ON "entity_duplicate_candidates" USING btree ("entity_type","entity_id_b");--> statement-breakpoint
 CREATE UNIQUE INDEX "uf_user_hash_uidx" ON "user_fonts" USING btree ("user_id","file_hash");--> statement-breakpoint
 CREATE UNIQUE INDEX "uf_user_family_weight_style_uidx" ON "user_fonts" USING btree ("user_id","family_name","weight","style");

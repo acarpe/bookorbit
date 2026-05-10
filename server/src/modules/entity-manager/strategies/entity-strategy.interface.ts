@@ -80,6 +80,10 @@ export interface EntityStrategy {
 
   findCandidatePairs(libraryIds: number[], minSimilarity: number): Promise<RawCandidatePair[]>;
 
+  getAllEntityIds?(): Promise<number[]>;
+
+  computeCandidatePairsForBatch?(outerIds: number[], minSimilarity: number): Promise<RawCandidatePair[]>;
+
   browse(params: BrowseParams): Promise<BrowseResult>;
 
   merge(input: MergeInput): Promise<StrategyMergeResult>;

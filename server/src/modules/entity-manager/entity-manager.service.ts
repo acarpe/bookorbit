@@ -6,6 +6,7 @@ import type {
   DismissedPairInfo,
   DuplicateCluster,
   DuplicateScanResponse,
+  DuplicateScanStatus,
   EntityInfo,
   EntityType,
   MergeResult,
@@ -17,6 +18,7 @@ import type { RequestUser } from '../../common/types/request-user';
 import { FileWriteService } from '../file-write/file-write.service';
 import { LibraryService } from '../library/library.service';
 import { EntityManagerRepository } from './entity-manager.repository';
+import { DuplicateComputeService } from './duplicate-compute.service';
 import type { EntityStrategy, RawCandidatePair } from './strategies/entity-strategy.interface';
 import { AuthorStrategy } from './strategies/author.strategy';
 import { GenreStrategy } from './strategies/genre.strategy';
@@ -40,6 +42,7 @@ export class EntityManagerService {
     private readonly repo: EntityManagerRepository,
     private readonly libraryService: LibraryService,
     private readonly fileWriteService: FileWriteService,
+    private readonly duplicateCompute: DuplicateComputeService,
     authorStrategy: AuthorStrategy,
     genreStrategy: GenreStrategy,
     tagStrategy: TagStrategy,
@@ -79,34 +82,54 @@ export class EntityManagerService {
 
     try {
       const strategy = this.getStrategy(entityType);
-      const allLibraryIds = await this.libraryService.findAccessibleLibraryIds(user);
-      const libraryIds = libraryId ? allLibraryIds.filter((id) => id === libraryId) : allLibraryIds;
+      const similarity = minSimilarity ?? DEFAULT_MIN_SIMILARITY;
 
-      if (libraryId && libraryIds.length === 0) {
-        throw new BadRequestException('Library not accessible');
+      if (libraryId) {
+        const allLibraryIds = await this.libraryService.findAccessibleLibraryIds(user);
+        if (!allLibraryIds.includes(libraryId)) throw new BadRequestException('Library not accessible');
       }
 
-      const similarity = minSimilarity ?? DEFAULT_MIN_SIMILARITY;
-      const rawPairs = await strategy.findCandidatePairs(libraryIds, similarity);
+      let rawPairs: RawCandidatePair[];
 
-      const dismissedSet = strategy.isInline
-        ? await this.repo.getInlineDismissedPairSet(entityType)
-        : await this.repo.getDismissedPairSet(entityType);
+      if (strategy.isInline) {
+        const allLibraryIds = await this.libraryService.findAccessibleLibraryIds(user);
+        const libraryIds = libraryId ? allLibraryIds.filter((id) => id === libraryId) : allLibraryIds;
+        rawPairs = await strategy.findCandidatePairs(libraryIds, similarity);
 
-      const filteredPairs = rawPairs.filter((pair) => {
-        const key = `${pair.idA}:${pair.idB}`;
-        return !dismissedSet.has(key);
-      });
+        const dismissedSet = await this.repo.getInlineDismissedPairSet(entityType);
+        rawPairs = rawPairs.filter((pair) => !dismissedSet.has(`${pair.idA}:${pair.idB}`));
+      } else {
+        const storedPairs = await this.duplicateCompute.readCandidatePairs(entityType, similarity);
 
-      const clusterMap = this.buildClusters(filteredPairs);
-      const ranked = this.rankClusters(clusterMap, filteredPairs);
+        if (storedPairs.length === 0) {
+          const status = await this.duplicateCompute.getStatus(entityType);
+          const shouldTrigger =
+            !status ||
+            (!status.isComputing && !status.computedAt) ||
+            (!status.isComputing && status.threshold !== null && status.threshold > similarity);
+          if (shouldTrigger) {
+            this.duplicateCompute.triggerCompute(entityType, strategy, similarity);
+          }
+        }
+
+        rawPairs = storedPairs.map((p) => ({
+          idA: p.idA,
+          idB: p.idB,
+          nameA: '',
+          nameB: '',
+          simScore: p.simScore,
+        }));
+      }
+
+      const clusterMap = this.buildClusters(rawPairs);
+      const ranked = this.rankClusters(clusterMap, rawPairs);
       const total = ranked.length;
 
       const clampedPage = total > 0 ? Math.max(1, Math.min(page, Math.ceil(total / pageSize))) : 1;
       const offset = (clampedPage - 1) * pageSize;
       const pageSlice = ranked.slice(offset, offset + pageSize);
 
-      const enrichedClusters = await this.enrichClusterSlice(strategy, pageSlice, filteredPairs);
+      const enrichedClusters = await this.enrichClusterSlice(strategy, pageSlice, rawPairs);
 
       this.logger.log(
         `[${event}] [end] userId=${user.id} entityType=${entityType} durationMs=${Date.now() - startedAt} total=${total} page=${clampedPage} clusters=${enrichedClusters.length} - duplicate scan completed`,
@@ -126,6 +149,48 @@ export class EntityManagerService {
       );
       throw err;
     }
+  }
+
+  async getDuplicateScanStatus(entityType: EntityType): Promise<DuplicateScanStatus> {
+    const strategy = this.getStrategy(entityType);
+
+    if (strategy.isInline) {
+      return { entityType, state: 'done', computedAt: null, totalPairs: null, threshold: null, progressPct: null };
+    }
+
+    const row = await this.duplicateCompute.getStatus(entityType);
+
+    if (!row) {
+      return { entityType, state: 'idle', computedAt: null, totalPairs: null, threshold: null, progressPct: null };
+    }
+
+    let state: DuplicateScanStatus['state'] = 'done';
+    if (row.isComputing) state = 'computing';
+    else if (row.errorMessage && !row.computedAt) state = 'error';
+    else if (!row.computedAt) state = 'idle';
+
+    const progressPct =
+      row.isComputing && row.totalCount && row.processedCount !== null ? Math.round((row.processedCount / row.totalCount) * 100) : null;
+
+    return {
+      entityType,
+      state,
+      computedAt: row.computedAt ? row.computedAt.toISOString() : null,
+      totalPairs: row.totalPairs ?? null,
+      threshold: row.threshold ?? null,
+      progressPct,
+    };
+  }
+
+  async refreshDuplicates(entityType: EntityType, minSimilarity?: number): Promise<DuplicateScanStatus> {
+    const strategy = this.getStrategy(entityType);
+    const threshold = minSimilarity ?? DEFAULT_MIN_SIMILARITY;
+
+    if (!strategy.isInline) {
+      this.duplicateCompute.triggerCompute(entityType, strategy, threshold);
+    }
+
+    return this.getDuplicateScanStatus(entityType);
   }
 
   async browse(
@@ -165,12 +230,18 @@ export class EntityManagerService {
       const strategy = this.getStrategy(entityType);
       const result = await strategy.merge({ targetId, sourceIds, userId: user.id });
 
+      const nonInlineSourceIds: number[] = [];
       for (const sourceId of sourceIds) {
         if (strategy.isInline) {
           await this.repo.deleteInlineDismissedPairsForValue(entityType, sourceId as string);
         } else {
           await this.repo.deleteDismissedPairsForEntity(entityType, sourceId as number);
+          nonInlineSourceIds.push(sourceId as number);
         }
+      }
+
+      if (nonInlineSourceIds.length > 0) {
+        await this.duplicateCompute.invalidateCandidatesForEntities(entityType, nonInlineSourceIds);
       }
 
       if (writeFiles) {
@@ -250,6 +321,7 @@ export class EntityManagerService {
         await this.repo.deleteInlineDismissedPairsForValue(entityType, entityId as string);
       } else if (mode === 'hard') {
         await this.repo.deleteDismissedPairsForEntity(entityType, entityId as number);
+        await this.duplicateCompute.invalidateCandidatesForEntities(entityType, [entityId as number]);
       }
 
       if (writeFiles) {
@@ -542,6 +614,7 @@ export class EntityManagerService {
       const validEntities = entities.filter((e): e is NonNullable<typeof e> => e !== null);
       if (validEntities.length < 2) continue;
 
+      const entityNameMap = new Map<string, string>(validEntities.map((entity) => [String(entity.id), entity.name]));
       const clusterPairs = pairs.filter((p) => memberIds.has(String(p.idA)) && memberIds.has(String(p.idB)));
       const suggestedTarget = validEntities.reduce((best, e) => (e.bookCount > best.bookCount ? e : best), validEntities[0]!);
 
@@ -554,7 +627,7 @@ export class EntityManagerService {
           idA: p.idA,
           idB: p.idB,
           similarity: Math.round(p.simScore * 100) / 100,
-          reasons: this.computeReasons(p.simScore, p.nameA, p.nameB),
+          reasons: this.computeReasons(p.simScore, entityNameMap.get(String(p.idA)) ?? p.nameA, entityNameMap.get(String(p.idB)) ?? p.nameB),
         })),
       });
     }

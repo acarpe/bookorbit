@@ -176,3 +176,12 @@ export class UndismissPairDto {
   @IsString()
   valueB?: string;
 }
+
+export class RefreshDuplicatesDto {
+  @IsOptional()
+  @IsNumber()
+  @Min(0.1)
+  @Max(1.0)
+  @Transform(({ value }) => (value !== undefined ? Number(value) : undefined))
+  minSimilarity?: number;
+}

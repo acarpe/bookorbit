@@ -5,6 +5,7 @@ import type {
   DeleteResult,
   DismissedPairInfo,
   DuplicateScanResponse,
+  DuplicateScanStatus,
   EntityInfo,
   EntityType,
   MergeResult,
@@ -133,6 +134,22 @@ export async function undismissPair(
 export async function getDismissedPairs(entityType: EntityType): Promise<DismissedPairInfo[]> {
   const res = await api(`${BASE}/${entityType}/duplicates/dismissed`)
   if (!res.ok) throw new Error(`Failed to get dismissed ${entityType} pairs`)
+  return res.json()
+}
+
+export async function getDuplicateScanStatus(entityType: EntityType): Promise<DuplicateScanStatus> {
+  const res = await api(`${BASE}/${entityType}/duplicates/status`)
+  if (!res.ok) throw new Error(`Failed to get ${entityType} duplicate scan status`)
+  return res.json()
+}
+
+export async function refreshDuplicates(entityType: EntityType, params?: { minSimilarity?: number }): Promise<DuplicateScanStatus> {
+  const res = await api(`${BASE}/${entityType}/duplicates/refresh`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(params ?? {}),
+  })
+  if (!res.ok) throw new Error(`Failed to refresh ${entityType} duplicates`)
   return res.json()
 }
 

@@ -89,21 +89,56 @@ export class AuthorStrategy implements EntityStrategy {
     return rows.rows;
   }
 
-  async browse(params: BrowseParams): Promise<BrowseResult> {
-    const conditions = [inArray(bookAuthors.bookId, this.db.select({ id: books.id }).from(books).where(inArray(books.libraryId, params.libraryIds)))];
-    if (params.search) {
-      conditions.push(ilike(authors.name, `%${escapeLike(params.search)}%`) as any);
-    }
+  async getAllEntityIds(): Promise<number[]> {
+    const rows = await this.db.execute<{ id: number }>(sql`SELECT id FROM authors ORDER BY id`);
+    return rows.rows.map((r) => r.id);
+  }
 
-    const where = and(...conditions);
+  async computeCandidatePairsForBatch(outerIds: number[], minSimilarity: number): Promise<RawCandidatePair[]> {
+    const similarityThreshold = Math.max(0.1, Math.min(1, minSimilarity));
+    const idsArray = sql.raw(`ARRAY[${outerIds.join(',')}]::int[]`);
+
+    const rows = await this.db.transaction(async (tx) => {
+      await tx.execute(sql`SELECT set_config('pg_trgm.similarity_threshold', ${similarityThreshold.toString()}, true)`);
+      return tx.execute<{
+        idA: number;
+        idB: number;
+        nameA: string;
+        nameB: string;
+        sortNameA: string | null;
+        sortNameB: string | null;
+        hasPhotoA: boolean;
+        hasPhotoB: boolean;
+        simScore: number;
+      }>(sql`
+        SELECT
+          a1.id AS "idA", a2.id AS "idB",
+          a1.name AS "nameA", a2.name AS "nameB",
+          a1.sort_name AS "sortNameA", a2.sort_name AS "sortNameB",
+          a1.has_photo AS "hasPhotoA", a2.has_photo AS "hasPhotoB",
+          similarity(a1.name, a2.name) AS "simScore"
+        FROM (SELECT id, name, sort_name, has_photo FROM authors WHERE id = ANY(${idsArray})) a1
+        JOIN authors a2 ON a1.id < a2.id AND a1.name % a2.name
+        WHERE similarity(a1.name, a2.name) >= ${similarityThreshold}
+      `);
+    });
+
+    return rows.rows;
+  }
+
+  async browse(params: BrowseParams): Promise<BrowseResult> {
     const bookCountExpr = sql<number>`count(distinct ${bookAuthors.bookId})::int`;
+
+    const nameCondition = params.search ? ilike(authors.name, `%${escapeLike(params.search)}%`) : undefined;
+
+    const libraryBookIds =
+      params.libraryIds.length > 0 ? this.db.select({ id: books.id }).from(books).where(inArray(books.libraryId, params.libraryIds)) : null;
 
     const [countResult, itemRows] = await Promise.all([
       this.db
         .select({ total: sql<number>`count(distinct ${authors.id})::int` })
         .from(authors)
-        .innerJoin(bookAuthors, eq(bookAuthors.authorId, authors.id))
-        .where(where),
+        .where(nameCondition),
       this.db
         .select({
           id: authors.id,
@@ -113,8 +148,13 @@ export class AuthorStrategy implements EntityStrategy {
           bookCount: bookCountExpr,
         })
         .from(authors)
-        .innerJoin(bookAuthors, eq(bookAuthors.authorId, authors.id))
-        .where(where)
+        .leftJoin(
+          bookAuthors,
+          libraryBookIds
+            ? and(eq(bookAuthors.authorId, authors.id), inArray(bookAuthors.bookId, libraryBookIds))
+            : eq(bookAuthors.authorId, authors.id),
+        )
+        .where(nameCondition)
         .groupBy(authors.id, authors.name, authors.sortName, authors.hasPhoto)
         .orderBy(
           params.sortBy === 'bookCount'

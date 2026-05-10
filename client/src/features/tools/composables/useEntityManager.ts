@@ -5,6 +5,7 @@ import {
   INLINE_ENTITY_TYPES,
   type BrowseEntityItem,
   type DuplicateCluster,
+  type DuplicateScanStatus,
   type DismissedPairInfo,
   type EntityType,
   type EntityTypeCapabilities,
@@ -39,6 +40,7 @@ export function useEntityManager() {
       scanAbortController.abort()
       scanAbortController = null
     }
+    stopStatusPoll()
   })
 
   // Browse state
@@ -66,6 +68,72 @@ export function useEntityManager() {
 
   const hasScanned = ref(false)
 
+  // Duplicate scan status (for non-inline entities)
+  const duplicateScanStatus = ref<DuplicateScanStatus | null>(null)
+  let statusPollTimer: ReturnType<typeof setTimeout> | null = null
+
+  function stopStatusPoll(): void {
+    if (statusPollTimer !== null) {
+      clearTimeout(statusPollTimer)
+      statusPollTimer = null
+    }
+  }
+
+  async function fetchScanStatus(): Promise<void> {
+    if (isInline.value) return
+    const capturedType = entityType.value
+    try {
+      const previousState = duplicateScanStatus.value?.state
+      const status = await entityManagerApi.getDuplicateScanStatus(capturedType)
+      if (entityType.value !== capturedType) return
+      duplicateScanStatus.value = status
+      if (status.state === 'done' && previousState === 'computing') {
+        void scan()
+      } else if (status.state === 'computing') {
+        stopStatusPoll()
+        statusPollTimer = setTimeout(fetchScanStatus, 3000)
+      }
+    } catch {
+      // silently ignore
+    }
+  }
+
+  async function refreshDuplicates(): Promise<void> {
+    try {
+      duplicateScanStatus.value = await entityManagerApi.refreshDuplicates(entityType.value, { minSimilarity: minSimilarity.value })
+    } catch {
+      // silently ignore
+    }
+    if (duplicateScanStatus.value?.state === 'computing') {
+      stopStatusPoll()
+      statusPollTimer = setTimeout(fetchScanStatus, 3000)
+    }
+  }
+
+  function removeClustersByIds(ids: (number | string)[]): void {
+    const idSet = new Set(ids)
+    const before = clusters.value.length
+    clusters.value = clusters.value.filter((c) => !c.entities.some((e) => idSet.has(e.id)))
+    scanTotal.value = Math.max(0, scanTotal.value - (before - clusters.value.length))
+  }
+
+  function removePairFromClusters(idA: number | string, idB: number | string): void {
+    const before = clusters.value.length
+    clusters.value = clusters.value
+      .map((c) => {
+        const remainingPairs = c.pairDetails.filter((p) => !(p.idA === idA && p.idB === idB) && !(p.idA === idB && p.idB === idA))
+        if (remainingPairs.length === 0) return null
+        const involvedIds = new Set(remainingPairs.flatMap((p) => [p.idA, p.idB]))
+        return {
+          ...c,
+          pairDetails: remainingPairs,
+          entities: c.entities.filter((e) => involvedIds.has(e.id)),
+        }
+      })
+      .filter((c): c is DuplicateCluster => c !== null)
+    scanTotal.value = Math.max(0, scanTotal.value - (before - clusters.value.length))
+  }
+
   function clearScan(): void {
     clusters.value = []
     scanError.value = null
@@ -86,6 +154,8 @@ export function useEntityManager() {
     clearBrowse()
     showDismissed.value = false
     dismissedPairs.value = []
+    stopStatusPoll()
+    duplicateScanStatus.value = null
   })
 
   watch(mode, () => {
@@ -315,6 +385,11 @@ export function useEntityManager() {
     scanTotalPages,
     scan,
     clearScan,
+    duplicateScanStatus,
+    fetchScanStatus,
+    refreshDuplicates,
+    removeClustersByIds,
+    removePairFromClusters,
 
     browseItems,
     browseTotal,

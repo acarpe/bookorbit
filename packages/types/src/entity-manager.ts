@@ -73,6 +73,17 @@ export interface DuplicateScanResponse {
   pageSize: number;
 }
 
+export type DuplicateScanState = 'idle' | 'computing' | 'done' | 'error';
+
+export interface DuplicateScanStatus {
+  entityType: EntityType;
+  state: DuplicateScanState;
+  computedAt: string | null;
+  totalPairs: number | null;
+  threshold: number | null;
+  progressPct: number | null;
+}
+
 // Operation results
 export interface MergeResult {
   targetId: number | string;

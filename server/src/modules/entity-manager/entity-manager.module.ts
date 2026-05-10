@@ -6,6 +6,7 @@ import { LibraryModule } from '../library/library.module';
 import { EntityManagerController } from './entity-manager.controller';
 import { EntityManagerRepository } from './entity-manager.repository';
 import { EntityManagerService } from './entity-manager.service';
+import { DuplicateComputeService } from './duplicate-compute.service';
 import { AuthorStrategy } from './strategies/author.strategy';
 import { GenreStrategy } from './strategies/genre.strategy';
 import { LanguageStrategy } from './strategies/language.strategy';
@@ -20,6 +21,7 @@ import { TagStrategy } from './strategies/tag.strategy';
   providers: [
     EntityManagerService,
     EntityManagerRepository,
+    DuplicateComputeService,
     AuthorStrategy,
     GenreStrategy,
     TagStrategy,

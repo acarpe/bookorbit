@@ -88,6 +88,39 @@ export abstract class JunctionEntityStrategy implements EntityStrategy {
     return rows.rows;
   }
 
+  async getAllEntityIds(): Promise<number[]> {
+    const t = sql.raw(this.rawTableName);
+    const rows = await this.db.execute<{ id: number }>(sql`SELECT id FROM ${t} ORDER BY id`);
+    return rows.rows.map((r) => r.id);
+  }
+
+  async computeCandidatePairsForBatch(outerIds: number[], minSimilarity: number): Promise<RawCandidatePair[]> {
+    const similarityThreshold = Math.max(0.1, Math.min(1, minSimilarity));
+    const t = sql.raw(this.rawTableName);
+    const idsArray = sql.raw(`ARRAY[${outerIds.join(',')}]::int[]`);
+
+    const rows = await this.db.transaction(async (tx) => {
+      await tx.execute(sql`SELECT set_config('pg_trgm.similarity_threshold', ${similarityThreshold.toString()}, true)`);
+      return tx.execute<{
+        idA: number;
+        idB: number;
+        nameA: string;
+        nameB: string;
+        simScore: number;
+      }>(sql`
+        SELECT
+          e1.id AS "idA", e2.id AS "idB",
+          e1.name AS "nameA", e2.name AS "nameB",
+          similarity(e1.name, e2.name) AS "simScore"
+        FROM (SELECT id, name FROM ${t} WHERE id = ANY(${idsArray})) e1
+        JOIN ${t} e2 ON e1.id < e2.id AND e1.name % e2.name
+        WHERE similarity(e1.name, e2.name) >= ${similarityThreshold}
+      `);
+    });
+
+    return rows.rows;
+  }
+
   async browse(params: BrowseParams): Promise<BrowseResult> {
     const conditions = [
       inArray(this.junctionBookIdCol, this.db.select({ id: books.id }).from(books).where(inArray(books.libraryId, params.libraryIds))),

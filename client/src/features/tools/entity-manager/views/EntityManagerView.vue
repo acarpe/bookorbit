@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
-import { CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Search } from 'lucide-vue-next'
+import { CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Loader2, RefreshCw, Search } from 'lucide-vue-next'
 import type { BrowseEntityItem, DuplicateCluster } from '@bookorbit/types'
 
 import { useEntityManager, type EntityManagerMode } from '../../composables/useEntityManager'
@@ -45,6 +45,8 @@ watch(
   (newMode) => {
     if (newMode === 'browse') {
       em.fetchBrowse()
+    } else if (newMode === 'duplicates') {
+      em.fetchScanStatus()
     }
   },
   { immediate: true },
@@ -55,6 +57,8 @@ watch(
   () => {
     if (em.mode.value === 'browse') {
       em.fetchBrowse()
+    } else if (em.mode.value === 'duplicates') {
+      em.fetchScanStatus()
     }
   },
   { immediate: true },
@@ -71,6 +75,10 @@ function handleUpdateMinSimilarity(value: number): void {
 function handleScan(): void {
   em.scanPage.value = 1
   em.scan()
+}
+
+function handleRefreshDuplicates(): void {
+  em.refreshDuplicates()
 }
 
 function handleScanPage(value: number): void {
@@ -96,7 +104,7 @@ function handleUpdatePage(value: number): void {
 
 async function handleMerge(targetId: number | string, sourceIds: (number | string)[], writeFiles: boolean): Promise<void> {
   await em.mergeEntities(targetId, sourceIds, writeFiles)
-  em.scan()
+  em.removeClustersByIds(sourceIds)
 }
 
 async function handleDismissEntity(cluster: DuplicateCluster, entityId: number | string): Promise<void> {
@@ -104,12 +112,12 @@ async function handleDismissEntity(cluster: DuplicateCluster, entityId: number |
   for (const pair of pairs) {
     await em.dismissPair(pair.idA, pair.idB)
   }
-  em.scan()
+  em.removeClustersByIds([entityId])
 }
 
 async function handleDismissPair(idA: number | string, idB: number | string): Promise<void> {
   await em.dismissPair(idA, idB)
-  em.scan()
+  em.removePairFromClusters(idA, idB)
 }
 
 async function handleUndismiss(idA: number | string, idB: number | string): Promise<void> {
@@ -204,6 +212,31 @@ async function handleBulkDeleteConfirm(mode: 'soft' | 'hard' | 'inline', writeFi
           @update:min-similarity="handleUpdateMinSimilarity"
           @scan="handleScan"
         />
+
+        <!-- Compute status bar -->
+        <div v-if="em.duplicateScanStatus.value && !em.isInline.value" class="mt-2 flex items-center gap-2 text-xs text-muted-foreground">
+          <template v-if="em.duplicateScanStatus.value.state === 'computing'">
+            <Loader2 class="h-3 w-3 animate-spin shrink-0" />
+            <span>
+              Computing candidates...
+              <template v-if="em.duplicateScanStatus.value.progressPct !== null">{{ em.duplicateScanStatus.value.progressPct }}%</template>
+            </span>
+          </template>
+          <template v-else-if="em.duplicateScanStatus.value.state === 'done' && em.duplicateScanStatus.value.computedAt">
+            <span>Candidates computed {{ new Date(em.duplicateScanStatus.value.computedAt).toLocaleString() }}</span>
+            <button class="flex items-center gap-1 hover:text-foreground transition-colors" @click="handleRefreshDuplicates">
+              <RefreshCw class="h-3 w-3" />
+              Recompute
+            </button>
+          </template>
+          <template v-else-if="em.duplicateScanStatus.value.state === 'idle'">
+            <span>No candidates computed yet.</span>
+            <button class="flex items-center gap-1 hover:text-foreground transition-colors" @click="handleRefreshDuplicates">
+              <RefreshCw class="h-3 w-3" />
+              Compute now
+            </button>
+          </template>
+        </div>
 
         <div v-if="em.scanError.value" class="mt-3 rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive">
           {{ em.scanError.value }}

@@ -12,6 +12,7 @@ import {
   DeleteEntityDto,
   DismissPairDto,
   MergeEntitiesDto,
+  RefreshDuplicatesDto,
   RenameEntityDto,
   ScanDuplicatesDto,
   SplitEntityDto,
@@ -39,6 +40,18 @@ export class EntityManagerController {
   @RequirePermission(Permission.LibraryEditMetadata)
   scanDuplicates(@Param('entityType', EntityTypePipe) entityType: EntityType, @Query() dto: ScanDuplicatesDto, @CurrentUser() user: RequestUser) {
     return this.service.scanDuplicates(entityType, user, dto.libraryId, dto.minSimilarity, dto.page, dto.pageSize);
+  }
+
+  @Get(':entityType/duplicates/status')
+  @RequirePermission(Permission.LibraryEditMetadata)
+  getDuplicateScanStatus(@Param('entityType', EntityTypePipe) entityType: EntityType) {
+    return this.service.getDuplicateScanStatus(entityType);
+  }
+
+  @Post(':entityType/duplicates/refresh')
+  @RequirePermission(Permission.LibraryEditMetadata)
+  refreshDuplicates(@Param('entityType', EntityTypePipe) entityType: EntityType, @Body() dto: RefreshDuplicatesDto) {
+    return this.service.refreshDuplicates(entityType, dto.minSimilarity);
   }
 
   @Post(':entityType/merge')
