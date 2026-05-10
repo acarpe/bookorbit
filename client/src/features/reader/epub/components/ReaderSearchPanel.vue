@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { ref, watch } from 'vue'
-import { ChevronLeft, Loader2, Search, X } from 'lucide-vue-next'
+import { computed, onUnmounted, ref, watch } from 'vue'
+import { ChevronRight, Loader2, Search, X } from 'lucide-vue-next'
 import type { SearchResult } from '../composables/useSearch'
+import { MIN_SEARCH_QUERY_LENGTH } from '../composables/useSearch'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 
 const props = defineProps<{
@@ -18,17 +19,28 @@ const emit = defineEmits<{
 }>()
 
 const inputValue = ref(props.initialQuery ?? '')
+const trimmedInputValue = computed(() => inputValue.value.trim())
+const isTooShort = computed(() => trimmedInputValue.value.length > 0 && trimmedInputValue.value.length < MIN_SEARCH_QUERY_LENGTH)
 let debounceTimer: ReturnType<typeof setTimeout> | null = null
 
 watch(inputValue, (val) => {
   if (debounceTimer) clearTimeout(debounceTimer)
-  if (!val.trim()) {
+  const normalized = val.trim()
+  if (!normalized) {
+    emit('clear')
+    return
+  }
+  if (normalized.length < MIN_SEARCH_QUERY_LENGTH) {
     emit('clear')
     return
   }
   debounceTimer = setTimeout(() => {
-    emit('search', val.trim())
+    emit('search', normalized)
   }, 600)
+})
+
+onUnmounted(() => {
+  if (debounceTimer) clearTimeout(debounceTimer)
 })
 
 function onClear() {
@@ -38,8 +50,10 @@ function onClear() {
 </script>
 
 <template>
-  <div class="fixed inset-0 z-50 flex">
-    <div class="search-panel w-80 h-full bg-card text-card-foreground flex flex-col shadow-2xl border-r border-border" @click.stop>
+  <div class="fixed inset-0 z-50 flex justify-end">
+    <div class="flex-1" @click="emit('close')" />
+
+    <div class="search-panel w-80 h-full bg-card text-card-foreground flex flex-col shadow-2xl border-l border-border" @click.stop>
       <div class="flex items-center gap-2 px-3 py-2.5 border-b border-border shrink-0">
         <Tooltip>
           <TooltipTrigger as-child>
@@ -47,7 +61,7 @@ function onClear() {
               class="flex items-center justify-center w-7 h-7 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors shrink-0"
               @click="emit('close')"
             >
-              <ChevronLeft :size="18" />
+              <ChevronRight :size="18" />
             </button>
           </TooltipTrigger>
           <TooltipContent>Close</TooltipContent>
@@ -56,7 +70,7 @@ function onClear() {
         <input
           v-model="inputValue"
           type="text"
-          placeholder="Search in book..."
+          placeholder="Search in book (min 2 chars)..."
           class="flex-1 min-w-0 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
           autofocus
         />
@@ -75,11 +89,15 @@ function onClear() {
           Searching…
         </div>
 
-        <div v-else-if="inputValue && !isSearching && results.length === 0" class="px-4 py-8 text-center text-sm text-muted-foreground">
+        <div v-else-if="isTooShort" class="px-4 py-8 text-center text-sm text-muted-foreground">
+          Type at least {{ MIN_SEARCH_QUERY_LENGTH }} characters
+        </div>
+
+        <div v-else-if="trimmedInputValue && !isSearching && results.length === 0" class="px-4 py-8 text-center text-sm text-muted-foreground">
           No results found
         </div>
 
-        <div v-else-if="!inputValue" class="px-4 py-8 text-center text-sm text-muted-foreground">Type to search</div>
+        <div v-else-if="!trimmedInputValue" class="px-4 py-8 text-center text-sm text-muted-foreground">Type to search</div>
 
         <ul v-else class="divide-y divide-border">
           <li
@@ -104,19 +122,17 @@ function onClear() {
         </p>
       </div>
     </div>
-
-    <div class="flex-1" @click="emit('close')" />
   </div>
 </template>
 
 <style scoped>
 .search-panel {
-  animation: slideInFromLeft 0.25s ease;
+  animation: slideInFromRight 0.25s ease;
 }
 
-@keyframes slideInFromLeft {
+@keyframes slideInFromRight {
   from {
-    transform: translateX(-100%);
+    transform: translateX(100%);
   }
   to {
     transform: translateX(0);

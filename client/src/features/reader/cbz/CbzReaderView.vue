@@ -33,14 +33,7 @@ import { useReaderSettings } from '../shared/composables/useReaderSettings'
 import type { CbxReaderSettings } from '@bookorbit/types'
 import { DEFAULT_WIDE_PAGE_RATIO_THRESHOLD, createCbzSpreadLayout } from './lib/spread-layout'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu'
+import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 
 const TWO_PAGE_BREAKPOINT = 900
 
@@ -61,6 +54,15 @@ const bookSettings = useReaderSettings(props.fileId, 'cbz')
 
 const currentPage = ref(0)
 const showSettings = ref(false)
+type SettingsTab = 'view' | 'reading' | 'layout'
+const settingsTab = ref<SettingsTab>('view')
+const settingsContentRef = ref<HTMLElement | null>(null)
+const hasSettingsTabBarShadow = ref(false)
+const settingsScrollMemory = ref<Record<SettingsTab, number>>({
+  view: 0,
+  reading: 0,
+  layout: 0,
+})
 const scrollContainer = ref<HTMLElement | null>(null)
 const viewportWidth = ref(0)
 const currentImageLoaded = ref(false)
@@ -71,7 +73,16 @@ const highlightForceTwoPage = ref(false)
 const forceTwoPageToggleButton = ref<HTMLButtonElement | null>(null)
 let forceToggleHighlightTimer: ReturnType<typeof setTimeout> | null = null
 
-watch(showSettings, (open) => setVisibilityLock(open))
+watch(showSettings, (open) => {
+  setVisibilityLock(open)
+  if (!open) return
+  settingsTab.value = 'view'
+  nextTick(() => {
+    if (!settingsContentRef.value) return
+    settingsContentRef.value.scrollTop = settingsScrollMemory.value.view ?? 0
+    hasSettingsTabBarShadow.value = settingsContentRef.value.scrollTop > 0
+  })
+})
 
 // ── Settings options ───────────────────────────────────────────────────────────
 const FIT_OPTIONS: { value: FitMode; label: string; icon: Component }[] = [
@@ -85,9 +96,9 @@ const VIEW_OPTIONS: { value: ViewMode; label: string; icon: Component }[] = [
   { value: 'two-page', label: 'Two-page', icon: LayoutGrid },
 ]
 const SCROLL_OPTIONS: { value: ScrollMode; label: string; icon: Component }[] = [
-  { value: 'paginated', label: 'Paginated', icon: ScanLine },
+  { value: 'paginated', label: 'Paged', icon: ScanLine },
   { value: 'infinite', label: 'Infinite', icon: Layers },
-  { value: 'long-strip', label: 'Long strip', icon: AlignJustify },
+  { value: 'long-strip', label: 'Strip', icon: AlignJustify },
 ]
 const DIRECTION_OPTIONS: { value: Direction; label: string; icon: Component }[] = [
   { value: 'ltr', label: 'L to R', icon: ArrowRight },
@@ -98,14 +109,33 @@ const SPREAD_ALIGNMENT_OPTIONS: { value: SpreadAlignment; label: string; icon: C
   { value: 'shifted', label: 'Shifted', icon: BookOpen },
 ]
 const WIDE_PAGE_OPTIONS: { value: WidePageSingletonMode; label: string; icon: Component }[] = [
-  { value: 'auto', label: 'Auto singleton', icon: ImageIcon },
-  { value: 'disable', label: 'Keep in spreads', icon: LayoutGrid },
+  { value: 'auto', label: 'Auto', icon: ImageIcon },
+  { value: 'disable', label: 'In spreads', icon: LayoutGrid },
 ]
 const BG_OPTIONS: { value: BgColor; label: string; icon: Component }[] = [
   { value: 'black', label: 'Black', icon: Moon },
   { value: 'gray', label: 'Gray', icon: Circle },
   { value: 'white', label: 'White', icon: Sun },
 ]
+
+function onSettingsContentScroll() {
+  if (!settingsContentRef.value) return
+  settingsScrollMemory.value[settingsTab.value] = settingsContentRef.value.scrollTop
+  hasSettingsTabBarShadow.value = settingsContentRef.value.scrollTop > 0
+}
+
+function setSettingsTab(tab: SettingsTab) {
+  if (tab === settingsTab.value) return
+  if (settingsContentRef.value) {
+    settingsScrollMemory.value[settingsTab.value] = settingsContentRef.value.scrollTop
+  }
+  settingsTab.value = tab
+  nextTick(() => {
+    if (!settingsContentRef.value) return
+    settingsContentRef.value.scrollTop = settingsScrollMemory.value[tab] ?? 0
+    hasSettingsTabBarShadow.value = settingsContentRef.value.scrollTop > 0
+  })
+}
 
 function setFitMode(v: FitMode) {
   fitMode.value = v
@@ -127,9 +157,6 @@ function setWidePageMode(v: WidePageSingletonMode) {
 }
 function setForceTwoPage(v: boolean) {
   forceTwoPage.value = v
-}
-function toggleForceTwoPage() {
-  setForceTwoPage(!forceTwoPage.value)
 }
 function setBgColor(v: BgColor) {
   bgColor.value = v
@@ -223,6 +250,12 @@ const progressPageIndex = computed(() => {
 const progressPercent = computed(() => {
   if (pageCount.value <= 0) return 0
   return ((Math.max(0, Math.min(progressPageIndex.value, pageCount.value - 1)) + 1) / pageCount.value) * 100
+})
+
+const sliderFillPercent = computed(() => {
+  const max = Math.max(0, pageCount.value - 1)
+  if (max === 0) return 0
+  return (Math.max(0, Math.min(currentPage.value, max)) / max) * 100
 })
 
 const canGoPrev = computed(() => {
@@ -543,181 +576,272 @@ onUnmounted(() => {
               <Settings :size="15" />
             </button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" class="w-80 p-2">
-            <DropdownMenuLabel class="text-muted-foreground text-xs px-1 py-1">Reader Settings</DropdownMenuLabel>
-
-            <div class="px-1 py-1.5 space-y-1.5">
-              <p class="text-[11px] text-muted-foreground">Fit mode</p>
-              <div class="grid grid-cols-2 gap-1">
-                <button
-                  v-for="opt in FIT_OPTIONS"
-                  :key="opt.value"
-                  class="h-7 px-2 rounded-md border text-[11px] transition-colors flex items-center justify-center gap-1"
-                  :class="
-                    fitMode === opt.value ? 'border-primary text-primary bg-primary/10' : 'border-border text-muted-foreground hover:text-foreground'
-                  "
-                  @click.stop="setFitMode(opt.value)"
-                >
-                  <component :is="opt.icon" :size="11" />
-                  {{ opt.label }}
-                </button>
-              </div>
-            </div>
-
-            <div class="px-1 py-1.5 space-y-1.5">
-              <div class="flex items-center justify-between">
-                <p class="text-[11px] text-muted-foreground">Page view</p>
-                <span
-                  v-if="showAutoFallbackBadge"
-                  class="inline-flex items-center gap-1 rounded-full border border-border bg-muted px-2 py-0.5 text-[10px] text-muted-foreground"
-                >
-                  <Info :size="11" />
-                  Auto-fallback active
-                </span>
-              </div>
-              <div class="grid grid-cols-2 gap-1">
-                <button
-                  v-for="opt in VIEW_OPTIONS"
-                  :key="opt.value"
-                  class="h-7 px-2 rounded-md border text-xs transition-colors flex items-center justify-center gap-1"
-                  :class="
-                    viewMode === opt.value ? 'border-primary text-primary bg-primary/10' : 'border-border text-muted-foreground hover:text-foreground'
-                  "
-                  @click.stop="setViewMode(opt.value)"
-                >
-                  <component :is="opt.icon" :size="11" />
-                  {{ opt.label }}
-                </button>
-              </div>
-            </div>
-
-            <div class="px-1 py-1.5 space-y-1.5">
-              <p class="text-[11px] text-muted-foreground">Reading direction</p>
-              <div class="grid grid-cols-2 gap-1">
-                <button
-                  v-for="opt in DIRECTION_OPTIONS"
-                  :key="opt.value"
-                  class="h-7 px-2 rounded-md border text-xs transition-colors flex items-center justify-center gap-1"
-                  :class="
-                    direction === opt.value
-                      ? 'border-primary text-primary bg-primary/10'
-                      : 'border-border text-muted-foreground hover:text-foreground'
-                  "
-                  @click.stop="setDirection(opt.value)"
-                >
-                  <component :is="opt.icon" :size="11" />
-                  {{ opt.label }}
-                </button>
-              </div>
-            </div>
-
-            <div class="px-1 py-1.5 space-y-1.5">
-              <p class="text-[11px] text-muted-foreground">Background</p>
-              <div class="grid grid-cols-3 gap-1">
-                <button
-                  v-for="opt in BG_OPTIONS"
-                  :key="opt.value"
-                  class="h-7 px-2 rounded-md border text-xs transition-colors flex items-center justify-center gap-1"
-                  :class="
-                    bgColor === opt.value ? 'border-primary text-primary bg-primary/10' : 'border-border text-muted-foreground hover:text-foreground'
-                  "
-                  @click.stop="setBgColor(opt.value)"
-                >
-                  <component :is="opt.icon" :size="11" />
-                  {{ opt.label }}
-                </button>
-              </div>
-            </div>
-
-            <div v-if="showSpreadAlignmentControl" class="px-1 py-1.5 space-y-1.5">
-              <p class="text-[11px] text-muted-foreground">Spread alignment</p>
-              <div class="grid grid-cols-2 gap-1">
-                <button
-                  v-for="opt in SPREAD_ALIGNMENT_OPTIONS"
-                  :key="opt.value"
-                  class="h-7 px-2 rounded-md border text-xs transition-colors flex items-center justify-center gap-1"
-                  :class="
-                    spreadAlignment === opt.value
-                      ? 'border-primary text-primary bg-primary/10'
-                      : 'border-border text-muted-foreground hover:text-foreground'
-                  "
-                  @click.stop="setSpreadAlignment(opt.value)"
-                >
-                  <component :is="opt.icon" :size="11" />
-                  {{ opt.label }}
-                </button>
-              </div>
-            </div>
-
-            <DropdownMenuItem v-if="showSpreadAlignmentHint" class="text-xs mt-1" @select.prevent="focusForceTwoPageFromHint">
-              <Info :size="13" />
-              Spread alignment unavailable in auto-fallback
-              <span class="ml-auto text-[10px] text-muted-foreground">Focus toggle below</span>
-            </DropdownMenuItem>
-
-            <DropdownMenuSeparator class="my-1" />
-
-            <div class="px-1 py-1.5 space-y-1.5">
-              <p class="text-[11px] text-muted-foreground">Scroll mode</p>
-              <div class="grid grid-cols-3 gap-1">
-                <button
-                  v-for="opt in SCROLL_OPTIONS"
-                  :key="opt.value"
-                  class="h-7 px-2 rounded-md border text-[11px] transition-colors flex items-center justify-center gap-1"
-                  :class="
-                    scrollMode === opt.value
-                      ? 'border-primary text-primary bg-primary/10'
-                      : 'border-border text-muted-foreground hover:text-foreground'
-                  "
-                  @click.stop="setScrollMode(opt.value)"
-                >
-                  <component :is="opt.icon" :size="11" />
-                  {{ opt.label }}
-                </button>
-              </div>
-            </div>
-
-            <div class="px-1 py-1.5 flex items-center justify-between">
-              <div>
-                <p class="text-[11px] text-muted-foreground">Force two-page (Bypass mobile fallback)</p>
-              </div>
-              <button
-                ref="forceTwoPageToggleButton"
-                class="h-7 px-3 rounded-md border text-xs transition-colors"
-                :class="[
-                  forceTwoPage ? 'border-primary text-primary bg-primary/10' : 'border-border text-muted-foreground hover:text-foreground',
-                  highlightForceTwoPage ? 'ring-2 ring-primary/50' : '',
-                ]"
-                @click.stop="toggleForceTwoPage"
+          <DropdownMenuContent
+            align="end"
+            side="bottom"
+            :side-offset="10"
+            class="w-[22rem] max-w-[calc(100vw-1rem)] max-h-[min(80vh,38rem)] rounded-lg border-border bg-card p-0 shadow-2xl overflow-hidden"
+          >
+            <section
+              class="bg-card text-card-foreground flex max-h-[min(80vh,38rem)] flex-col overflow-hidden [&_button:focus-visible]:outline-none [&_button:focus-visible]:ring-2 [&_button:focus-visible]:ring-primary/55 [&_button:focus-visible]:ring-offset-1 [&_button:focus-visible]:ring-offset-card"
+            >
+              <div
+                class="sticky top-0 z-10 border-b border-border bg-card/95 px-3 py-3 backdrop-blur-sm transition-shadow"
+                :class="hasSettingsTabBarShadow ? 'shadow-sm' : ''"
               >
-                {{ forceTwoPage ? 'On' : 'Off' }}
-              </button>
-            </div>
-
-            <div class="px-1 py-1.5 space-y-1.5">
-              <p class="text-[11px] text-muted-foreground">Wide pages</p>
-              <div class="grid grid-cols-2 gap-1">
-                <button
-                  v-for="opt in WIDE_PAGE_OPTIONS"
-                  :key="opt.value"
-                  class="h-7 px-2 rounded-md border text-[11px] transition-colors flex items-center justify-center gap-1"
-                  :class="
-                    widePageSingletonMode === opt.value
-                      ? 'border-primary text-primary bg-primary/10'
-                      : 'border-border text-muted-foreground hover:text-foreground'
-                  "
-                  @click.stop="setWidePageMode(opt.value)"
-                >
-                  <component :is="opt.icon" :size="11" />
-                  {{ opt.label }}
-                </button>
+                <div class="grid grid-cols-3 gap-1 rounded-lg bg-muted/55 p-1">
+                  <button
+                    class="flex h-8.5 min-w-0 items-center justify-center gap-1.5 rounded-lg px-2 text-[12px] font-medium leading-none transition-colors"
+                    :class="
+                      settingsTab === 'view'
+                        ? 'bg-background text-foreground shadow-sm ring-1 ring-border'
+                        : 'text-muted-foreground hover:text-foreground hover:bg-background/70'
+                    "
+                    @click.stop="setSettingsTab('view')"
+                  >
+                    <ImageIcon :size="13" />
+                    <span class="truncate whitespace-nowrap">View</span>
+                  </button>
+                  <button
+                    class="flex h-8.5 min-w-0 items-center justify-center gap-1.5 rounded-lg px-2 text-[12px] font-medium leading-none transition-colors"
+                    :class="
+                      settingsTab === 'reading'
+                        ? 'bg-background text-foreground shadow-sm ring-1 ring-border'
+                        : 'text-muted-foreground hover:text-foreground hover:bg-background/70'
+                    "
+                    @click.stop="setSettingsTab('reading')"
+                  >
+                    <ScanLine :size="13" />
+                    <span class="truncate whitespace-nowrap">Reading</span>
+                  </button>
+                  <button
+                    class="flex h-8.5 min-w-0 items-center justify-center gap-1.5 rounded-lg px-2 text-[12px] font-medium leading-none transition-colors"
+                    :class="
+                      settingsTab === 'layout'
+                        ? 'bg-background text-foreground shadow-sm ring-1 ring-border'
+                        : 'text-muted-foreground hover:text-foreground hover:bg-background/70'
+                    "
+                    @click.stop="setSettingsTab('layout')"
+                  >
+                    <LayoutGrid :size="13" />
+                    <span class="truncate whitespace-nowrap">Layout</span>
+                  </button>
+                </div>
               </div>
-            </div>
 
-            <DropdownMenuSeparator class="my-1" />
-            <DropdownMenuItem class="text-xs text-destructive focus:text-destructive" @select.prevent="confirmResetBookViewSettings">
-              Reset book view settings
-            </DropdownMenuItem>
+              <div ref="settingsContentRef" class="overflow-y-auto p-5.5 space-y-6" @scroll="onSettingsContentScroll">
+                <template v-if="settingsTab === 'view'">
+                  <div class="space-y-6">
+                    <div>
+                      <p class="mb-2 text-[13px] font-medium text-foreground/90">Fit mode</p>
+                      <div class="grid grid-cols-2 gap-1 rounded-lg bg-muted/55 p-1">
+                        <button
+                          v-for="opt in FIT_OPTIONS"
+                          :key="opt.value"
+                          class="flex h-[2.125rem] min-w-0 items-center justify-center gap-1.5 rounded-lg px-2.5 text-[12px] font-medium leading-none transition-colors"
+                          :class="
+                            fitMode === opt.value
+                              ? 'bg-background text-foreground shadow-sm ring-1 ring-border'
+                              : 'text-muted-foreground hover:text-foreground hover:bg-background/70'
+                          "
+                          @click.stop="setFitMode(opt.value)"
+                        >
+                          <component :is="opt.icon" :size="13" />
+                          <span class="truncate whitespace-nowrap">{{ opt.label }}</span>
+                        </button>
+                      </div>
+                    </div>
+
+                    <div class="h-px bg-border/70" />
+
+                    <div>
+                      <p class="mb-2 text-[13px] font-medium text-foreground/90">Background</p>
+                      <div class="grid grid-cols-3 gap-1 rounded-lg bg-muted/55 p-1">
+                        <button
+                          v-for="opt in BG_OPTIONS"
+                          :key="opt.value"
+                          class="flex h-[2.125rem] min-w-0 items-center justify-center gap-1.5 rounded-lg px-2.5 text-[12px] font-medium leading-none transition-colors"
+                          :class="
+                            bgColor === opt.value
+                              ? 'bg-background text-foreground shadow-sm ring-1 ring-border'
+                              : 'text-muted-foreground hover:text-foreground hover:bg-background/70'
+                          "
+                          @click.stop="setBgColor(opt.value)"
+                        >
+                          <component :is="opt.icon" :size="13" />
+                          <span class="truncate whitespace-nowrap">{{ opt.label }}</span>
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </template>
+
+                <template v-else-if="settingsTab === 'reading'">
+                  <div class="space-y-6">
+                    <div>
+                      <p class="mb-2 text-[13px] font-medium text-foreground/90">Scroll mode</p>
+                      <div class="grid grid-cols-3 gap-1 rounded-lg bg-muted/55 p-1">
+                        <button
+                          v-for="opt in SCROLL_OPTIONS"
+                          :key="opt.value"
+                          class="flex h-[2.125rem] min-w-0 items-center justify-center gap-1.5 rounded-lg px-2 text-[12px] font-medium leading-none transition-colors"
+                          :class="
+                            scrollMode === opt.value
+                              ? 'bg-background text-foreground shadow-sm ring-1 ring-border'
+                              : 'text-muted-foreground hover:text-foreground hover:bg-background/70'
+                          "
+                          @click.stop="setScrollMode(opt.value)"
+                        >
+                          <component :is="opt.icon" :size="13" />
+                          <span class="truncate whitespace-nowrap">{{ opt.label }}</span>
+                        </button>
+                      </div>
+                    </div>
+
+                    <div class="h-px bg-border/70" />
+
+                    <div>
+                      <p class="mb-2 text-[13px] font-medium text-foreground/90">Reading direction</p>
+                      <div class="grid grid-cols-2 gap-1 rounded-lg bg-muted/55 p-1">
+                        <button
+                          v-for="opt in DIRECTION_OPTIONS"
+                          :key="opt.value"
+                          class="flex h-[2.125rem] min-w-0 items-center justify-center gap-1.5 rounded-lg px-2.5 text-[12px] font-medium leading-none transition-colors"
+                          :class="
+                            direction === opt.value
+                              ? 'bg-background text-foreground shadow-sm ring-1 ring-border'
+                              : 'text-muted-foreground hover:text-foreground hover:bg-background/70'
+                          "
+                          @click.stop="setDirection(opt.value)"
+                        >
+                          <component :is="opt.icon" :size="13" />
+                          <span class="truncate whitespace-nowrap">{{ opt.label }}</span>
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </template>
+
+                <template v-else>
+                  <div class="space-y-6">
+                    <div>
+                      <div class="mb-2 flex items-center justify-between">
+                        <p class="text-[13px] font-medium text-foreground/90">Page view</p>
+                        <span
+                          v-if="showAutoFallbackBadge"
+                          class="inline-flex items-center gap-1 rounded-full border border-border bg-muted px-2 py-0.5 text-[10px] text-muted-foreground"
+                        >
+                          <Info :size="11" />
+                          Auto-fallback
+                        </span>
+                      </div>
+                      <div class="grid grid-cols-2 gap-1 rounded-lg bg-muted/55 p-1">
+                        <button
+                          v-for="opt in VIEW_OPTIONS"
+                          :key="opt.value"
+                          class="flex h-[2.125rem] min-w-0 items-center justify-center gap-1.5 rounded-lg px-2.5 text-[12px] font-medium leading-none transition-colors"
+                          :class="
+                            viewMode === opt.value
+                              ? 'bg-background text-foreground shadow-sm ring-1 ring-border'
+                              : 'text-muted-foreground hover:text-foreground hover:bg-background/70'
+                          "
+                          @click.stop="setViewMode(opt.value)"
+                        >
+                          <component :is="opt.icon" :size="13" />
+                          <span class="truncate whitespace-nowrap">{{ opt.label }}</span>
+                        </button>
+                      </div>
+                    </div>
+
+                    <div class="h-px bg-border/70" />
+
+                    <div v-if="showSpreadAlignmentControl">
+                      <p class="mb-2 text-[13px] font-medium text-foreground/90">Spread alignment</p>
+                      <div class="grid grid-cols-2 gap-1 rounded-lg bg-muted/55 p-1">
+                        <button
+                          v-for="opt in SPREAD_ALIGNMENT_OPTIONS"
+                          :key="opt.value"
+                          class="flex h-[2.125rem] min-w-0 items-center justify-center gap-1.5 rounded-lg px-2.5 text-[12px] font-medium leading-none transition-colors"
+                          :class="
+                            spreadAlignment === opt.value
+                              ? 'bg-background text-foreground shadow-sm ring-1 ring-border'
+                              : 'text-muted-foreground hover:text-foreground hover:bg-background/70'
+                          "
+                          @click.stop="setSpreadAlignment(opt.value)"
+                        >
+                          <component :is="opt.icon" :size="13" />
+                          <span class="truncate whitespace-nowrap">{{ opt.label }}</span>
+                        </button>
+                      </div>
+                    </div>
+
+                    <div v-else-if="showSpreadAlignmentHint" class="rounded-lg border border-border/70 bg-muted/35 px-3 py-2">
+                      <p class="text-xs leading-tight text-muted-foreground">Spread alignment is unavailable in auto-fallback mode.</p>
+                      <button class="mt-1 text-xs text-primary hover:underline" @click.stop="focusForceTwoPageFromHint">Focus two-page toggle</button>
+                    </div>
+
+                    <div>
+                      <p class="mb-2 text-[13px] font-medium text-foreground/90">Force two-page</p>
+                      <div class="grid grid-cols-2 gap-1 rounded-lg bg-muted/55 p-1">
+                        <button
+                          ref="forceTwoPageToggleButton"
+                          class="flex h-[2.125rem] min-w-0 items-center justify-center rounded-lg px-2.5 text-[12px] font-medium leading-none transition-colors"
+                          :class="[
+                            !forceTwoPage
+                              ? 'bg-background text-foreground shadow-sm ring-1 ring-border'
+                              : 'text-muted-foreground hover:text-foreground hover:bg-background/70',
+                            highlightForceTwoPage ? 'ring-2 ring-primary/50' : '',
+                          ]"
+                          @click.stop="setForceTwoPage(false)"
+                        >
+                          Off
+                        </button>
+                        <button
+                          class="flex h-[2.125rem] min-w-0 items-center justify-center rounded-lg px-2.5 text-[12px] font-medium leading-none transition-colors"
+                          :class="
+                            forceTwoPage
+                              ? 'bg-background text-foreground shadow-sm ring-1 ring-border'
+                              : 'text-muted-foreground hover:text-foreground hover:bg-background/70'
+                          "
+                          @click.stop="setForceTwoPage(true)"
+                        >
+                          On
+                        </button>
+                      </div>
+                    </div>
+
+                    <div>
+                      <p class="mb-2 text-[13px] font-medium text-foreground/90">Wide pages</p>
+                      <div class="grid grid-cols-2 gap-1 rounded-lg bg-muted/55 p-1">
+                        <button
+                          v-for="opt in WIDE_PAGE_OPTIONS"
+                          :key="opt.value"
+                          class="flex h-[2.125rem] min-w-0 items-center justify-center gap-1.5 rounded-lg px-2.5 text-[12px] font-medium leading-none transition-colors"
+                          :class="
+                            widePageSingletonMode === opt.value
+                              ? 'bg-background text-foreground shadow-sm ring-1 ring-border'
+                              : 'text-muted-foreground hover:text-foreground hover:bg-background/70'
+                          "
+                          @click.stop="setWidePageMode(opt.value)"
+                        >
+                          <component :is="opt.icon" :size="13" />
+                          <span class="truncate whitespace-nowrap">{{ opt.label }}</span>
+                        </button>
+                      </div>
+                    </div>
+
+                    <div class="h-px bg-border/70" />
+
+                    <button
+                      class="w-full rounded-lg border border-destructive/40 px-3 py-2 text-sm font-medium text-destructive transition-colors hover:bg-destructive/10"
+                      @click.stop="confirmResetBookViewSettings"
+                    >
+                      Reset book view settings
+                    </button>
+                  </div>
+                </template>
+              </div>
+            </section>
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
@@ -798,24 +922,29 @@ onUnmounted(() => {
       class="absolute bottom-0 inset-x-0 z-50 transition-all duration-300"
       :class="footerVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-full pointer-events-none'"
     >
-      <div class="h-14 flex items-center gap-3 px-4 bg-background/90 backdrop-blur-md border-t border-border">
-        <Tooltip>
-          <TooltipTrigger as-child>
-            <button class="viewer-btn" @click="goToPage(0)"><ChevronsLeft :size="16" /></button>
-          </TooltipTrigger>
-          <TooltipContent>First page</TooltipContent>
-        </Tooltip>
+      <div class="h-12 sm:h-14 flex items-center gap-1.5 px-2 sm:gap-3 sm:px-4 bg-background/90 backdrop-blur-md border-t border-border">
+        <div class="hidden sm:block">
+          <Tooltip>
+            <TooltipTrigger as-child>
+              <button class="viewer-btn" @click="goToPage(0)"><ChevronsLeft :size="16" /></button>
+            </TooltipTrigger>
+            <TooltipContent>First page</TooltipContent>
+          </Tooltip>
+        </div>
         <button class="viewer-btn" :disabled="!canGoPrev" @click="prevPage"><ChevronLeft :size="16" /></button>
 
-        <div class="flex-1 flex flex-col justify-center gap-0.5">
+        <div class="relative flex-1 min-w-0 flex items-center h-6">
           <input
             type="range"
             :min="0"
             :max="Math.max(0, pageCount - 1)"
             :value="currentPage"
             list="cbz-ticks"
-            class="flex-1 w-full cursor-pointer"
-            style="accent-color: var(--primary)"
+            class="w-full h-1 rounded-full cursor-pointer"
+            :style="{
+              accentColor: 'var(--primary)',
+              background: `linear-gradient(to right, var(--primary) ${sliderFillPercent}%, var(--border) ${sliderFillPercent}%)`,
+            }"
             @input="goToPage(Number(($event.target as HTMLInputElement).value))"
           />
           <datalist id="cbz-ticks">
@@ -824,12 +953,14 @@ onUnmounted(() => {
         </div>
 
         <button class="viewer-btn" :disabled="!canGoNext" @click="nextPage"><ChevronRight :size="16" /></button>
-        <Tooltip>
-          <TooltipTrigger as-child>
-            <button class="viewer-btn" @click="goToPage(pageCount - 1)"><ChevronsRight :size="16" /></button>
-          </TooltipTrigger>
-          <TooltipContent>Last page</TooltipContent>
-        </Tooltip>
+        <div class="hidden sm:block">
+          <Tooltip>
+            <TooltipTrigger as-child>
+              <button class="viewer-btn" @click="goToPage(pageCount - 1)"><ChevronsRight :size="16" /></button>
+            </TooltipTrigger>
+            <TooltipContent>Last page</TooltipContent>
+          </Tooltip>
+        </div>
       </div>
     </div>
 

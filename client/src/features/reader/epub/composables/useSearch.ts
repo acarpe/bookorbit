@@ -1,5 +1,7 @@
 import { ref } from 'vue'
 
+export const MIN_SEARCH_QUERY_LENGTH = 2
+
 export interface SearchExcerpt {
   pre: string
   match: string
@@ -30,8 +32,13 @@ export function useSearch() {
   let cancelled = false
 
   async function search(view: FoliateView, q: string) {
-    if (!q.trim()) {
+    const normalized = q.trim()
+    if (normalized.length < MIN_SEARCH_QUERY_LENGTH) {
+      cancelled = true
+      isSearching.value = false
       results.value = []
+      query.value = normalized
+      view.clearSearch?.()
       return
     }
 
@@ -39,12 +46,12 @@ export function useSearch() {
     await Promise.resolve()
     cancelled = false
 
-    query.value = q
+    query.value = normalized
     results.value = []
     isSearching.value = true
 
     try {
-      const generator = view.search({ query: q })
+      const generator = view.search({ query: normalized })
       for await (const section of generator) {
         if (cancelled) break
         if (!section || typeof section !== 'object' || !('subitems' in section)) continue

@@ -63,7 +63,8 @@ export function usePdfRenderer(
       // Cancel any prior render on this canvas before starting a new one.
       activeRenders.get(pageNum)?.cancel()
 
-      const task = startRenderPageFn(pageNum, canvas, scale.value)
+      const renderScale = scale.value
+      const task = startRenderPageFn(pageNum, canvas, renderScale)
       activeRenders.set(pageNum, task)
       await task.promise
 
@@ -72,7 +73,7 @@ export function usePdfRenderer(
       activeRenders.delete(pageNum)
 
       const dpr = window.devicePixelRatio || 1
-      onDimUpdate(pageNum, { width: canvas.width / (scale.value * dpr), height: canvas.height / (scale.value * dpr) })
+      onDimUpdate(pageNum, { width: canvas.width / (renderScale * dpr), height: canvas.height / (renderScale * dpr) })
       rendered.add(pageNum)
       await buildTextLayer(pageNum)
     }

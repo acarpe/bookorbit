@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { useSearch, type FoliateView } from '../useSearch'
+import { MIN_SEARCH_QUERY_LENGTH, useSearch, type FoliateView } from '../useSearch'
 
 describe('useSearch', () => {
   it('returns early for empty query and does not call foliate search', async () => {
@@ -16,6 +16,25 @@ describe('useSearch', () => {
     await store.search(view, '   ')
 
     expect(view.search).not.toHaveBeenCalled()
+    expect(store.results.value).toEqual([])
+    expect(store.isSearching.value).toBe(false)
+  })
+
+  it('returns early for short query and does not call foliate search', async () => {
+    const view: FoliateView = {
+      search: vi.fn<(opts: { query: string }) => AsyncGenerator<Record<string, unknown>, void, unknown>>(async function* () {
+        yield {}
+      }),
+      clearSearch: vi.fn<() => void>(),
+    }
+
+    const store = useSearch()
+    store.results.value = [{ cfi: 'x', excerpt: { pre: '', match: 'x', post: '' } }]
+
+    await store.search(view, 'x'.repeat(MIN_SEARCH_QUERY_LENGTH - 1))
+
+    expect(view.search).not.toHaveBeenCalled()
+    expect(view.clearSearch).toHaveBeenCalledTimes(1)
     expect(store.results.value).toEqual([])
     expect(store.isSearching.value).toBe(false)
   })

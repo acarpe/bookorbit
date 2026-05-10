@@ -1,6 +1,7 @@
 import { mount } from '@vue/test-utils'
 import { describe, expect, it, vi } from 'vitest'
 import ReaderSearchPanel from '../ReaderSearchPanel.vue'
+import { MIN_SEARCH_QUERY_LENGTH } from '../../composables/useSearch'
 
 const globalStubs = {
   stubs: {
@@ -29,6 +30,27 @@ describe('ReaderSearchPanel', () => {
 
     vi.advanceTimersByTime(1)
     expect(wrapper.emitted('search')?.[0]).toEqual(['dragons'])
+
+    vi.useRealTimers()
+  })
+
+  it('requires minimum query length before searching', async () => {
+    vi.useFakeTimers()
+
+    const wrapper = mount(ReaderSearchPanel, {
+      props: {
+        results: [],
+        isSearching: false,
+      },
+      global: globalStubs,
+    })
+
+    await wrapper.get('input').setValue('x'.repeat(MIN_SEARCH_QUERY_LENGTH - 1))
+
+    vi.advanceTimersByTime(700)
+    expect(wrapper.emitted('search')).toBeUndefined()
+    expect(wrapper.emitted('clear')?.length).toBe(1)
+    expect(wrapper.text()).toContain(`Type at least ${MIN_SEARCH_QUERY_LENGTH} characters`)
 
     vi.useRealTimers()
   })
@@ -72,8 +94,9 @@ describe('ReaderSearchPanel', () => {
     await wrapper.get('li').trigger('click')
     expect(wrapper.emitted('navigate')?.[0]).toEqual(['epubcfi(/6/4)'])
 
-    const overlays = wrapper.findAll('.flex-1')
-    await overlays[overlays.length - 1]!.trigger('click')
+    const dismissOverlay = wrapper.find('.fixed.inset-0.z-50.flex.justify-end > .flex-1')
+    expect(dismissOverlay.exists()).toBe(true)
+    await dismissOverlay.trigger('click')
     expect(wrapper.emitted('close')?.length).toBe(1)
   })
 })

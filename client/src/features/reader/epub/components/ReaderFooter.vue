@@ -22,7 +22,9 @@ function onSeek(e: Event) {
 </script>
 
 <template>
-  <footer class="fixed bottom-0 left-0 right-0 h-14 z-50 flex items-center gap-3 px-4 bg-background/90 backdrop-blur-md border-t border-border">
+  <footer
+    class="fixed bottom-0 left-0 right-0 h-12 sm:h-14 z-50 flex items-center gap-2 px-2 sm:gap-3 sm:px-4 bg-background/90 backdrop-blur-md border-t border-border"
+  >
     <Tooltip>
       <TooltipTrigger as-child>
         <button class="viewer-btn" :disabled="sectionIndex === 0" @click="emit('prevSection')">

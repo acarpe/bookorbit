@@ -348,10 +348,19 @@ onUnmounted(() => {
     />
 
     <!-- Body: sidebar + pages -->
-    <div class="flex flex-1 min-h-0 min-w-0">
+    <div class="flex-1 min-h-0 min-w-0 relative">
+      <!-- Mobile sidebar mask -->
+      <button
+        v-if="showSidebar"
+        class="absolute inset-0 z-10 bg-black/35 md:hidden"
+        aria-label="Close sidebar overlay"
+        @click="showSidebar = false"
+      />
+
       <!-- Sidebar -->
       <PdfSidebar
         v-if="showSidebar"
+        class="absolute left-0 top-0 bottom-0 z-20 shadow-xl"
         :total-pages="totalPages"
         :current-page="currentPage"
         :outline="outline.outline.value"
@@ -360,7 +369,7 @@ onUnmounted(() => {
       />
 
       <!-- PDF Viewport -->
-      <div class="flex-1 min-w-0 relative">
+      <div class="h-full w-full min-w-0 relative">
         <div v-if="error" class="absolute inset-0 flex items-center justify-center p-8 text-center bg-background">
           <div>
             <p class="text-sm font-medium text-foreground mb-1">Failed to load PDF</p>

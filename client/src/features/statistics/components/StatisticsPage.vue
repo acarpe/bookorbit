@@ -121,11 +121,11 @@ function setTab(tab: 'library' | 'user') {
 
 <template>
   <div class="flex flex-col gap-6 pt-4">
-    <div class="flex items-center justify-between">
-      <div class="flex items-center gap-1 rounded-lg bg-muted p-1">
+    <div class="flex w-full flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+      <div class="flex w-full items-center gap-1 rounded-lg bg-muted p-1 sm:w-auto">
         <button
           :class="[
-            'rounded-md px-4 py-1.5 text-sm font-medium transition-colors',
+            'flex-1 rounded-md px-4 py-1.5 text-sm font-medium transition-colors sm:flex-none',
             activeTab === 'library' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground',
           ]"
           @click="setTab('library')"
@@ -134,7 +134,7 @@ function setTab(tab: 'library' | 'user') {
         </button>
         <button
           :class="[
-            'rounded-md px-4 py-1.5 text-sm font-medium transition-colors',
+            'flex-1 rounded-md px-4 py-1.5 text-sm font-medium transition-colors sm:flex-none',
             activeTab === 'user' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground',
           ]"
           @click="setTab('user')"
@@ -143,16 +143,16 @@ function setTab(tab: 'library' | 'user') {
         </button>
       </div>
 
-      <div class="flex items-center gap-2">
+      <div class="flex w-full min-w-0 items-center gap-2 sm:w-auto sm:justify-end">
         <Popover v-if="libraries.length > 1">
           <PopoverTrigger as-child>
             <button
               :class="[
-                'flex h-8 items-center gap-1.5 rounded-md border px-3 text-sm transition-colors',
+                'flex h-8 min-w-0 flex-1 items-center justify-between gap-1.5 rounded-md border px-3 text-sm transition-colors sm:w-auto sm:flex-none sm:justify-start',
                 isFiltered ? 'border-primary/40 bg-primary/10 text-primary hover:bg-primary/15' : 'border-border text-foreground hover:bg-accent',
               ]"
             >
-              {{ libraryLabel }}
+              <span class="truncate">{{ libraryLabel }}</span>
               <ChevronDown class="size-3.5 opacity-60" />
             </button>
           </PopoverTrigger>
@@ -187,7 +187,7 @@ function setTab(tab: 'library' | 'user') {
         </Popover>
 
         <button
-          class="bg-muted text-foreground hover:bg-muted/70 flex h-8 items-center gap-1.5 rounded-md px-2.5 text-sm font-medium transition-colors"
+          class="bg-muted text-foreground hover:bg-muted/70 flex h-8 shrink-0 items-center gap-1.5 rounded-md px-2.5 text-sm font-medium transition-colors"
           @click="openConfig"
         >
           <Settings2 class="size-3.5" />
@@ -199,7 +199,7 @@ function setTab(tab: 'library' | 'user') {
     <StatisticsSummaryCard />
 
     <Sheet v-model:open="configOpen">
-      <SheetContent side="right" class="w-[420px] sm:max-w-[420px]">
+      <SheetContent side="right" class="w-[90dvw] max-w-[90dvw] sm:w-[420px] sm:max-w-[420px]">
         <SheetHeader>
           <div class="flex items-center justify-between pr-8">
             <SheetTitle>Configure Charts</SheetTitle>

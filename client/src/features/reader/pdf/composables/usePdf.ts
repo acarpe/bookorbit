@@ -63,13 +63,20 @@ export function usePdf() {
       }
       const dpr = window.devicePixelRatio || 1
       const viewport = page.getViewport({ scale: scale * dpr })
-      canvas.width = viewport.width
-      canvas.height = viewport.height
-      canvas.style.width = `${Math.round(viewport.width / dpr)}px`
-      canvas.style.height = `${Math.round(viewport.height / dpr)}px`
-      renderTask = page.render({ canvas, viewport })
+      const renderCanvas = document.createElement('canvas')
+      renderCanvas.width = viewport.width
+      renderCanvas.height = viewport.height
+      renderTask = page.render({ canvas: renderCanvas, viewport })
       try {
         await renderTask.promise
+        if (cancelled) return
+        const ctx = canvas.getContext('2d')
+        if (!ctx) return
+        canvas.width = viewport.width
+        canvas.height = viewport.height
+        canvas.style.width = `${Math.round(viewport.width / dpr)}px`
+        canvas.style.height = `${Math.round(viewport.height / dpr)}px`
+        ctx.drawImage(renderCanvas, 0, 0)
       } catch {
         // cancelled or interrupted — not an error
       } finally {

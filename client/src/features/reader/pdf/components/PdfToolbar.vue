@@ -15,13 +15,17 @@ import {
   Maximize,
   Minimize,
   Minus,
+  MoveHorizontal,
   MoreHorizontal,
   MousePointer,
   PanelLeft,
+  PanelLeftOpen,
+  PanelRightOpen,
   Plus,
+  Ratio,
   Search,
   ScanLine,
-  WrapText,
+  Square,
 } from 'lucide-vue-next'
 import {
   DropdownMenu,
@@ -88,6 +92,19 @@ const ZOOM_PERCENT_PRESETS = [
   { label: '400%', value: '4' },
 ] as const
 
+const ZOOM_MODE_PRESETS: { label: string; value: 'fit-page' | 'fit-width'; icon: Component }[] = [
+  { label: 'Page Fit', value: 'fit-page', icon: Ratio },
+  { label: 'Page Width', value: 'fit-width', icon: MoveHorizontal },
+]
+
+const MOBILE_ZOOM_PERCENT_PRESETS = [
+  { label: '75%', value: '0.75' },
+  { label: '100%', value: '1' },
+  { label: '125%', value: '1.25' },
+  { label: '150%', value: '1.5' },
+  { label: '200%', value: '2' },
+] as const
+
 const SCROLL_MODES: { label: string; value: ScrollMode; icon: Component }[] = [
   { label: 'Vertical Scrolling', value: 'vertical', icon: ArrowDownUp },
   { label: 'Horizontal Scrolling', value: 'horizontal', icon: ArrowLeftRight },
@@ -95,10 +112,10 @@ const SCROLL_MODES: { label: string; value: ScrollMode; icon: Component }[] = [
   { label: 'Page Scrolling', value: 'page', icon: ScanLine },
 ]
 
-const SPREAD_MODES = [
-  { label: 'No Spreads', value: 'none' as const },
-  { label: 'Odd Spreads', value: 'odd' as const },
-  { label: 'Even Spreads', value: 'even' as const },
+const SPREAD_MODES: { label: string; value: 'none' | 'odd' | 'even'; icon: Component }[] = [
+  { label: 'No Spreads', value: 'none', icon: Square },
+  { label: 'Odd Spreads', value: 'odd', icon: PanelLeftOpen },
+  { label: 'Even Spreads', value: 'even', icon: PanelRightOpen },
 ]
 
 function onPageInput(e: Event) {
@@ -161,7 +178,7 @@ function handleApplyZoomPreset(value: AcceptableValue) {
       <TooltipContent>Previous Page</TooltipContent>
     </Tooltip>
 
-    <div class="flex items-center gap-1 mx-0.5">
+    <div class="hidden md:flex items-center gap-1 mx-0.5">
       <input
         :value="pageInput"
         type="number"
@@ -174,6 +191,7 @@ function handleApplyZoomPreset(value: AcceptableValue) {
       <span class="text-muted-foreground text-xs">/</span>
       <span class="text-muted-foreground text-xs tabular-nums">{{ totalPages }}</span>
     </div>
+    <div class="md:hidden min-w-[3.6rem] text-center text-xs tabular-nums text-muted-foreground px-0.5">{{ currentPage }} / {{ totalPages }}</div>
 
     <Tooltip>
       <TooltipTrigger as-child>
@@ -184,69 +202,81 @@ function handleApplyZoomPreset(value: AcceptableValue) {
       <TooltipContent>Next Page</TooltipContent>
     </Tooltip>
 
-    <div class="viewer-sep" />
+    <div class="viewer-sep hidden md:block" />
 
     <!-- Zoom controls -->
-    <Tooltip>
-      <TooltipTrigger as-child>
-        <button class="viewer-btn" @click="emit('zoomOut')"><Minus :size="13" /></button>
-      </TooltipTrigger>
-      <TooltipContent>Zoom Out</TooltipContent>
-    </Tooltip>
+    <div class="hidden md:block">
+      <Tooltip>
+        <TooltipTrigger as-child>
+          <button class="viewer-btn" @click="emit('zoomOut')"><Minus :size="13" /></button>
+        </TooltipTrigger>
+        <TooltipContent>Zoom Out</TooltipContent>
+      </Tooltip>
+    </div>
 
-    <DropdownMenu>
-      <DropdownMenuTrigger as-child>
-        <button
-          class="flex items-center gap-1 px-2 h-7 rounded text-foreground/80 hover:text-foreground hover:bg-muted text-xs tabular-nums transition-colors"
-          style="min-width: 84px"
-        >
-          <span class="flex-1 text-center">{{ zoomLabel }}</span>
-          <ChevronDown :size="10" class="text-muted-foreground" />
-        </button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="center" class="min-w-[9rem]">
-        <DropdownMenuRadioGroup :model-value="currentZoomValue()" @update:model-value="handleApplyZoomPreset">
-          <DropdownMenuRadioItem value="fit-page" class="text-xs">Page Fit</DropdownMenuRadioItem>
-          <DropdownMenuRadioItem value="fit-width" class="text-xs">Page Width</DropdownMenuRadioItem>
-          <DropdownMenuSeparator />
-          <DropdownMenuRadioItem v-for="preset in ZOOM_PERCENT_PRESETS" :key="preset.value" :value="preset.value" class="text-xs">
-            {{ preset.label }}
-          </DropdownMenuRadioItem>
-        </DropdownMenuRadioGroup>
-      </DropdownMenuContent>
-    </DropdownMenu>
+    <div class="hidden md:block">
+      <DropdownMenu>
+        <DropdownMenuTrigger as-child>
+          <button
+            class="flex items-center gap-1 px-2 h-7 rounded text-foreground/80 hover:text-foreground hover:bg-muted text-xs tabular-nums transition-colors"
+            style="min-width: 84px"
+          >
+            <span class="flex-1 text-center">{{ zoomLabel }}</span>
+            <ChevronDown :size="10" class="text-muted-foreground" />
+          </button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="center" class="min-w-[9rem]">
+          <DropdownMenuRadioGroup :model-value="currentZoomValue()" @update:model-value="handleApplyZoomPreset">
+            <DropdownMenuRadioItem v-for="preset in ZOOM_MODE_PRESETS" :key="preset.value" :value="preset.value" class="text-xs gap-2">
+              <component :is="preset.icon" :size="13" />
+              {{ preset.label }}
+            </DropdownMenuRadioItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuRadioItem v-for="preset in ZOOM_PERCENT_PRESETS" :key="preset.value" :value="preset.value" class="text-xs">
+              {{ preset.label }}
+            </DropdownMenuRadioItem>
+          </DropdownMenuRadioGroup>
+        </DropdownMenuContent>
+      </DropdownMenu>
+    </div>
 
-    <Tooltip>
-      <TooltipTrigger as-child>
-        <button class="viewer-btn" @click="emit('zoomIn')"><Plus :size="13" /></button>
-      </TooltipTrigger>
-      <TooltipContent>Zoom In</TooltipContent>
-    </Tooltip>
+    <div class="hidden md:block">
+      <Tooltip>
+        <TooltipTrigger as-child>
+          <button class="viewer-btn" @click="emit('zoomIn')"><Plus :size="13" /></button>
+        </TooltipTrigger>
+        <TooltipContent>Zoom In</TooltipContent>
+      </Tooltip>
+    </div>
 
     <!-- Spacer -->
     <div class="flex-1" />
 
     <!-- Right side controls -->
-    <Tooltip>
-      <TooltipTrigger as-child>
-        <button class="viewer-btn" @click="emit('toggleFullscreen')">
-          <Minimize v-if="isFullscreen" :size="14" />
-          <Maximize v-else :size="14" />
-        </button>
-      </TooltipTrigger>
-      <TooltipContent>{{ isFullscreen ? 'Exit Fullscreen' : 'Fullscreen' }}</TooltipContent>
-    </Tooltip>
+    <div class="hidden md:block">
+      <Tooltip>
+        <TooltipTrigger as-child>
+          <button class="viewer-btn" @click="emit('toggleFullscreen')">
+            <Minimize v-if="isFullscreen" :size="14" />
+            <Maximize v-else :size="14" />
+          </button>
+        </TooltipTrigger>
+        <TooltipContent>{{ isFullscreen ? 'Exit Fullscreen' : 'Fullscreen' }}</TooltipContent>
+      </Tooltip>
+    </div>
 
-    <Tooltip v-if="hasPermission('library_download')">
-      <TooltipTrigger as-child>
-        <a :href="`/api/v1/books/files/${fileId}/download`" class="viewer-btn flex items-center justify-center">
-          <Download :size="14" />
-        </a>
-      </TooltipTrigger>
-      <TooltipContent>Download</TooltipContent>
-    </Tooltip>
+    <div v-if="hasPermission('library_download')" class="hidden md:block">
+      <Tooltip>
+        <TooltipTrigger as-child>
+          <a :href="`/api/v1/books/files/${fileId}/download`" class="viewer-btn flex items-center justify-center">
+            <Download :size="14" />
+          </a>
+        </TooltipTrigger>
+        <TooltipContent>Download</TooltipContent>
+      </Tooltip>
+    </div>
 
-    <div class="viewer-sep" />
+    <div class="viewer-sep hidden md:block" />
 
     <!-- Secondary toolbar (More tools) -->
     <DropdownMenu>
@@ -255,7 +285,42 @@ function handleApplyZoomPreset(value: AcceptableValue) {
           <MoreHorizontal :size="16" />
         </button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" class="w-52">
+      <DropdownMenuContent align="end" class="w-52 max-h-[72vh] overflow-y-auto">
+        <div class="md:hidden">
+          <DropdownMenuGroup>
+            <DropdownMenuItem class="text-xs gap-2" @click="emit('zoomOut')"> <Minus :size="13" /> Zoom Out </DropdownMenuItem>
+            <DropdownMenuItem class="text-xs gap-2" @click="emit('zoomIn')"> <Plus :size="13" /> Zoom In </DropdownMenuItem>
+          </DropdownMenuGroup>
+          <DropdownMenuLabel class="text-muted-foreground text-xs px-2 py-1">Zoom</DropdownMenuLabel>
+          <DropdownMenuRadioGroup :model-value="currentZoomValue()" @update:model-value="handleApplyZoomPreset">
+            <DropdownMenuRadioItem v-for="preset in ZOOM_MODE_PRESETS" :key="`mobile-${preset.value}`" :value="preset.value" class="text-xs gap-2">
+              <component :is="preset.icon" :size="13" />
+              {{ preset.label }}
+            </DropdownMenuRadioItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuRadioItem
+              v-for="preset in MOBILE_ZOOM_PERCENT_PRESETS"
+              :key="`mobile-${preset.value}`"
+              :value="preset.value"
+              class="text-xs"
+            >
+              {{ preset.label }}
+            </DropdownMenuRadioItem>
+          </DropdownMenuRadioGroup>
+          <DropdownMenuSeparator />
+          <DropdownMenuGroup>
+            <DropdownMenuItem class="text-xs gap-2" @click="emit('toggleFullscreen')">
+              <Minimize v-if="isFullscreen" :size="13" />
+              <Maximize v-else :size="13" />
+              {{ isFullscreen ? 'Exit Fullscreen' : 'Fullscreen' }}
+            </DropdownMenuItem>
+            <DropdownMenuItem v-if="hasPermission('library_download')" as-child class="text-xs gap-2">
+              <a :href="`/api/v1/books/files/${fileId}/download`"> <Download :size="13" /> Download </a>
+            </DropdownMenuItem>
+          </DropdownMenuGroup>
+          <DropdownMenuSeparator />
+        </div>
+
         <DropdownMenuGroup>
           <DropdownMenuItem class="text-xs gap-2" @click="emit('firstPage')"> <ChevronFirst :size="13" /> First Page </DropdownMenuItem>
           <DropdownMenuItem class="text-xs gap-2" @click="emit('lastPage')"> <ChevronLast :size="13" /> Last Page </DropdownMenuItem>
@@ -283,8 +348,9 @@ function handleApplyZoomPreset(value: AcceptableValue) {
 
         <DropdownMenuLabel class="text-muted-foreground text-xs px-2 py-1">Page Spread</DropdownMenuLabel>
         <DropdownMenuRadioGroup :model-value="spread" @update:model-value="emit('update:spread', $event as 'none' | 'odd' | 'even')">
-          <DropdownMenuRadioItem v-for="sp in SPREAD_MODES" :key="sp.value" :value="sp.value" class="text-xs">
-            <WrapText :size="13" /> {{ sp.label }}
+          <DropdownMenuRadioItem v-for="sp in SPREAD_MODES" :key="sp.value" :value="sp.value" class="text-xs gap-2">
+            <component :is="sp.icon" :size="13" />
+            {{ sp.label }}
           </DropdownMenuRadioItem>
         </DropdownMenuRadioGroup>
       </DropdownMenuContent>

@@ -118,6 +118,15 @@ const scrollerStyle = computed(() => ({
 <style scoped>
 .book-grid-scroller {
   width: 100%;
+  max-width: 100%;
+  overflow-x: hidden;
+  overscroll-behavior-x: none;
+}
+
+@media (pointer: coarse) {
+  .book-grid-scroller {
+    touch-action: pan-y;
+  }
 }
 
 .book-grid-cell {

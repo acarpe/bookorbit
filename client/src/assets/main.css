@@ -299,8 +299,45 @@
     @apply border-border outline-ring/50;
     scrollbar-color: var(--scrollbar-thumb) transparent;
   }
+
+  html,
+  body,
+  #app,
+  .app-shell,
+  .app-shell-inset,
+  .app-shell-scroll {
+    max-width: 100%;
+    overflow-x: clip;
+    overscroll-behavior-x: none;
+  }
+
+  @supports not (overflow: clip) {
+    html,
+    body,
+    #app,
+    .app-shell,
+    .app-shell-inset,
+    .app-shell-scroll {
+      overflow-x: hidden;
+    }
+  }
+
   body {
     @apply bg-background text-foreground font-sans antialiased;
+  }
+
+  @media (pointer: coarse) {
+    .app-shell-inset,
+    .app-shell-scroll {
+      touch-action: pan-y;
+    }
+
+    /* Prevent double-tap zoom on tappable controls while preserving normal taps. */
+    a,
+    button,
+    [role='button'] {
+      touch-action: manipulation;
+    }
   }
 
   /* Webkit scrollbar styles */

@@ -24,14 +24,14 @@ const viewKey = computed(() => {
 </script>
 
 <template>
-  <SidebarProvider class="glow-wrapper min-h-screen" :class="backgroundClass">
+  <SidebarProvider class="app-shell glow-wrapper min-h-screen" :class="backgroundClass">
     <AppSidebar />
-    <SidebarInset class="flex flex-col h-screen overflow-hidden relative bg-transparent pb-3">
+    <SidebarInset class="app-shell-inset flex flex-col h-screen overflow-hidden relative bg-transparent pb-3">
       <!-- 1. Global App Header: Fixed at the top, independent of views -->
       <AppHeader />
 
       <!-- 2. Independent View Area: Everything below the header scrolls here -->
-      <div class="px-2 sm:px-4 pt-2 flex-1 overflow-y-auto overflow-x-hidden relative scroll-smooth bg-transparent">
+      <div class="app-shell-scroll px-2 sm:px-4 pt-2 flex-1 overflow-y-auto overflow-x-hidden relative scroll-smooth bg-transparent">
         <router-view v-slot="{ Component }">
           <Transition name="page" mode="out-in">
             <div
