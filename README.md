@@ -207,16 +207,17 @@ The fastest way to learn the patterns is to follow an existing module:
 
 Server environment is configured in `server/.env` for local development. Production compose uses the repo-root `.env` created from `.env.example`.
 
-| Variable                  | Default                                                   | Description                                                |
-| ------------------------- | --------------------------------------------------------- | ---------------------------------------------------------- |
-| `DATABASE_URL`            | `postgres://bookorbit:bookorbit@localhost:5432/bookorbit` | PostgreSQL connection string                               |
-| `PORT`                    | `3000`                                                    | Server port                                                |
-| `NODE_ENV`                | `development`                                             | Environment mode                                           |
-| `JWT_SECRET`              | `change-me-in-production`                                 | JWT signing secret                                         |
-| `SETUP_BOOTSTRAP_TOKEN`   | (empty)                                                   | Required in production for initial `/api/v1/auth/setup`    |
-| `APP_DATA_PATH`           | `../local/data`                                           | App data directory for cover images (not where books live) |
-| `APP_URL`                 | `http://localhost:5173`                                   | Client URL (used in emails)                                |
-| `NODE_MAX_OLD_SPACE_SIZE` | `2048`                                                    | Docker Node.js heap limit in MB                            |
+| Variable                        | Default                                                   | Description                                                       |
+| ------------------------------- | --------------------------------------------------------- | ----------------------------------------------------------------- |
+| `DATABASE_URL`                  | `postgres://bookorbit:bookorbit@localhost:5432/bookorbit` | PostgreSQL connection string                                      |
+| `PORT`                          | `3000`                                                    | Server port                                                       |
+| `NODE_ENV`                      | `development`                                             | Environment mode                                                  |
+| `JWT_SECRET`                    | `change-me-in-production`                                 | JWT signing secret                                                |
+| `SETUP_BOOTSTRAP_TOKEN`         | (empty)                                                   | Required in production for initial `/api/v1/auth/setup`           |
+| `APP_DATA_PATH`                 | `../local/data`                                           | App data directory for cover images (not where books live)        |
+| `APP_URL`                       | `http://localhost:5173`                                   | Client URL (used in emails)                                       |
+| `CSP_ALLOW_CLOUDFLARE_INSIGHTS` | `false`                                                   | Allow Cloudflare Web Analytics beacon script/connect hosts in CSP |
+| `NODE_MAX_OLD_SPACE_SIZE`       | `2048`                                                    | Docker Node.js heap limit in MB                                   |
 
 ## Production Deploy
 

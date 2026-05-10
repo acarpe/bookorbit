@@ -24,7 +24,6 @@ export const loggerConfig: Params = {
         method.apply(this, inputArgs);
       },
     },
-    customProps: () => ({ context: 'HTTP' }),
     customSuccessMessage: (req: IncomingMessage, res: ServerResponse, responseTime: number) => {
       return `[HTTP] ${req.method} ${req.url} ${res.statusCode} +${Math.round(responseTime)}ms`;
     },

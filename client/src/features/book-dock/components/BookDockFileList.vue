@@ -19,6 +19,7 @@ import { formatBytes } from '@/lib/formatting'
 import BookDockStatusBadge from './BookDockStatusBadge.vue'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useLibraries } from '@/features/library/composables/useLibraries'
+import { toDisplayCoverUrl } from '@/features/book/lib/metadata-fetch'
 
 const props = withDefaults(
   defineProps<{
@@ -48,15 +49,15 @@ function backendCoverUrl(file: BookDockFile): string {
 }
 
 function selectedCoverUrl(file: BookDockFile): string | null {
-  const url = file.selectedMetadata?.coverUrl?.trim()
-  return url ? url : null
+  const displayUrl = toDisplayCoverUrl(file.selectedMetadata?.coverUrl)
+  return displayUrl || null
 }
 
 function newCoverUrl(file: BookDockFile): string | null {
   const selected = selectedCoverUrl(file)
   if (selected) return selected
-  const fetched = file.fetchedMetadata?.coverUrl?.trim()
-  return fetched ? fetched : null
+  const displayFetchedUrl = toDisplayCoverUrl(file.fetchedMetadata?.coverUrl)
+  return displayFetchedUrl || null
 }
 
 function currentCoverUrl(file: BookDockFile): string {

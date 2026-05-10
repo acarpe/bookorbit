@@ -5,6 +5,7 @@ import { BookOpen, Check, ChevronDown, FolderPlus, Headphones, Lock, MoreHorizon
 import { DialogClose, DialogContent, DialogOverlay, DialogPortal, DialogRoot } from 'reka-ui'
 import { bookCoverStyle } from '@/features/book/lib/book-cover'
 import { getFormatColor } from '@/features/book/lib/format-colors'
+import { providerIconPath } from '@/features/book/lib/provider-icons'
 import { getProviderColor } from '@/lib/provider-colors'
 import { useCoverVersions } from '@/features/book/composables/useCoverVersions'
 import { COVER_ASPECT_RATIO_KEY, DEFAULT_COVER_ASPECT_RATIO } from '@/features/book/lib/cover-aspect-ratio'
@@ -356,7 +357,7 @@ const providerLinks = computed<ProviderLink[]>(() => {
       key: 'google',
       label: 'Google Books',
       url: `https://books.google.com/books?id=${ids.google}`,
-      iconUrl: 'https://books.google.com/favicon.ico',
+      iconUrl: providerIconPath('google'),
       fallback: 'G',
     })
   }
@@ -365,7 +366,7 @@ const providerLinks = computed<ProviderLink[]>(() => {
       key: 'goodreads',
       label: 'Goodreads',
       url: `https://www.goodreads.com/book/show/${ids.goodreads}`,
-      iconUrl: 'https://www.goodreads.com/favicon.ico',
+      iconUrl: providerIconPath('goodreads'),
       fallback: 'GR',
     })
   }
@@ -374,7 +375,7 @@ const providerLinks = computed<ProviderLink[]>(() => {
       key: 'amazon',
       label: 'Amazon',
       url: `https://www.amazon.com/dp/${ids.amazon}`,
-      iconUrl: 'https://www.amazon.com/favicon.ico',
+      iconUrl: providerIconPath('amazon'),
       fallback: 'A',
     })
   }
@@ -383,7 +384,7 @@ const providerLinks = computed<ProviderLink[]>(() => {
       key: 'hardcover',
       label: 'Hardcover',
       url: `https://hardcover.app/books/${ids.hardcover}`,
-      iconUrl: 'https://assets.hardcover.app/static/favicon.ico',
+      iconUrl: providerIconPath('hardcover'),
       fallback: 'H',
     })
   }
@@ -393,7 +394,7 @@ const providerLinks = computed<ProviderLink[]>(() => {
       key: 'openLibrary',
       label: 'Open Library',
       url: `https://openlibrary.org${path}`,
-      iconUrl: 'https://openlibrary.org/favicon.ico',
+      iconUrl: providerIconPath('openLibrary'),
       fallback: 'OL',
     })
   }
@@ -402,7 +403,7 @@ const providerLinks = computed<ProviderLink[]>(() => {
       key: 'itunes',
       label: 'Apple Books',
       url: `https://books.apple.com/book/id${ids.itunes}`,
-      iconUrl: 'https://www.apple.com/favicon.ico',
+      iconUrl: providerIconPath('itunes'),
       fallback: '',
     })
   }
@@ -411,7 +412,7 @@ const providerLinks = computed<ProviderLink[]>(() => {
       key: 'audible',
       label: 'Audible',
       url: `https://www.audible.com/pd/${ids.audible}`,
-      iconUrl: 'https://www.audible.com/favicon.ico',
+      iconUrl: providerIconPath('audible'),
       fallback: 'Au',
     })
   }

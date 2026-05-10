@@ -41,6 +41,7 @@ export abstract class InlineEntityStrategy implements EntityStrategy {
   }
 
   async findCandidatePairs(libraryIds: number[], minSimilarity: number): Promise<RawCandidatePair[]> {
+    const similarityThreshold = Math.max(0.1, Math.min(1, minSimilarity));
     const f = sql.raw(this.rawFieldName);
     const hasLibraryFilter = libraryIds.length > 0;
     const idsLiteral = hasLibraryFilter ? sql.raw(`(${libraryIds.join(',')})`) : sql``;
@@ -52,34 +53,37 @@ export abstract class InlineEntityStrategy implements EntityStrategy {
       ? sql`AND EXISTS (SELECT 1 FROM books b2 WHERE b2.id = bm2.book_id AND b2.library_id IN ${idsLiteral})`
       : sql``;
 
-    const rows = await this.db.execute<{
-      idA: string;
-      idB: string;
-      nameA: string;
-      nameB: string;
-      simScore: number;
-    }>(sql`
-      SELECT DISTINCT ON (LEAST(LOWER(v1.val), LOWER(v2.val)), GREATEST(LOWER(v1.val), LOWER(v2.val)))
-        v1.val AS "idA", v2.val AS "idB",
-        v1.val AS "nameA", v2.val AS "nameB",
-        similarity(LOWER(v1.val), LOWER(v2.val)) AS "simScore"
-      FROM (
-        SELECT DISTINCT bm1.${f} AS val, bm1.book_id
-        FROM book_metadata bm1
-        WHERE bm1.${f} IS NOT NULL AND bm1.${f} <> ''
-        ${v1LibraryFilter}
-      ) v1
-      CROSS JOIN (
-        SELECT DISTINCT bm2.${f} AS val, bm2.book_id
-        FROM book_metadata bm2
-        WHERE bm2.${f} IS NOT NULL AND bm2.${f} <> ''
-        ${v2LibraryFilter}
-      ) v2
-      WHERE v1.val <> v2.val
-      AND LOWER(v1.val) % LOWER(v2.val)
-      AND similarity(LOWER(v1.val), LOWER(v2.val)) >= ${minSimilarity}
-      ORDER BY LEAST(LOWER(v1.val), LOWER(v2.val)), GREATEST(LOWER(v1.val), LOWER(v2.val)), similarity(LOWER(v1.val), LOWER(v2.val)) DESC
-    `);
+    const rows = await this.db.transaction(async (tx) => {
+      await tx.execute(sql`SELECT set_config('pg_trgm.similarity_threshold', ${similarityThreshold.toString()}, true)`);
+      return tx.execute<{
+        idA: string;
+        idB: string;
+        nameA: string;
+        nameB: string;
+        simScore: number;
+      }>(sql`
+        SELECT DISTINCT ON (LEAST(LOWER(v1.val), LOWER(v2.val)), GREATEST(LOWER(v1.val), LOWER(v2.val)))
+          v1.val AS "idA", v2.val AS "idB",
+          v1.val AS "nameA", v2.val AS "nameB",
+          similarity(LOWER(v1.val), LOWER(v2.val)) AS "simScore"
+        FROM (
+          SELECT DISTINCT bm1.${f} AS val, bm1.book_id
+          FROM book_metadata bm1
+          WHERE bm1.${f} IS NOT NULL AND bm1.${f} <> ''
+          ${v1LibraryFilter}
+        ) v1
+        CROSS JOIN (
+          SELECT DISTINCT bm2.${f} AS val, bm2.book_id
+          FROM book_metadata bm2
+          WHERE bm2.${f} IS NOT NULL AND bm2.${f} <> ''
+          ${v2LibraryFilter}
+        ) v2
+        WHERE v1.val <> v2.val
+        AND LOWER(v1.val) % LOWER(v2.val)
+        AND similarity(LOWER(v1.val), LOWER(v2.val)) >= ${similarityThreshold}
+        ORDER BY LEAST(LOWER(v1.val), LOWER(v2.val)), GREATEST(LOWER(v1.val), LOWER(v2.val)), similarity(LOWER(v1.val), LOWER(v2.val)) DESC
+      `);
+    });
 
     return rows.rows;
   }

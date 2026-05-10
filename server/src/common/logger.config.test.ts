@@ -55,6 +55,7 @@ describe('loggerConfig', () => {
     expect(pinoHttp.customLogLevel?.({} as never, { statusCode: 404 } as never)).toBe('warn');
     expect(pinoHttp.customLogLevel?.({} as never, { statusCode: 503 } as never)).toBe('error');
     expect(pinoHttp.customLogLevel?.({} as never, { statusCode: 200 } as never, new Error('fail'))).toBe('error');
+    expect(pinoHttp.customProps).toBeUndefined();
   });
 
   it('filters framework context logs while keeping regular logs', async () => {

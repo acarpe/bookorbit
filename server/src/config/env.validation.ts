@@ -21,6 +21,14 @@ const envSchema = z.object({
   TRUST_PROXY: z.string().optional(),
   EMAIL_ENCRYPTION_KEY: z.string().optional(),
   LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace']).optional(),
+  CSP_ALLOW_CLOUDFLARE_INSIGHTS: z
+    .string()
+    .trim()
+    .toLowerCase()
+    .refine((val) => ['true', 'false', '1', '0', 'yes', 'no', 'on', 'off'].includes(val), {
+      message: 'CSP_ALLOW_CLOUDFLARE_INSIGHTS must be one of true/false/1/0/yes/no/on/off',
+    })
+    .optional(),
 });
 
 export function validateEnv(config: Record<string, unknown>) {

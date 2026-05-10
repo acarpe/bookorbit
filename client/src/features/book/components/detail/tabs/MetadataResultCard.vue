@@ -2,7 +2,7 @@
 import { computed, inject, ref } from 'vue'
 import { BookOpen } from 'lucide-vue-next'
 import type { MetadataCandidate, MetadataProviderInfo } from '@bookorbit/types'
-import { getProviderLabel, hideOnError, providerBadgeStyle } from '../../../lib/metadata-fetch'
+import { getProviderLabel, hideOnError, providerBadgeStyle, toDisplayCoverUrl } from '../../../lib/metadata-fetch'
 import { COVER_ASPECT_RATIO_KEY, DEFAULT_COVER_ASPECT_RATIO } from '../../../lib/cover-aspect-ratio'
 
 const props = defineProps<{
@@ -15,6 +15,7 @@ const emit = defineEmits<{ select: [MetadataCandidate] }>()
 const coverAspectRatio = inject(COVER_ASPECT_RATIO_KEY, ref(DEFAULT_COVER_ASPECT_RATIO))
 
 const providerLabel = computed(() => getProviderLabel(props.candidate.provider, props.providers))
+const displayCoverUrl = computed(() => toDisplayCoverUrl(props.candidate.coverUrl))
 
 function handleSelect() {
   emit('select', props.candidate)
@@ -29,8 +30,8 @@ function handleSelect() {
     <!-- Cover -->
     <span class="relative shrink-0 rounded-lg overflow-hidden bg-muted block shadow-sm" :style="{ width: '88px', aspectRatio: coverAspectRatio }">
       <img
-        v-if="candidate.coverUrl"
-        :src="candidate.coverUrl"
+        v-if="displayCoverUrl"
+        :src="displayCoverUrl"
         :alt="candidate.title"
         class="w-full h-full object-contain transition-transform duration-500 group-hover:scale-105"
         @error="hideOnError"

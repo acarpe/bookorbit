@@ -8,6 +8,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { DialogRoot, DialogContent, DialogPortal, DialogOverlay, DialogClose, DialogTitle, DialogDescription } from 'reka-ui'
 import { formatBytes } from '@/lib/formatting'
 import { getProviderColor } from '@/lib/provider-colors'
+import { providerIconPath } from '@/features/book/lib/provider-icons'
 import { useBookDetail } from '../composables/useBookDetail'
 import { useCoverVersions } from '../composables/useCoverVersions'
 import { bookCoverStyle } from '../lib/book-cover'
@@ -79,7 +80,7 @@ const providerLinks = computed<ProviderLink[]>(() => {
       key: 'google',
       label: 'Google Books',
       url: `https://books.google.com/books?id=${ids.google}`,
-      iconUrl: 'https://books.google.com/favicon.ico',
+      iconUrl: providerIconPath('google'),
       fallback: 'G',
     })
   }
@@ -88,7 +89,7 @@ const providerLinks = computed<ProviderLink[]>(() => {
       key: 'goodreads',
       label: 'Goodreads',
       url: `https://www.goodreads.com/book/show/${ids.goodreads}`,
-      iconUrl: 'https://www.goodreads.com/favicon.ico',
+      iconUrl: providerIconPath('goodreads'),
       fallback: 'GR',
     })
   }
@@ -97,7 +98,7 @@ const providerLinks = computed<ProviderLink[]>(() => {
       key: 'amazon',
       label: 'Amazon',
       url: `https://www.amazon.com/dp/${ids.amazon}`,
-      iconUrl: 'https://www.amazon.com/favicon.ico',
+      iconUrl: providerIconPath('amazon'),
       fallback: 'A',
     })
   }
@@ -106,7 +107,7 @@ const providerLinks = computed<ProviderLink[]>(() => {
       key: 'hardcover',
       label: 'Hardcover',
       url: `https://hardcover.app/books/${ids.hardcover}`,
-      iconUrl: 'https://hardcover.app/favicon.ico',
+      iconUrl: providerIconPath('hardcover'),
       fallback: 'H',
     })
   }
@@ -116,7 +117,7 @@ const providerLinks = computed<ProviderLink[]>(() => {
       key: 'openLibrary',
       label: 'Open Library',
       url: `https://openlibrary.org${path}`,
-      iconUrl: 'https://openlibrary.org/favicon.ico',
+      iconUrl: providerIconPath('openLibrary'),
       fallback: 'OL',
     })
   }
@@ -125,7 +126,7 @@ const providerLinks = computed<ProviderLink[]>(() => {
       key: 'itunes',
       label: 'Apple Books',
       url: `https://books.apple.com/book/id${ids.itunes}`,
-      iconUrl: 'https://www.apple.com/favicon.ico',
+      iconUrl: providerIconPath('itunes'),
       fallback: '',
     })
   }

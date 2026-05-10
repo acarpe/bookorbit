@@ -94,7 +94,7 @@ export class FileWriteService implements OnModuleDestroy {
     await this.acquireWriteSlot();
 
     const startedAt = Date.now();
-    this.logger.log(
+    this.logger.debug(
       `[${FILE_WRITE_EVENT}] [start] bookId=${bookId} triggeredBy=${triggeredBy} userId=${formatUserId(userId)} dryRun=${dryRun} - file write started`,
     );
 
@@ -256,9 +256,12 @@ export class FileWriteService implements OnModuleDestroy {
     result: WriteResult,
   ): void {
     const reasonPart = result.reason ? ` reason="${sanitizeErrorMessage(result.reason)}"` : '';
-    this.logger.log(
-      `[${FILE_WRITE_EVENT}] [end] bookId=${bookId} format=${format || UNKNOWN_FORMAT} triggeredBy=${triggeredBy} userId=${formatUserId(userId)} dryRun=${dryRun} durationMs=${Date.now() - startedAt} status=${result.status} fieldsWritten=${result.fieldsWritten.length}${reasonPart} - file write completed`,
-    );
+    const message = `[${FILE_WRITE_EVENT}] [end] bookId=${bookId} format=${format || UNKNOWN_FORMAT} triggeredBy=${triggeredBy} userId=${formatUserId(userId)} dryRun=${dryRun} durationMs=${Date.now() - startedAt} status=${result.status} fieldsWritten=${result.fieldsWritten.length}${reasonPart} - file write completed`;
+    if (triggeredBy === 'auto' && result.status === 'skipped') {
+      this.logger.debug(message);
+      return;
+    }
+    this.logger.log(message);
   }
 
   private logWriteFail(

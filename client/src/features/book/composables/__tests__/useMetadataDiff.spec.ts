@@ -194,4 +194,36 @@ describe('useMetadataDiff', () => {
     expect(fields.value.find((f) => f.key === 'title')?.isPicked).toBe(false)
     expect(buildPatch().formPatch.title).toBeUndefined()
   })
+
+  it('proxies external cover URLs for display and preserves raw cover URL in patch', () => {
+    const externalCover = 'https://m.media-amazon.com/images/I/41ZaIFRkWyL.jpg'
+    const candidate: MetadataCandidate = {
+      ...mockCandidate1,
+      coverUrl: externalCover,
+    }
+    const candidates = ref([candidate])
+    const activeProvider = ref<MetadataProviderKey>('google')
+    const { fields, toggleField, buildPatch } = useMetadataDiff(mockCurrent, candidates, activeProvider, providers)
+
+    const coverField = fields.value.find((f) => f.key === 'coverUrl')
+    expect(coverField?.candidateDisplay).toContain('/api/v1/books/cover/proxy?url=')
+
+    toggleField('coverUrl')
+    const { coverUrl } = buildPatch()
+    expect(coverUrl).toBe(externalCover)
+  })
+
+  it('does not proxy same-origin cover URLs for display', () => {
+    const sameOriginCover = '/api/v1/books/1/cover'
+    const candidate: MetadataCandidate = {
+      ...mockCandidate1,
+      coverUrl: sameOriginCover,
+    }
+    const candidates = ref([candidate])
+    const activeProvider = ref<MetadataProviderKey>('google')
+    const { fields } = useMetadataDiff(mockCurrent, candidates, activeProvider, providers)
+
+    const coverField = fields.value.find((f) => f.key === 'coverUrl')
+    expect(coverField?.candidateDisplay).toBe(sameOriginCover)
+  })
 })

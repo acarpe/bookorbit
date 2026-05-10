@@ -44,6 +44,8 @@ export class AuthorStrategy implements EntityStrategy {
   ) {}
 
   async findCandidatePairs(libraryIds: number[], minSimilarity: number): Promise<RawCandidatePair[]> {
+    const similarityThreshold = Math.max(0.1, Math.min(1, minSimilarity));
+
     let libraryFilter = sql``;
     if (libraryIds.length > 0) {
       const idsLiteral = sql.raw(`(${libraryIds.join(',')})`);
@@ -57,29 +59,32 @@ export class AuthorStrategy implements EntityStrategy {
       )`;
     }
 
-    const rows = await this.db.execute<{
-      idA: number;
-      idB: number;
-      nameA: string;
-      nameB: string;
-      sortNameA: string | null;
-      sortNameB: string | null;
-      hasPhotoA: boolean;
-      hasPhotoB: boolean;
-      simScore: number;
-    }>(sql`
-      SELECT
-        a1.id AS "idA", a2.id AS "idB",
-        a1.name AS "nameA", a2.name AS "nameB",
-        a1.sort_name AS "sortNameA", a2.sort_name AS "sortNameB",
-        a1.has_photo AS "hasPhotoA", a2.has_photo AS "hasPhotoB",
-        similarity(a1.name, a2.name) AS "simScore"
-      FROM authors a1
-      JOIN authors a2 ON a1.id < a2.id AND a1.name % a2.name
-      WHERE similarity(a1.name, a2.name) >= ${minSimilarity}
-      ${libraryFilter}
-      ORDER BY similarity(a1.name, a2.name) DESC
-    `);
+    const rows = await this.db.transaction(async (tx) => {
+      await tx.execute(sql`SELECT set_config('pg_trgm.similarity_threshold', ${similarityThreshold.toString()}, true)`);
+      return tx.execute<{
+        idA: number;
+        idB: number;
+        nameA: string;
+        nameB: string;
+        sortNameA: string | null;
+        sortNameB: string | null;
+        hasPhotoA: boolean;
+        hasPhotoB: boolean;
+        simScore: number;
+      }>(sql`
+        SELECT
+          a1.id AS "idA", a2.id AS "idB",
+          a1.name AS "nameA", a2.name AS "nameB",
+          a1.sort_name AS "sortNameA", a2.sort_name AS "sortNameB",
+          a1.has_photo AS "hasPhotoA", a2.has_photo AS "hasPhotoB",
+          similarity(a1.name, a2.name) AS "simScore"
+        FROM authors a1
+        JOIN authors a2 ON a1.id < a2.id AND a1.name % a2.name
+        WHERE similarity(a1.name, a2.name) >= ${similarityThreshold}
+        ${libraryFilter}
+        ORDER BY similarity(a1.name, a2.name) DESC
+      `);
+    });
 
     return rows.rows;
   }

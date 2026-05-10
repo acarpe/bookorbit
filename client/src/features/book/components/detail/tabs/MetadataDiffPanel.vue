@@ -10,7 +10,7 @@ import type {
   ProviderIds,
 } from '@bookorbit/types'
 import { useMetadataDiff, type DiffFieldKey, type MetadataPatch } from '../../../composables/useMetadataDiff'
-import { getProviderColor, getProviderLabel, hideOnError, providerActivePillStyle } from '../../../lib/metadata-fetch'
+import { getProviderColor, getProviderLabel, hideOnError, providerActivePillStyle, toDisplayCoverUrl } from '../../../lib/metadata-fetch'
 import MetadataDiffRow from './MetadataDiffRow.vue'
 import { COVER_ASPECT_RATIO_KEY, DEFAULT_COVER_ASPECT_RATIO } from '../../../lib/cover-aspect-ratio'
 
@@ -189,6 +189,10 @@ function handlePickFromProvider(key: DiffFieldKey, provider: MetadataProviderKey
   pickFieldFromProvider(key, provider)
 }
 
+function candidateCoverUrl(candidate: MetadataCandidate): string {
+  return toDisplayCoverUrl(candidate.coverUrl)
+}
+
 function handleCopyAll() {
   copyAll()
 }
@@ -266,7 +270,13 @@ onBeforeUnmount(() => {
             @click="selectResultForTab(candidate)"
           >
             <span class="relative w-10 shrink-0 rounded-md overflow-hidden bg-muted ring-1 ring-border/70" :style="{ aspectRatio: coverAspectRatio }">
-              <img v-if="candidate.coverUrl" :src="candidate.coverUrl" alt="" class="w-full h-full object-cover" @error="hideOnError" />
+              <img
+                v-if="candidateCoverUrl(candidate)"
+                :src="candidateCoverUrl(candidate)"
+                alt=""
+                class="w-full h-full object-cover"
+                @error="hideOnError"
+              />
               <span v-else class="block w-full h-full bg-muted-foreground/10" />
             </span>
             <span class="min-w-0 flex-1">

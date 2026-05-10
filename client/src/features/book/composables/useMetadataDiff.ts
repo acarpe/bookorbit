@@ -8,7 +8,7 @@ import type {
   MetadataSource,
   ProviderIds,
 } from '@bookorbit/types'
-import { getProviderLabel } from '../lib/metadata-fetch'
+import { getProviderLabel, toDisplayCoverUrl } from '../lib/metadata-fetch'
 
 type ComicDiffFieldKey =
   | 'comicIssueNumber'
@@ -192,7 +192,7 @@ export function getCandidateValueFrom(candidate: MetadataCandidate, key: DiffFie
     if (Array.isArray(val)) return val.join(', ')
     return val ?? ''
   }
-  if (key === 'coverUrl') return candidate.coverUrl ?? ''
+  if (key === 'coverUrl') return toDisplayCoverUrl(candidate.coverUrl)
   if (key === 'authors') return (candidate.authors ?? []).join(', ')
   if (key === 'genres') return (candidate.genres ?? []).join(', ')
   if (key === 'narrators') return (candidate.narrators ?? []).join(', ')

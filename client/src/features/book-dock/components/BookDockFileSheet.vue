@@ -10,6 +10,7 @@ import { useLibraries } from '@/features/library/composables/useLibraries'
 import { useMetadataSearch } from '@/features/book/composables/useMetadataSearch'
 import type { MetadataPatch } from '@/features/book/composables/useMetadataDiff'
 import { formatBytes } from '@/lib/formatting'
+import { toDisplayCoverUrl } from '@/features/book/lib/metadata-fetch'
 
 const props = defineProps<{ file: BookDockFile }>()
 
@@ -269,9 +270,9 @@ const hasFetchedMetadata = computed(() => {
 })
 
 const backendBookDockCoverUrl = computed(() => `${coverUrl(props.file.id)}?v=${new Date(props.file.updatedAt).getTime()}`)
-const normalizedSelectedCoverUrl = computed(() => selectedCoverUrl.value.trim())
-const currentBookDockCoverUrl = computed(() => normalizedSelectedCoverUrl.value || backendBookDockCoverUrl.value)
-const currentBookDockCoverFallbackUrl = computed(() => (normalizedSelectedCoverUrl.value ? backendBookDockCoverUrl.value : null))
+const displaySelectedCoverUrl = computed(() => toDisplayCoverUrl(selectedCoverUrl.value))
+const currentBookDockCoverUrl = computed(() => displaySelectedCoverUrl.value || backendBookDockCoverUrl.value)
+const currentBookDockCoverFallbackUrl = computed(() => (displaySelectedCoverUrl.value ? backendBookDockCoverUrl.value : null))
 
 function onCurrentBookDockCoverError(event: Event) {
   const img = event.target as HTMLImageElement

@@ -45,6 +45,7 @@ export abstract class JunctionEntityStrategy implements EntityStrategy {
   constructor(@Inject(DB) protected readonly db: Db) {}
 
   async findCandidatePairs(libraryIds: number[], minSimilarity: number): Promise<RawCandidatePair[]> {
+    const similarityThreshold = Math.max(0.1, Math.min(1, minSimilarity));
     const t = sql.raw(this.rawTableName);
     const jt = sql.raw(this.rawJunctionTable);
     const ec = sql.raw(this.rawEntityIdCol);
@@ -63,23 +64,26 @@ export abstract class JunctionEntityStrategy implements EntityStrategy {
         )`;
     }
 
-    const rows = await this.db.execute<{
-      idA: number;
-      idB: number;
-      nameA: string;
-      nameB: string;
-      simScore: number;
-    }>(sql`
-      SELECT
-        e1.id AS "idA", e2.id AS "idB",
-        e1.name AS "nameA", e2.name AS "nameB",
-        similarity(e1.name, e2.name) AS "simScore"
-      FROM ${t} e1
-      JOIN ${t} e2 ON e1.id < e2.id AND e1.name % e2.name
-      WHERE similarity(e1.name, e2.name) >= ${minSimilarity}
-      ${libraryFilter}
-      ORDER BY similarity(e1.name, e2.name) DESC
-    `);
+    const rows = await this.db.transaction(async (tx) => {
+      await tx.execute(sql`SELECT set_config('pg_trgm.similarity_threshold', ${similarityThreshold.toString()}, true)`);
+      return tx.execute<{
+        idA: number;
+        idB: number;
+        nameA: string;
+        nameB: string;
+        simScore: number;
+      }>(sql`
+        SELECT
+          e1.id AS "idA", e2.id AS "idB",
+          e1.name AS "nameA", e2.name AS "nameB",
+          similarity(e1.name, e2.name) AS "simScore"
+        FROM ${t} e1
+        JOIN ${t} e2 ON e1.id < e2.id AND e1.name % e2.name
+        WHERE similarity(e1.name, e2.name) >= ${similarityThreshold}
+        ${libraryFilter}
+        ORDER BY similarity(e1.name, e2.name) DESC
+      `);
+    });
 
     return rows.rows;
   }
