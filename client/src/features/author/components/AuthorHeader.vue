@@ -3,6 +3,7 @@ import { computed, ref, watch } from 'vue'
 import type { AuthorDetail } from '@bookorbit/types'
 import { MoreHorizontal, Pencil, RefreshCcw, Trash2, UsersRound, X } from 'lucide-vue-next'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
+import { toDisplayCoverUrl } from '@/features/book/lib/metadata-fetch'
 
 const props = defineProps<{
   author: AuthorDetail
@@ -54,7 +55,11 @@ const previewProviderLabel = computed(() => {
 const showMenu = computed(() => props.canUpdate || props.canMerge || props.canDelete)
 
 const imageLightboxOpen = ref(false)
-const canOpenImageLightbox = computed(() => Boolean(props.imageUrl))
+const displayImageUrl = computed(() => {
+  const display = toDisplayCoverUrl(props.imageUrl)
+  return display || null
+})
+const canOpenImageLightbox = computed(() => Boolean(displayImageUrl.value))
 const bioExpanded = ref(false)
 
 watch(resolvedBio, () => {
@@ -71,7 +76,7 @@ watch(resolvedBio, () => {
           :class="canOpenImageLightbox ? 'cursor-zoom-in' : ''"
           @click="canOpenImageLightbox && (imageLightboxOpen = true)"
         >
-          <img v-if="imageUrl" :src="imageUrl" :alt="`${author.name} portrait`" class="h-full w-full object-cover" />
+          <img v-if="displayImageUrl" :src="displayImageUrl" :alt="`${author.name} portrait`" class="h-full w-full object-cover" />
           <div
             v-else
             class="flex h-full w-full items-center justify-center bg-gradient-to-br from-primary/20 to-primary/5 text-3xl font-semibold text-primary"
@@ -162,7 +167,7 @@ watch(resolvedBio, () => {
 
   <Teleport to="body">
     <div
-      v-if="imageLightboxOpen && imageUrl"
+      v-if="imageLightboxOpen && displayImageUrl"
       class="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm"
       @click="imageLightboxOpen = false"
     >
@@ -172,7 +177,12 @@ watch(resolvedBio, () => {
       >
         <X class="size-5" />
       </button>
-      <img :src="imageUrl" :alt="`${author.name} portrait`" class="max-h-[90vh] max-w-[90vw] rounded-lg object-contain shadow-2xl" @click.stop />
+      <img
+        :src="displayImageUrl"
+        :alt="`${author.name} portrait`"
+        class="max-h-[90vh] max-w-[90vw] rounded-lg object-contain shadow-2xl"
+        @click.stop
+      />
     </div>
   </Teleport>
 </template>

@@ -4,6 +4,7 @@ import type { AuthorSummary } from '@bookorbit/types'
 import { BookCopy, Check, ExternalLink, Loader2, MoreHorizontal, RefreshCw, Trash2 } from 'lucide-vue-next'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { bookCoverStyle } from '@/features/book/lib/book-cover'
+import { toDisplayCoverUrl } from '@/features/book/lib/metadata-fetch'
 
 const props = defineProps<{
   author: AuthorSummary
@@ -25,7 +26,10 @@ const emit = defineEmits<{
 
 const initial = computed(() => props.author.name.trim().charAt(0).toUpperCase() || '?')
 const fallbackStyle = computed(() => bookCoverStyle(props.author.name || String(props.author.id)))
-const imageSrc = computed(() => props.author.imageUrl ?? undefined)
+const imageSrc = computed(() => {
+  const display = toDisplayCoverUrl(props.author.imageUrl)
+  return display || undefined
+})
 const hasImage = computed(() => Boolean(imageSrc.value) && !imageFailed.value)
 
 const imageFailed = ref(false)

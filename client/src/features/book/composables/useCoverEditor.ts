@@ -1,6 +1,7 @@
 import { onUnmounted, ref, type Ref } from 'vue'
 import { api } from '@/lib/api'
 import { useCoverVersions } from './useCoverVersions'
+import { toDisplayCoverUrl } from '../lib/metadata-fetch'
 
 export function useCoverEditor(bookId: Ref<number>) {
   const uploading = ref(false)
@@ -19,9 +20,10 @@ export function useCoverEditor(bookId: Ref<number>) {
 
   function setUrl(url: string) {
     if (previewSrc.value?.startsWith('blob:')) URL.revokeObjectURL(previewSrc.value)
+    const normalizedUrl = url.trim()
     pendingFile.value = null
-    pendingUrl.value = url || null
-    previewSrc.value = url || null
+    pendingUrl.value = normalizedUrl || null
+    previewSrc.value = normalizedUrl ? toDisplayCoverUrl(normalizedUrl) : null
     error.value = null
   }
 

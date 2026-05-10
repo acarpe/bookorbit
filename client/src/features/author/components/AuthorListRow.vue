@@ -2,6 +2,7 @@
 import { computed, ref, watch } from 'vue'
 import type { AuthorSummary } from '@bookorbit/types'
 import { ArrowRight, BookCopy, Check, Clock3, Loader2 } from 'lucide-vue-next'
+import { toDisplayCoverUrl } from '@/features/book/lib/metadata-fetch'
 
 const props = defineProps<{
   author: AuthorSummary
@@ -23,6 +24,10 @@ const lastAddedLabel = computed(() => {
 
 const imageFailed = ref(false)
 const initial = computed(() => props.author.name.trim().charAt(0).toUpperCase() || '?')
+const imageSrc = computed(() => {
+  const display = toDisplayCoverUrl(props.author.imageUrl)
+  return display || undefined
+})
 watch(
   () => props.author.imageUrl,
   () => {
@@ -56,8 +61,8 @@ function handleClick(event: MouseEvent) {
 
       <div class="h-8 w-8 shrink-0 overflow-hidden rounded-md border border-border/60 bg-muted/30">
         <img
-          v-if="author.imageUrl && !imageFailed"
-          :src="author.imageUrl"
+          v-if="imageSrc && !imageFailed"
+          :src="imageSrc"
           :alt="`${author.name} portrait`"
           class="h-full w-full object-cover"
           loading="lazy"
