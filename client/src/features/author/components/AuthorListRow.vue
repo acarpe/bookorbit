@@ -41,7 +41,7 @@ function handleClick(event: MouseEvent) {
 
 <template>
   <button
-    class="w-full rounded-lg border border-transparent px-3 py-2 text-left transition-colors hover:border-border hover:bg-muted/40 [content-visibility:auto] [contain-intrinsic-size:56px_1000px]"
+    class="w-full rounded-lg border border-transparent px-1 sm:px-3 py-2 text-left transition-colors hover:border-border hover:bg-muted/40 [content-visibility:auto] [contain-intrinsic-size:56px_1000px]"
     :class="[selectionMode ? 'cursor-pointer select-none' : '', selected ? 'border-primary/45 bg-primary/5' : '']"
     @click="handleClick($event as MouseEvent)"
   >

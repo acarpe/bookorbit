@@ -43,6 +43,14 @@ export class SeriesRepository {
     return s.replace(/[\\%_]/g, '\\$&');
   }
 
+  private buildAuthorNameMatchCondition(pattern: string): SQL {
+    return sql`${books.id} IN (
+      SELECT ${bookAuthors.bookId} FROM ${bookAuthors}
+      INNER JOIN ${authors} ON ${authors.id} = ${bookAuthors.authorId}
+      WHERE ${ilike(authors.name, pattern)}
+    )`;
+  }
+
   async findPage(params: {
     q?: string;
     page: number;
@@ -60,18 +68,14 @@ export class SeriesRepository {
     const conditions: SQL[] = [isNotNull(bookMetadata.seriesName), sql`btrim(${bookMetadata.seriesName}) != ''`, libraryFilter];
 
     if (params.q) {
-      conditions.push(ilike(bookMetadata.seriesName, `%${this.escapeLikePattern(params.q)}%`));
+      const qPattern = `%${this.escapeLikePattern(params.q)}%`;
+      const authorNameMatch = this.buildAuthorNameMatchCondition(qPattern);
+      conditions.push(sql`(${ilike(bookMetadata.seriesName, qPattern)} OR ${authorNameMatch})`);
     }
 
     if (params.author) {
       const authorPattern = `%${this.escapeLikePattern(params.author)}%`;
-      conditions.push(
-        sql`${books.id} IN (
-          SELECT ${bookAuthors.bookId} FROM ${bookAuthors}
-          INNER JOIN ${authors} ON ${authors.id} = ${bookAuthors.authorId}
-          WHERE ${ilike(authors.name, authorPattern)}
-        )`,
-      );
+      conditions.push(this.buildAuthorNameMatchCondition(authorPattern));
     }
 
     const baseWhere = and(...conditions)!;

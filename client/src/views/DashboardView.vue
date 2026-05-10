@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, ref } from 'vue'
-import { Settings2 } from 'lucide-vue-next'
+import { Settings2, Sparkles } from 'lucide-vue-next'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 
+import { useAuth } from '@/features/auth/composables/useAuth'
 import { usePermissions } from '@/features/auth/composables/usePermissions'
 import { useLibraries } from '@/features/library/composables/useLibraries'
 import DashboardScroller from '@/features/dashboard/components/DashboardScroller.vue'
@@ -13,6 +14,7 @@ import { useDashboardConfig } from '@/features/dashboard/composables/useDashboar
 import { useOnboardingTour } from '@/features/onboarding/composables/useOnboardingTour'
 
 const { hasPermission } = usePermissions()
+const { user } = useAuth()
 const { libraries, loading: librariesLoading, fetchLibraries } = useLibraries()
 const { scrollers } = useDashboardConfig()
 const { maybeStartTour } = useOnboardingTour()
@@ -24,6 +26,17 @@ const enabledScrollers = computed(() =>
 )
 
 const hasNoLibraries = computed(() => !librariesLoading.value && libraries.value.length === 0)
+const greetingLabel = computed(() => {
+  const hour = new Date().getHours()
+  if (hour < 12) return 'morning'
+  if (hour < 18) return 'afternoon'
+  return 'evening'
+})
+const greetingName = computed(() => {
+  const fullName = user.value?.name?.trim()
+  if (fullName) return fullName.split(/\s+/)[0] ?? fullName
+  return user.value?.username?.trim() || 'there'
+})
 
 onMounted(() => {
   fetchLibraries()
@@ -59,6 +72,14 @@ onMounted(() => {
     <div class="space-y-5 pb-8 pt-4 sm:pr-2">
       <DashboardWelcome v-if="hasNoLibraries" :can-create="hasPermission('manage_libraries')" />
       <template v-else>
+        <div class="animate-fade-up flex items-center gap-2 px-1" style="animation-delay: 40ms">
+          <Sparkles :size="16" class="shrink-0 text-primary/85" />
+          <p class="text-[1.05rem] font-medium leading-tight tracking-[-0.01em] text-foreground/90 sm:text-[1.18rem]">
+            <span class="text-foreground/88">Good {{ greetingLabel }},</span>
+            <span class="ml-1 font-semibold text-primary">{{ greetingName }}</span>
+          </p>
+        </div>
+
         <DashboardWidgetRow class="animate-fade-up" />
         <DashboardScroller
           v-for="(scroller, index) in enabledScrollers"

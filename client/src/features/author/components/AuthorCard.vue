@@ -201,7 +201,7 @@ function handleDelete() {
 
       <span
         v-if="!selectionMode"
-        class="absolute bottom-0.5 left-0.5 z-20 h-6 w-6 rounded-full border border-border bg-card shadow-sm flex items-center justify-center text-[10px] font-semibold text-foreground"
+        class="absolute bottom-0.5 left-0.5 z-10 h-6 w-6 rounded-full border border-border bg-card shadow-sm flex items-center justify-center text-[10px] font-semibold text-foreground"
       >
         {{ author.bookCount.toLocaleString() }}
       </span>
@@ -209,7 +209,7 @@ function handleDelete() {
       <DropdownMenu v-if="!selectionMode">
         <DropdownMenuTrigger as-child>
           <button
-            class="absolute bottom-0.5 right-0.5 z-20 h-6 w-6 rounded-full border border-border bg-card shadow-sm flex items-center justify-center text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+            class="absolute bottom-0.5 right-0.5 z-10 h-6 w-6 rounded-full border border-border bg-card shadow-sm flex items-center justify-center text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
             @click.stop
           >
             <MoreHorizontal :size="12" />

@@ -80,11 +80,11 @@ const widgetSizeClass: Record<DashboardWidgetSize, string> = {
 </script>
 
 <template>
-  <section v-if="enabledWidgets.length > 0" class="group/widgets">
-    <!-- Header -->
-    <div class="mb-1 flex items-center justify-between px-1 pt-1">
-      <h2 class="text-[18px] font-bold tracking-tight"></h2>
-      <div class="flex items-center gap-0.5 opacity-0 transition-opacity duration-200 group-hover/widgets:opacity-100">
+  <section v-if="enabledWidgets.length > 0" class="group/widgets relative">
+    <div
+      class="pointer-events-none absolute right-2 top-2 z-10 flex items-center gap-0.5 opacity-0 transition-opacity duration-200 group-hover/widgets:opacity-100"
+    >
+      <div class="pointer-events-auto flex items-center gap-0.5 rounded-md border border-border/60 bg-background/65 p-0.5 backdrop-blur-sm">
         <button
           class="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
           @click="scrollBy(-300)"
@@ -99,7 +99,6 @@ const widgetSizeClass: Record<DashboardWidgetSize, string> = {
         </button>
       </div>
     </div>
-
     <!-- Widgets row -->
     <VueDraggable
       ref="scrollEl"

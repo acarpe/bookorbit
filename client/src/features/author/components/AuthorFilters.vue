@@ -8,6 +8,7 @@ defineProps<{
   minBookCount: number | null
   activeCount?: number
   closable?: boolean
+  embedded?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -46,7 +47,7 @@ function onMinBookCountChange(event: Event) {
 </script>
 
 <template>
-  <section class="mb-4 rounded-md border border-border bg-card p-3">
+  <section :class="embedded ? 'rounded-md border border-border bg-card p-3' : 'mb-4 rounded-md border border-border bg-card p-3'">
     <div class="mb-3 flex items-center justify-between">
       <span class="text-xs font-medium text-muted-foreground">Author Filters</span>
       <div class="flex items-center gap-2">

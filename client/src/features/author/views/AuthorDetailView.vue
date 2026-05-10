@@ -2,7 +2,7 @@
 import { useWindowSize } from '@vueuse/core'
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { ChevronLeft } from 'lucide-vue-next'
+import { ArrowUpDown, ChevronDown, ChevronLeft } from 'lucide-vue-next'
 import { toast } from 'vue-sonner'
 
 import type { AuthorSummary, BookCard } from '@bookorbit/types'
@@ -75,6 +75,12 @@ const selectedMergeBookCount = computed(() => {
   const selected = new Set(selectedMergeIds.value)
   return mergeCandidates.value.filter((candidate) => selected.has(candidate.id)).reduce((sum, candidate) => sum + candidate.bookCount, 0)
 })
+
+const BOOK_SORT_OPTIONS = [
+  { value: 'addedAt', label: 'Recently Added' },
+  { value: 'title', label: 'Title' },
+  { value: 'publishedYear', label: 'Published Year' },
+] as const
 
 function showRefreshResultToast(updated: { imageUrl?: string | null }) {
   if (!updated.imageUrl) {
@@ -268,6 +274,17 @@ function onLibraryFilterChange(event: Event) {
   libraryId.value = value ? Number(value) : null
 }
 
+function onMobileSortChange(event: Event) {
+  const value = (event.target as HTMLSelectElement).value
+  if (BOOK_SORT_OPTIONS.some((option) => option.value === value)) {
+    sort.value = value as (typeof BOOK_SORT_OPTIONS)[number]['value']
+  }
+}
+
+function toggleBookOrder() {
+  order.value = order.value === 'asc' ? 'desc' : 'asc'
+}
+
 async function refreshMetadata() {
   if (!author.value || refreshingMetadata.value) return
   refreshingMetadata.value = true
@@ -337,8 +354,8 @@ watch(authorName, () => {
 </script>
 
 <template>
-  <main class="flex min-h-full flex-col pr-2">
-    <div class="mb-3 mt-2 mr-4 flex items-center gap-2 px-1">
+  <main class="flex min-h-full w-full min-w-0 flex-col overflow-x-hidden pr-0 sm:pr-2">
+    <div class="mb-3 mt-2 mr-0 sm:mr-4 flex items-center gap-2 px-1">
       <button
         class="inline-flex h-8 items-center gap-1 rounded-md border border-input px-2.5 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
         @click="goBack"
@@ -447,7 +464,45 @@ watch(authorName, () => {
       <section class="mt-4 rounded-lg border border-border/70 bg-card/60 p-3">
         <div class="mb-3 flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
           <h2 class="text-sm font-semibold text-foreground">Books</h2>
-          <div class="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
+          <div class="w-full space-y-2 sm:hidden">
+            <div class="grid grid-cols-[minmax(0,1fr)_auto] gap-2">
+              <div class="relative min-w-0">
+                <select
+                  :value="sort"
+                  class="h-8 w-full appearance-none rounded-md border border-input bg-background px-2.5 pr-8 text-sm text-foreground outline-none transition-colors focus:border-primary/60"
+                  @change="onMobileSortChange"
+                >
+                  <option v-for="opt in BOOK_SORT_OPTIONS" :key="opt.value" :value="opt.value">
+                    {{ opt.label }}
+                  </option>
+                </select>
+                <ArrowUpDown :size="13" class="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground/85" />
+              </div>
+
+              <button
+                class="h-8 rounded-md border border-input bg-background px-2.5 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                @click="toggleBookOrder"
+              >
+                {{ order === 'asc' ? 'Asc' : 'Desc' }}
+              </button>
+            </div>
+
+            <div class="relative min-w-0">
+              <select
+                :value="libraryId ?? ''"
+                class="h-8 w-full appearance-none rounded-md border border-input bg-background px-2.5 pr-8 text-sm text-foreground outline-none transition-colors focus:border-primary/60"
+                @change="onLibraryFilterChange"
+              >
+                <option value="">All Libraries</option>
+                <option v-for="library in libraries" :key="library.id" :value="library.id">
+                  {{ library.name }}
+                </option>
+              </select>
+              <ChevronDown :size="14" class="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground/85" />
+            </div>
+          </div>
+
+          <div class="hidden flex-wrap items-center gap-2 sm:flex">
             <select
               v-model="sort"
               class="h-8 w-full min-w-0 rounded-md border border-input bg-background px-2.5 text-sm outline-none transition-colors focus:border-primary/60 sm:w-auto"

@@ -32,7 +32,7 @@ export type ExportScope = 'primary' | 'all' | 'audio'
 
 const ICON_SIZE = 17
 
-const BTN_ICON = 'text-foreground/80 h-9 w-9 flex items-center justify-center rounded-full transition-colors'
+const BTN_ICON = 'text-foreground/80 h-9 w-9 shrink-0 flex items-center justify-center rounded-full transition-colors'
 const BTN_DISABLED = 'text-muted-foreground/60 cursor-not-allowed'
 const BTN_PRIMARY = 'text-foreground hover:bg-primary hover:text-primary-foreground'
 const BTN_MUTED = 'text-foreground hover:bg-muted'
@@ -310,7 +310,7 @@ watch(
 
             <Tooltip v-if="canBulkActions">
               <TooltipTrigger as-child>
-                <span class="inline-flex">
+                <span class="inline-flex shrink-0">
                   <DropdownMenu>
                     <DropdownMenuTrigger as-child>
                       <button
@@ -352,7 +352,7 @@ watch(
 
             <Tooltip v-if="canShowMoreMenu">
               <TooltipTrigger as-child>
-                <span class="inline-flex">
+                <span class="inline-flex shrink-0">
                   <DropdownMenu>
                     <DropdownMenuTrigger as-child>
                       <button

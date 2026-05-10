@@ -5,15 +5,14 @@ defineProps<{
   libraryId: number | null
   libraries: { id: number; name: string }[]
   completionStatus: CompletionStatus | null
-  author: string | null
   activeCount?: number
   closable?: boolean
+  embedded?: boolean
 }>()
 
 const emit = defineEmits<{
   'update:libraryId': [value: number | null]
   'update:completionStatus': [value: CompletionStatus | null]
-  'update:author': [value: string | null]
   clear: []
   close: []
 }>()
@@ -35,16 +34,11 @@ function onCompletionChange(event: Event) {
   const value = (event.target as HTMLSelectElement).value
   emit('update:completionStatus', (value as CompletionStatus) || null)
 }
-
-function onAuthorChange(event: Event) {
-  const value = (event.target as HTMLInputElement).value.trim()
-  emit('update:author', value || null)
-}
 </script>
 
 <template>
-  <section class="mb-4 rounded-md border border-border bg-card p-3">
-    <div class="mb-3 flex items-center justify-between">
+  <section :class="embedded ? 'rounded-md border border-border bg-card p-3' : 'mb-4 rounded-md border border-border bg-card p-3'">
+    <div v-if="!embedded" class="mb-3 flex items-center justify-between">
       <span class="text-xs font-medium text-muted-foreground">Series Filters</span>
       <div class="flex items-center gap-2">
         <button
@@ -84,17 +78,6 @@ function onAuthorChange(event: Event) {
         <option value="in_progress">In progress</option>
         <option value="complete">Complete</option>
       </select>
-
-      <div class="flex h-9 items-center gap-1.5 rounded-md border border-input bg-background px-2.5">
-        <span class="text-sm text-muted-foreground">Author</span>
-        <input
-          type="text"
-          :value="author ?? ''"
-          placeholder="Filter by author"
-          class="w-32 bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground/85"
-          @change="onAuthorChange"
-        />
-      </div>
     </div>
   </section>
 </template>

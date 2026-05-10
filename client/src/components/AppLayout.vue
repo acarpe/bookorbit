@@ -13,7 +13,7 @@ const themeStore = useThemeStore()
 const backgroundClass = computed(() => BACKGROUND_OPTIONS.find((b) => b.id === themeStore.background)?.cssClass ?? '')
 
 const BOOK_ROUTE_NAMES = new Set(['book-detail'])
-const TABLE_VIEW_ROUTE_NAMES = new Set(['library', 'smartScope', 'collection', 'series-detail'])
+const TABLE_VIEW_ROUTE_NAMES = new Set(['library', 'smartScope', 'collection', 'series', 'series-detail', 'authors'])
 const viewKey = computed(() => {
   const name = String(route.name)
   if (BOOK_ROUTE_NAMES.has(name)) return name
@@ -31,7 +31,7 @@ const viewKey = computed(() => {
       <AppHeader />
 
       <!-- 2. Independent View Area: Everything below the header scrolls here -->
-      <div class="px-4 pt-2 flex-1 overflow-y-auto overflow-x-hidden relative scroll-smooth bg-transparent">
+      <div class="px-2 sm:px-4 pt-2 flex-1 overflow-y-auto overflow-x-hidden relative scroll-smooth bg-transparent">
         <router-view v-slot="{ Component }">
           <Transition name="page" mode="out-in">
             <div

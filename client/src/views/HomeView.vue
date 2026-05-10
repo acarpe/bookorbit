@@ -10,6 +10,7 @@ import {
   FileSpreadsheet,
   Filter,
   Layers,
+  Search,
   SlidersHorizontal,
   Square,
   Telescope,
@@ -305,13 +306,11 @@ const localSortModel = computed({
   get: () => sortModel.value,
   set: (v: SortSpec[]) => {
     sortModel.value = v
-    collapseMobileControlsIfNeeded()
   },
 })
 
 function handleResetSort() {
   resetSort()
-  collapseMobileControlsIfNeeded()
 }
 
 const activeFilterCount = computed(() => filter.value?.rules?.length ?? 0)
@@ -320,17 +319,6 @@ const mobileControlsBadgeCount = computed(() => activeFilterCount.value + (!isDe
 function clearFilters() {
   filter.value = undefined
   forgetSavedFilter()
-  collapseMobileControlsIfNeeded()
-}
-
-function isMobileViewport() {
-  return typeof window !== 'undefined' && window.innerWidth < 640
-}
-
-function collapseMobileControlsIfNeeded() {
-  if (!mobileControlsExpanded.value) return
-  if (!isMobileViewport()) return
-  mobileControlsExpanded.value = false
 }
 
 function toggleMobileControls() {
@@ -339,7 +327,6 @@ function toggleMobileControls() {
 
 function toggleFilterPanel() {
   filterOpen.value = !filterOpen.value
-  if (filterOpen.value) collapseMobileControlsIfNeeded()
 }
 
 function closeFilterPanel() {
@@ -485,6 +472,7 @@ async function handleToggleCollapse() {
       v-model:viewMode="viewMode"
       :selection-mode="selectionMode"
       :searchable="true"
+      :mobile-search-in-menu="false"
       v-model:searchQuery="searchQuery"
       @toggle-selection="toggleSelectionMode"
     >
@@ -635,6 +623,19 @@ async function handleToggleCollapse() {
     </ViewHeader>
 
     <section v-if="mobileControlsExpanded" class="mb-3 space-y-2 rounded-lg border border-border/70 bg-card/70 p-2 sm:hidden">
+      <div class="flex h-9 items-center rounded-md border border-input bg-background px-2.5">
+        <Search :size="13" class="mr-1.5 shrink-0 text-muted-foreground/85" />
+        <input
+          v-model="searchQuery"
+          type="search"
+          placeholder="Search title, author, series, narrator..."
+          class="mobile-search-input h-full w-full bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground/85"
+        />
+        <button v-if="searchQuery.trim()" class="ml-1 text-muted-foreground/85 transition-colors hover:text-foreground" @click="clearSearch">
+          <X :size="12" />
+        </button>
+      </div>
+
       <div class="flex flex-wrap items-center gap-2">
         <Popover>
           <PopoverTrigger as-child>
@@ -709,18 +710,19 @@ async function handleToggleCollapse() {
 
         <!-- Filter builder panel -->
         <div v-if="filterOpen" class="mb-4 p-3 rounded-md border border-border bg-card">
-          <div class="flex items-center justify-between mb-3">
-            <span class="text-xs font-medium text-muted-foreground">Filter rules</span>
-            <div class="flex items-center gap-1.5">
+          <div class="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <span class="text-xs font-medium text-muted-foreground sm:shrink-0">Filter rules</span>
+            <div class="flex w-full flex-wrap items-center gap-1.5 sm:w-auto sm:flex-nowrap">
               <Tooltip>
                 <TooltipTrigger as-child>
                   <button
                     v-if="activeFilterCount > 0"
                     @click="saveAsSmartScopeOpen = true"
-                    class="flex items-center gap-1.5 h-7 px-3 rounded-md border border-input text-xs font-medium text-muted-foreground bg-background hover:text-foreground hover:bg-muted transition-colors"
+                    class="flex min-h-7 items-center gap-1.5 rounded-md border border-input bg-background px-3 py-1 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
                   >
                     <Telescope :size="13" />
-                    Save as Smart Scope
+                    <span class="hidden sm:inline whitespace-nowrap">Save as Smart Scope</span>
+                    <span class="sm:hidden whitespace-nowrap">Save Scope</span>
                   </button>
                 </TooltipTrigger>
                 <TooltipContent>Save this filter as a named Smart Scope</TooltipContent>
@@ -730,7 +732,7 @@ async function handleToggleCollapse() {
                   <button
                     v-if="activeFilterCount > 0"
                     @click="saveFilter"
-                    class="flex items-center gap-1.5 h-7 px-3 rounded-md border text-xs font-medium transition-colors"
+                    class="flex min-h-7 items-center gap-1.5 rounded-md border px-3 py-1 text-xs font-medium transition-colors whitespace-nowrap"
                     :class="
                       isFilterSaved
                         ? 'border-primary/40 text-primary bg-primary/8'
@@ -757,7 +759,7 @@ async function handleToggleCollapse() {
                 <TooltipContent>Remove saved filter</TooltipContent>
               </Tooltip>
               <button
-                class="h-7 rounded-md border border-input px-2.5 text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                class="min-h-7 whitespace-nowrap rounded-md border border-input px-2.5 py-1 text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
                 @click="closeFilterPanel"
               >
                 Close
@@ -927,3 +929,19 @@ async function handleToggleCollapse() {
 
   <DeleteBookDialog :open="deleteBookId !== null" :deleting="deletingBook" @confirm="confirmDelete" @cancel="cancelDelete" />
 </template>
+
+<style scoped>
+.mobile-search-input::-webkit-search-decoration,
+.mobile-search-input::-webkit-search-cancel-button,
+.mobile-search-input::-webkit-search-results-button,
+.mobile-search-input::-webkit-search-results-decoration {
+  -webkit-appearance: none;
+}
+
+.mobile-search-input::-ms-clear,
+.mobile-search-input::-ms-reveal {
+  display: none;
+  width: 0;
+  height: 0;
+}
+</style>

@@ -117,7 +117,7 @@ function resetToDefault() {
 
 <template>
   <Sheet :open="open" @update:open="emit('update:open', $event)">
-    <SheetContent side="right" class="flex w-[420px] flex-col gap-0 p-0 sm:max-w-[420px]">
+    <SheetContent side="right" class="flex w-[90vw] max-w-[420px] flex-col gap-0 p-0">
       <!-- Header -->
       <SheetHeader class="border-b border-border px-5 py-4">
         <SheetTitle class="text-base font-semibold">Customize Dashboard</SheetTitle>

@@ -58,7 +58,7 @@ function handleLoadMore() {
       </Button>
     </SheetTrigger>
 
-    <SheetContent side="right" class="w-full sm:max-w-md p-0 flex flex-col gap-0">
+    <SheetContent side="right" class="w-[90vw] sm:max-w-md p-0 flex flex-col gap-0">
       <SheetHeader class="flex flex-row items-center justify-between border-b px-4 py-3 h-14 shrink-0 space-y-0">
         <SheetTitle class="text-sm font-semibold text-foreground">Notifications</SheetTitle>
         <div class="flex items-center gap-1 pr-8">

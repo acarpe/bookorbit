@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import type { AuthorDetail } from '@bookorbit/types'
 import { MoreHorizontal, Pencil, RefreshCcw, Trash2, UsersRound, X } from 'lucide-vue-next'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
@@ -55,6 +55,11 @@ const showMenu = computed(() => props.canUpdate || props.canMerge || props.canDe
 
 const imageLightboxOpen = ref(false)
 const canOpenImageLightbox = computed(() => Boolean(props.imageUrl))
+const bioExpanded = ref(false)
+
+watch(resolvedBio, () => {
+  bioExpanded.value = false
+})
 </script>
 
 <template>
@@ -115,7 +120,24 @@ const canOpenImageLightbox = computed(() => Boolean(props.imageUrl))
           </div>
 
           <div class="mt-3">
-            <p v-if="resolvedBio" class="text-sm leading-6 text-foreground/90">{{ resolvedBio }}</p>
+            <p
+              v-if="resolvedBio"
+              :class="[
+                'text-sm leading-6 text-foreground/90 sm:overflow-visible sm:text-clip sm:[display:block] sm:[-webkit-line-clamp:unset]',
+                bioExpanded
+                  ? 'overflow-visible [display:block]'
+                  : 'overflow-hidden text-ellipsis [display:-webkit-box] [-webkit-line-clamp:2] [-webkit-box-orient:vertical]',
+              ]"
+            >
+              {{ resolvedBio }}
+            </p>
+            <button
+              v-if="resolvedBio"
+              class="mt-1 text-xs font-medium text-primary transition-colors hover:text-primary/80 sm:hidden"
+              @click="bioExpanded = !bioExpanded"
+            >
+              {{ bioExpanded ? 'Show less' : 'Show more' }}
+            </button>
             <p v-else-if="loadingPreview" class="text-sm text-muted-foreground">Looking up author metadata...</p>
             <p v-else class="text-sm text-muted-foreground">No biography available. Use the menu to refresh metadata.</p>
             <p v-if="usesPreviewBio && previewProviderLabel" class="mt-1.5 text-xs text-muted-foreground">

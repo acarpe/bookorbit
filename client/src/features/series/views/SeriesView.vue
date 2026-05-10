@@ -17,7 +17,7 @@ const router = useRouter()
 const route = useRoute()
 const { viewMode } = useDisplaySettings()
 const { libraries, fetchLibraries } = useLibraries()
-const { items, total, loading, error, hasMore, q, sort, order, libraryId, completionStatus, author, load } = useSeriesList()
+const { items, total, loading, error, hasMore, q, sort, order, libraryId, completionStatus, load } = useSeriesList()
 
 const SERIES_CARD_WIDTH_STORAGE_KEY = 'bookorbit:seriesCardWidth'
 const SERIES_GRID_GAP_STORAGE_KEY = 'bookorbit:seriesGridGap'
@@ -31,7 +31,6 @@ const hydrating = ref(true)
 const suppressAutoReload = ref(false)
 const filtersOpen = ref(false)
 const mobileControlsExpanded = ref(false)
-const mobileSearchOpen = ref(false)
 const initialLoadComplete = ref(false)
 const INITIAL_SKELETON_COUNT = 18
 
@@ -59,7 +58,6 @@ const activeFilterCount = computed(() => {
   if (q.value.trim()) count += 1
   if (libraryId.value !== null) count += 1
   if (completionStatus.value !== null) count += 1
-  if (author.value) count += 1
   return count
 })
 const mobileControlsBadgeCount = computed(() => activeFilterCount.value + (!isDefaultSort.value ? 1 : 0))
@@ -95,7 +93,6 @@ function syncRouteQuery() {
       order: order.value !== 'asc' ? order.value : undefined,
       libraryId: libraryId.value ? String(libraryId.value) : undefined,
       completionStatus: completionStatus.value ?? undefined,
-      author: author.value || undefined,
     },
   })
 }
@@ -107,18 +104,20 @@ function openSeries(seriesName: string) {
 function setSortField(field: SeriesListSort) {
   sort.value = field
   order.value = 'asc'
-  collapseMobileControlsIfNeeded()
 }
 
 function setSortOrder(dir: SortDirection) {
   order.value = dir
-  collapseMobileControlsIfNeeded()
 }
 
 function resetSort() {
   sort.value = 'name'
   order.value = 'asc'
-  collapseMobileControlsIfNeeded()
+}
+
+function onMobileSortChange(event: Event) {
+  const value = parseSort((event.target as HTMLSelectElement).value)
+  setSortField(value)
 }
 
 function clearSearchQuery() {
@@ -133,19 +132,8 @@ function closeFiltersPanel() {
   filtersOpen.value = false
 }
 
-function isMobileViewport() {
-  return typeof window !== 'undefined' && window.innerWidth < 640
-}
-
 function closeMobileControls() {
   mobileControlsExpanded.value = false
-  mobileSearchOpen.value = false
-}
-
-function collapseMobileControlsIfNeeded() {
-  if (!mobileControlsExpanded.value) return
-  if (!isMobileViewport()) return
-  closeMobileControls()
 }
 
 function toggleMobileControls() {
@@ -154,18 +142,9 @@ function toggleMobileControls() {
     return
   }
   mobileControlsExpanded.value = true
-}
-
-function toggleMobileSearch() {
-  mobileSearchOpen.value = !mobileSearchOpen.value
-  if (!mobileSearchOpen.value) return
   void nextTick(() => {
     mobileSearchInput.value?.focus()
   })
-}
-
-function closeMobileSearch() {
-  mobileSearchOpen.value = false
 }
 
 async function clearFilters() {
@@ -177,12 +156,10 @@ async function clearFilters() {
   order.value = 'asc'
   libraryId.value = null
   completionStatus.value = null
-  author.value = null
 
   syncRouteQuery()
   await load(true)
   filtersOpen.value = false
-  collapseMobileControlsIfNeeded()
 
   await nextTick()
   suppressAutoReload.value = false
@@ -194,10 +171,6 @@ function handleLibraryIdUpdate(value: number | null) {
 
 function handleCompletionStatusUpdate(value: CompletionStatus | null) {
   completionStatus.value = value
-}
-
-function handleAuthorUpdate(value: string | null) {
-  author.value = value
 }
 
 function loadIfSentinelVisible() {
@@ -213,7 +186,6 @@ onMounted(async () => {
   order.value = parseOrder(route.query.order)
   libraryId.value = parseLibraryId(route.query.libraryId)
   completionStatus.value = parseCompletionStatus(route.query.completionStatus)
-  author.value = typeof route.query.author === 'string' ? route.query.author : null
 
   await fetchLibraries()
   hydrating.value = false
@@ -240,11 +212,10 @@ onUnmounted(() => {
   if (searchTimer) clearTimeout(searchTimer)
 })
 
-watch([sort, order, libraryId, completionStatus, author], () => {
+watch([sort, order, libraryId, completionStatus], () => {
   if (hydrating.value || suppressAutoReload.value) return
   syncRouteQuery()
   void load(true)
-  collapseMobileControlsIfNeeded()
 })
 
 watch(q, () => {
@@ -284,227 +255,276 @@ watch(seriesGridGap, (value) => {
 </script>
 
 <template>
-  <ViewHeader
-    title="Series"
-    icon="Library"
-    :total="total"
-    :view-mode="viewMode"
-    :show-selection="false"
-    :show-view-mode-toggle="false"
-    v-model:coverSize="seriesCardWidth"
-    v-model:gridGap="seriesGridGap"
-    :cover-size-min="SERIES_CARD_WIDTH_MIN"
-    :cover-size-max="SERIES_CARD_WIDTH_MAX"
-    :cover-size-step="20"
-    :grid-gap-min="SERIES_GRID_GAP_MIN"
-    :grid-gap-max="SERIES_GRID_GAP_MAX"
-  >
-    <template #toolbar>
-      <div class="hidden lg:flex h-8 w-64 items-center rounded-md border border-input bg-background px-2.5">
-        <Search :size="13" class="mr-1.5 shrink-0 text-muted-foreground/85" />
+  <section class="flex h-full flex-col">
+    <ViewHeader
+      title="Series"
+      icon="Library"
+      :total="total"
+      :view-mode="viewMode"
+      :show-selection="false"
+      :show-view-mode-toggle="false"
+      :mobile-display-in-menu="false"
+      :allowed-view-modes="['grid']"
+      v-model:coverSize="seriesCardWidth"
+      v-model:gridGap="seriesGridGap"
+      :cover-size-min="SERIES_CARD_WIDTH_MIN"
+      :cover-size-max="SERIES_CARD_WIDTH_MAX"
+      :cover-size-step="20"
+      :grid-gap-min="SERIES_GRID_GAP_MIN"
+      :grid-gap-max="SERIES_GRID_GAP_MAX"
+    >
+      <template #toolbar>
+        <div class="hidden lg:flex h-8 w-64 items-center rounded-md border border-input bg-background px-2.5">
+          <Search :size="13" class="mr-1.5 shrink-0 text-muted-foreground/85" />
+          <input
+            v-model="q"
+            type="search"
+            placeholder="Search series or author"
+            class="series-search-input h-full w-full bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground/85"
+          />
+          <button v-if="q.trim()" class="ml-1 text-muted-foreground/85 transition-colors hover:text-foreground" @click="clearSearchQuery">
+            <X :size="12" />
+          </button>
+        </div>
+
+        <div class="hidden lg:block h-5 w-px shrink-0 bg-border" />
+
+        <div class="hidden sm:flex items-center gap-1">
+          <Popover>
+            <PopoverTrigger as-child>
+              <button
+                class="flex h-8 items-center gap-1.5 rounded-md border px-3 text-sm transition-colors"
+                :class="
+                  !isDefaultSort
+                    ? 'border-primary text-primary bg-primary/10'
+                    : 'border-input text-muted-foreground bg-background hover:text-foreground hover:bg-muted'
+                "
+              >
+                <ArrowUpDown :size="13" />
+                <span class="hidden lg:inline">{{ sortSummary }}</span>
+                <span class="lg:hidden">Sort</span>
+              </button>
+            </PopoverTrigger>
+            <PopoverContent align="start" class="w-56 p-2">
+              <div class="mb-2 px-1 text-xs font-medium text-muted-foreground">Sort by</div>
+              <div class="flex flex-col gap-0.5">
+                <button
+                  v-for="field in ['name', 'bookCount', 'lastAddedAt', 'readProgress'] as const"
+                  :key="field"
+                  class="flex items-center justify-between rounded-sm px-2 py-1.5 text-sm transition-colors hover:bg-muted"
+                  :class="sort === field ? 'text-foreground font-medium' : 'text-muted-foreground'"
+                  @click="setSortField(field)"
+                >
+                  {{ SORT_LABELS[field] }}
+                  <span v-if="sort === field" class="text-xs text-primary">{{ order === 'asc' ? '↑' : '↓' }}</span>
+                </button>
+              </div>
+              <div class="my-2 border-t border-border" />
+              <div class="flex gap-1">
+                <button
+                  v-for="dir in ['asc', 'desc'] as const"
+                  :key="dir"
+                  class="flex-1 rounded-sm px-2 py-1.5 text-sm transition-colors hover:bg-muted"
+                  :class="order === dir ? 'bg-muted text-foreground font-medium' : 'text-muted-foreground'"
+                  @click="setSortOrder(dir)"
+                >
+                  {{ dir === 'asc' ? 'Ascending' : 'Descending' }}
+                </button>
+              </div>
+            </PopoverContent>
+          </Popover>
+          <button
+            v-if="!isDefaultSort"
+            class="flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:text-destructive hover:bg-muted"
+            @click="resetSort"
+          >
+            <X :size="13" />
+          </button>
+        </div>
+
+        <div class="hidden sm:block h-5 w-px shrink-0 bg-border" />
+
+        <button
+          class="hidden sm:flex h-8 items-center gap-1.5 rounded-md border px-3 text-sm transition-colors"
+          :class="
+            activeFilterCount > 0
+              ? 'border-primary text-primary bg-primary/10'
+              : 'border-input text-muted-foreground bg-background hover:text-foreground hover:bg-muted'
+          "
+          @click="toggleFiltersOpen"
+        >
+          <Filter :size="13" />
+          <span>Filters</span>
+          <span v-if="activeFilterCount > 0" class="text-xs font-semibold">({{ activeFilterCount }})</span>
+        </button>
+
+        <button
+          v-if="activeFilterCount > 0 || !isDefaultSort"
+          class="hidden sm:flex h-8 items-center gap-1 rounded-md px-2 text-sm text-muted-foreground transition-colors hover:text-destructive"
+          @click="clearFilters"
+        >
+          <X :size="13" />
+          Clear
+        </button>
+
+        <button
+          class="sm:hidden relative flex h-8 w-8 items-center justify-center rounded-md border transition-colors"
+          :class="
+            mobileControlsExpanded
+              ? 'border-primary text-primary bg-primary/10'
+              : 'border-input bg-background text-muted-foreground hover:bg-muted hover:text-foreground'
+          "
+          @click="toggleMobileControls"
+        >
+          <SlidersHorizontal :size="14" />
+          <span
+            v-if="mobileControlsBadgeCount > 0"
+            class="absolute -right-1 -top-1 inline-flex min-h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-semibold leading-none text-primary-foreground"
+          >
+            {{ mobileControlsBadgeCount }}
+          </span>
+        </button>
+      </template>
+    </ViewHeader>
+
+    <!-- Mobile controls -->
+    <section v-if="mobileControlsExpanded" class="mb-3 space-y-2 rounded-lg border border-border/70 bg-card/70 p-2 sm:hidden">
+      <div class="flex items-center gap-1 rounded-md border border-input bg-background px-2.5">
+        <Search :size="13" class="shrink-0 text-muted-foreground/85" />
         <input
+          ref="mobileSearchInput"
           v-model="q"
           type="search"
-          placeholder="Search series"
-          class="h-full w-full bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground/85"
+          placeholder="Search series or author"
+          class="mobile-search-input h-9 w-full bg-transparent text-sm outline-none placeholder:text-muted-foreground/85"
         />
-        <button v-if="q.trim()" class="ml-1 text-muted-foreground/85 transition-colors hover:text-foreground" @click="clearSearchQuery">
+        <button v-if="q.trim()" class="text-muted-foreground/85 hover:text-foreground" @click="clearSearchQuery">
           <X :size="12" />
         </button>
       </div>
 
-      <div class="hidden lg:block h-5 w-px shrink-0 bg-border" />
+      <div class="flex flex-wrap items-center gap-2">
+        <div class="relative min-w-0 flex-1">
+          <select
+            :value="sort"
+            class="h-8 w-full appearance-none rounded-md border border-input bg-background px-2.5 pr-8 text-sm text-foreground outline-none transition-colors focus:border-primary/60"
+            @change="onMobileSortChange"
+          >
+            <option v-for="field in ['name', 'bookCount', 'lastAddedAt', 'readProgress'] as const" :key="field" :value="field">
+              {{ SORT_LABELS[field] }}
+            </option>
+          </select>
+          <ArrowUpDown :size="13" class="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground/85" />
+        </div>
 
-      <div class="hidden sm:flex items-center gap-1">
-        <Popover>
-          <PopoverTrigger as-child>
-            <button
-              class="flex h-8 items-center gap-1.5 rounded-md border px-3 text-sm transition-colors"
-              :class="
-                !isDefaultSort
-                  ? 'border-primary text-primary bg-primary/10'
-                  : 'border-input text-muted-foreground bg-background hover:text-foreground hover:bg-muted'
-              "
-            >
-              <ArrowUpDown :size="13" />
-              <span class="hidden lg:inline">{{ sortSummary }}</span>
-              <span class="lg:hidden">Sort</span>
-            </button>
-          </PopoverTrigger>
-          <PopoverContent align="start" class="w-56 p-2">
-            <div class="mb-2 px-1 text-xs font-medium text-muted-foreground">Sort by</div>
-            <div class="flex flex-col gap-0.5">
-              <button
-                v-for="field in ['name', 'bookCount', 'lastAddedAt', 'readProgress'] as const"
-                :key="field"
-                class="flex items-center justify-between rounded-sm px-2 py-1.5 text-sm transition-colors hover:bg-muted"
-                :class="sort === field ? 'text-foreground font-medium' : 'text-muted-foreground'"
-                @click="setSortField(field)"
-              >
-                {{ SORT_LABELS[field] }}
-                <span v-if="sort === field" class="text-xs text-primary">{{ order === 'asc' ? '↑' : '↓' }}</span>
-              </button>
-            </div>
-            <div class="my-2 border-t border-border" />
-            <div class="flex gap-1">
-              <button
-                v-for="dir in ['asc', 'desc'] as const"
-                :key="dir"
-                class="flex-1 rounded-sm px-2 py-1.5 text-sm transition-colors hover:bg-muted"
-                :class="order === dir ? 'bg-muted text-foreground font-medium' : 'text-muted-foreground'"
-                @click="setSortOrder(dir)"
-              >
-                {{ dir === 'asc' ? 'Ascending' : 'Descending' }}
-              </button>
-            </div>
-          </PopoverContent>
-        </Popover>
         <button
-          v-if="!isDefaultSort"
-          class="flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:text-destructive hover:bg-muted"
-          @click="resetSort"
+          class="flex h-8 items-center rounded-md border px-2.5 text-sm transition-colors"
+          :class="
+            order === 'asc'
+              ? 'border-primary text-primary bg-primary/10'
+              : 'border-input text-muted-foreground bg-background hover:text-foreground hover:bg-muted'
+          "
+          @click="setSortOrder(order === 'asc' ? 'desc' : 'asc')"
         >
-          <X :size="13" />
+          {{ order === 'asc' ? 'Asc' : 'Desc' }}
+        </button>
+
+        <button
+          v-if="activeFilterCount > 0 || !isDefaultSort"
+          class="h-8 rounded-md px-2 text-sm text-muted-foreground transition-colors hover:text-destructive"
+          @click="clearFilters"
+        >
+          Clear
         </button>
       </div>
 
-      <div class="hidden sm:block h-5 w-px shrink-0 bg-border" />
-
-      <button
-        class="hidden sm:flex h-8 items-center gap-1.5 rounded-md border px-3 text-sm transition-colors"
-        :class="
-          activeFilterCount > 0
-            ? 'border-primary text-primary bg-primary/10'
-            : 'border-input text-muted-foreground bg-background hover:text-foreground hover:bg-muted'
-        "
-        @click="toggleFiltersOpen"
-      >
-        <Filter :size="13" />
-        <span>Filters</span>
-        <span v-if="activeFilterCount > 0" class="text-xs font-semibold">({{ activeFilterCount }})</span>
-      </button>
-
-      <button
-        v-if="activeFilterCount > 0 || !isDefaultSort"
-        class="hidden sm:flex h-8 items-center gap-1 rounded-md px-2 text-sm text-muted-foreground transition-colors hover:text-destructive"
-        @click="clearFilters"
-      >
-        <X :size="13" />
-        Clear
-      </button>
-
-      <button
-        class="sm:hidden relative flex h-8 w-8 items-center justify-center rounded-md border transition-colors"
-        :class="
-          mobileControlsExpanded
-            ? 'border-primary text-primary bg-primary/10'
-            : 'border-input bg-background text-muted-foreground hover:bg-muted hover:text-foreground'
-        "
-        @click="toggleMobileControls"
-      >
-        <SlidersHorizontal :size="14" />
-        <span
-          v-if="mobileControlsBadgeCount > 0"
-          class="absolute -right-1 -top-1 inline-flex min-h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-semibold leading-none text-primary-foreground"
-        >
-          {{ mobileControlsBadgeCount }}
-        </span>
-      </button>
-    </template>
-  </ViewHeader>
-
-  <!-- Mobile controls -->
-  <section v-if="mobileControlsExpanded" class="mb-3 space-y-2 rounded-lg border border-border/70 bg-card/70 p-2 sm:hidden">
-    <div class="flex items-center gap-1">
-      <button
-        class="flex h-9 flex-1 items-center justify-center gap-1.5 rounded-md border border-input text-sm text-muted-foreground transition-colors hover:bg-muted"
-        @click="toggleMobileSearch"
-      >
-        <Search :size="13" />
-        {{ q.trim() ? `"${q.trim()}"` : 'Search' }}
-      </button>
-    </div>
-    <div v-if="mobileSearchOpen" class="flex items-center gap-1 rounded-md border border-input bg-background px-2.5">
-      <Search :size="13" class="shrink-0 text-muted-foreground/85" />
-      <input
-        ref="mobileSearchInput"
-        v-model="q"
-        type="search"
-        placeholder="Search series"
-        class="h-9 w-full bg-transparent text-sm outline-none placeholder:text-muted-foreground/85"
+      <SeriesFilters
+        :library-id="libraryId"
+        :libraries="libraries"
+        :completion-status="completionStatus"
+        :active-count="activeFilterCount"
+        embedded
+        @update:library-id="handleLibraryIdUpdate"
+        @update:completion-status="handleCompletionStatusUpdate"
+        @clear="clearFilters"
       />
-      <button v-if="q.trim()" class="text-muted-foreground/85 hover:text-foreground" @click="clearSearchQuery">
-        <X :size="12" />
-      </button>
-      <button class="ml-1 text-xs text-muted-foreground hover:text-foreground" @click="closeMobileSearch">Done</button>
-    </div>
+    </section>
 
-    <SeriesFilters
-      :library-id="libraryId"
-      :libraries="libraries"
-      :completion-status="completionStatus"
-      :author="author"
-      :active-count="activeFilterCount"
-      @update:library-id="handleLibraryIdUpdate"
-      @update:completion-status="handleCompletionStatusUpdate"
-      @update:author="handleAuthorUpdate"
-      @clear="clearFilters"
-    />
-  </section>
+    <main class="flex-1 min-h-0 overflow-y-auto pr-2">
+      <!-- Desktop filters panel -->
+      <SeriesFilters
+        v-if="filtersOpen && !mobileControlsExpanded"
+        :library-id="libraryId"
+        :libraries="libraries"
+        :completion-status="completionStatus"
+        :active-count="activeFilterCount"
+        closable
+        @update:library-id="handleLibraryIdUpdate"
+        @update:completion-status="handleCompletionStatusUpdate"
+        @clear="clearFilters"
+        @close="closeFiltersPanel"
+      />
 
-  <!-- Desktop filters panel -->
-  <SeriesFilters
-    v-if="filtersOpen && !mobileControlsExpanded"
-    :library-id="libraryId"
-    :libraries="libraries"
-    :completion-status="completionStatus"
-    :author="author"
-    :active-count="activeFilterCount"
-    closable
-    @update:library-id="handleLibraryIdUpdate"
-    @update:completion-status="handleCompletionStatusUpdate"
-    @update:author="handleAuthorUpdate"
-    @clear="clearFilters"
-    @close="closeFiltersPanel"
-  />
-
-  <!-- Grid -->
-  <div
-    class="series-grid grid"
-    :style="{
-      '--series-card-width': `${seriesCardWidth}px`,
-      gap: `${seriesGridGap}px`,
-    }"
-  >
-    <template v-if="!initialLoadComplete">
-      <div v-for="n in INITIAL_SKELETON_COUNT" :key="n" class="overflow-hidden rounded-lg border border-border/60 bg-card">
-        <div class="animate-pulse bg-muted/80" style="aspect-ratio: 11 / 8" />
-        <div class="space-y-2 px-4 py-3">
-          <div class="h-4 w-2/3 rounded bg-muted/80" />
-          <div class="h-3 w-1/2 rounded bg-muted/70" />
-        </div>
-        <div class="h-1.5 w-full animate-pulse bg-muted/80" />
+      <!-- Grid -->
+      <div
+        class="series-grid grid"
+        :style="{
+          '--series-card-width': `${seriesCardWidth}px`,
+          gap: `${seriesGridGap}px`,
+        }"
+      >
+        <template v-if="!initialLoadComplete">
+          <div v-for="n in INITIAL_SKELETON_COUNT" :key="n" class="overflow-hidden rounded-lg border border-border/60 bg-card">
+            <div class="animate-pulse bg-muted/80" style="aspect-ratio: 11 / 8" />
+            <div class="space-y-2 px-4 py-3">
+              <div class="h-4 w-2/3 rounded bg-muted/80" />
+              <div class="h-3 w-1/2 rounded bg-muted/70" />
+            </div>
+            <div class="h-1.5 w-full animate-pulse bg-muted/80" />
+          </div>
+        </template>
+        <template v-else>
+          <SeriesCard v-for="series in items" :key="series.name" :series="series" @open="openSeries" />
+        </template>
       </div>
-    </template>
-    <template v-else>
-      <SeriesCard v-for="series in items" :key="series.name" :series="series" @open="openSeries" />
-    </template>
-  </div>
 
-  <!-- Empty state -->
-  <div v-if="initialLoadComplete && items.length === 0 && !loading" class="mt-12 text-center text-sm text-muted-foreground">
-    <p v-if="activeFilterCount > 0">No series match your filters.</p>
-    <p v-else>No series found in your libraries.</p>
-  </div>
+      <!-- Empty state -->
+      <div v-if="initialLoadComplete && items.length === 0 && !loading" class="mt-12 text-center text-sm text-muted-foreground">
+        <p v-if="activeFilterCount > 0">No series match your filters.</p>
+        <p v-else>No series found in your libraries.</p>
+      </div>
 
-  <!-- Error state -->
-  <div v-if="error" class="mt-8 text-center text-sm text-destructive">{{ error }}</div>
+      <!-- Error state -->
+      <div v-if="error" class="mt-8 text-center text-sm text-destructive">{{ error }}</div>
 
-  <!-- Infinite scroll sentinel -->
-  <div ref="sentinel" class="h-px" />
+      <!-- Infinite scroll sentinel -->
+      <div ref="sentinel" class="h-px" />
+    </main>
+  </section>
 </template>
 
 <style scoped>
+.series-search-input::-webkit-search-decoration,
+.series-search-input::-webkit-search-cancel-button,
+.series-search-input::-webkit-search-results-button,
+.series-search-input::-webkit-search-results-decoration,
+.mobile-search-input::-webkit-search-decoration,
+.mobile-search-input::-webkit-search-cancel-button,
+.mobile-search-input::-webkit-search-results-button,
+.mobile-search-input::-webkit-search-results-decoration {
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.series-search-input::-ms-clear,
+.series-search-input::-ms-reveal,
+.mobile-search-input::-ms-clear,
+.mobile-search-input::-ms-reveal {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
 .series-grid {
   grid-template-columns: repeat(auto-fill, minmax(var(--series-card-width), 1fr));
 }

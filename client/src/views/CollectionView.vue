@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { AlertTriangle, CheckSquare, FileSpreadsheet, FolderOpen, Layers, Pencil, SlidersHorizontal, Square, X } from 'lucide-vue-next'
+import { AlertTriangle, CheckSquare, FileSpreadsheet, FolderOpen, Layers, Pencil, Search, SlidersHorizontal, Square, X } from 'lucide-vue-next'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { DropdownMenuItem } from '@/components/ui/dropdown-menu'
 import VirtualBookGrid from '@/features/book/components/VirtualBookGrid.vue'
@@ -362,6 +362,7 @@ watch(debouncedQuery, () => {
       v-model:viewMode="viewMode"
       :selection-mode="selectionMode"
       :searchable="true"
+      :mobile-search-in-menu="false"
       v-model:searchQuery="searchQuery"
       @toggle-selection="toggleSelectionMode"
     >
@@ -453,6 +454,19 @@ watch(debouncedQuery, () => {
     </ViewHeader>
 
     <section v-if="mobileControlsExpanded" class="mb-3 rounded-lg border border-border/70 bg-card/70 p-2 sm:hidden">
+      <div class="mb-2 flex h-9 items-center rounded-md border border-input bg-background px-2.5">
+        <Search :size="13" class="mr-1.5 shrink-0 text-muted-foreground/85" />
+        <input
+          v-model="searchQuery"
+          type="search"
+          placeholder="Search title, author, series, narrator..."
+          class="mobile-search-input h-full w-full bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground/85"
+        />
+        <button v-if="searchQuery.trim()" class="ml-1 text-muted-foreground/85 transition-colors hover:text-foreground" @click="clearSearch">
+          <X :size="12" />
+        </button>
+      </div>
+
       <div class="flex flex-wrap items-center gap-2">
         <button
           class="flex h-8 items-center gap-1.5 rounded-md border px-2.5 text-sm transition-colors"
@@ -573,3 +587,19 @@ watch(debouncedQuery, () => {
     </main>
   </section>
 </template>
+
+<style scoped>
+.mobile-search-input::-webkit-search-decoration,
+.mobile-search-input::-webkit-search-cancel-button,
+.mobile-search-input::-webkit-search-results-button,
+.mobile-search-input::-webkit-search-results-decoration {
+  -webkit-appearance: none;
+}
+
+.mobile-search-input::-ms-clear,
+.mobile-search-input::-ms-reveal {
+  display: none;
+  width: 0;
+  height: 0;
+}
+</style>
