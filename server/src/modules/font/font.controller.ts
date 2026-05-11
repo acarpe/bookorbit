@@ -2,8 +2,9 @@ import { BadRequestException, Body, Controller, Delete, Get, HttpCode, HttpStatu
 import type { FastifyReply } from 'fastify';
 import { createReadStream } from 'fs';
 
-import { FONT_FORMAT_MIME_TYPES, MAX_FONT_FILE_SIZE } from '@bookorbit/types';
+import { FONT_FORMAT_MIME_TYPES, MAX_FONT_FILE_SIZE, Permission } from '@bookorbit/types';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
+import { ForbidPermission } from '../../common/decorators/forbid-permission.decorator';
 import type { MultipartRequest } from '../../common/types/multipart-request';
 import type { RequestUser } from '../../common/types/request-user';
 import { FontService } from './font.service';
@@ -20,6 +21,7 @@ export class FontController {
 
   @Post('upload')
   @HttpCode(HttpStatus.CREATED)
+  @ForbidPermission(Permission.DemoRestricted, 'Demo-restricted account cannot manage fonts')
   async upload(@CurrentUser() user: RequestUser, @Req() req: MultipartRequest) {
     const data = await req.file({ limits: { fileSize: MAX_FONT_FILE_SIZE } });
     if (!data) throw new BadRequestException('No file provided');
@@ -28,12 +30,14 @@ export class FontController {
   }
 
   @Patch(':id')
+  @ForbidPermission(Permission.DemoRestricted, 'Demo-restricted account cannot manage fonts')
   async update(@Param('id', ParseIntPipe) id: number, @Body() dto: UpdateFontDto, @CurrentUser() user: RequestUser) {
     return this.fontService.update(user, id, dto);
   }
 
   @Delete(':id')
   @HttpCode(HttpStatus.NO_CONTENT)
+  @ForbidPermission(Permission.DemoRestricted, 'Demo-restricted account cannot manage fonts')
   async remove(@Param('id', ParseIntPipe) id: number, @CurrentUser() user: RequestUser) {
     await this.fontService.remove(user, id);
   }

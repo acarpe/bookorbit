@@ -5,6 +5,7 @@ import { Pencil, Trash2, Upload, X, Check, ChevronDown, ChevronRight } from 'luc
 import { MAX_FONTS_PER_USER } from '@bookorbit/types'
 import type { UserFont } from '@bookorbit/types'
 import { useCustomFonts } from '@/features/reader/epub/composables/useCustomFonts'
+import { usePermissions } from '@/features/auth/composables/usePermissions'
 import SettingsPageHeader from './SettingsPageHeader.vue'
 
 const WEIGHT_LABELS: Record<number, string> = {
@@ -21,6 +22,7 @@ const WEIGHT_LABELS: Record<number, string> = {
 
 const customFonts = useCustomFonts()
 const { fonts, families, loading, uploading, fetchFonts, uploadFont, updateFont } = customFonts
+const { isDemoRestrictedAccount } = usePermissions()
 
 const isDragging = ref(false)
 const uploadErrors = ref<string[]>([])
@@ -184,6 +186,10 @@ function handleFileInput(event: Event) {
 }
 
 async function processFiles(files: File[]) {
+  if (isDemoRestrictedAccount.value) {
+    toast.error('Demo-restricted account cannot manage fonts')
+    return
+  }
   uploadErrors.value = []
   for (const file of files) {
     try {
@@ -215,21 +221,26 @@ function formatBytes(bytes: number): string {
     <div class="mb-6">
       <p class="settings-group-label">Upload Fonts</p>
       <label
-        class="relative flex flex-col items-center justify-center gap-3 rounded-lg border-2 border-dashed px-6 py-8 text-center cursor-pointer transition-colors"
-        :class="isDragging ? 'border-primary bg-primary/5' : 'border-border hover:border-muted-foreground/40 hover:bg-muted/30'"
+        class="relative flex flex-col items-center justify-center gap-3 rounded-lg border-2 border-dashed px-6 py-8 text-center transition-colors"
+        :class="[
+          isDemoRestrictedAccount ? 'border-border opacity-50 cursor-not-allowed' : 'cursor-pointer',
+          !isDemoRestrictedAccount &&
+            (isDragging ? 'border-primary bg-primary/5' : 'border-border hover:border-muted-foreground/40 hover:bg-muted/30'),
+        ]"
         @dragover="handleDragOver"
         @dragleave="handleDragLeave"
         @drop="handleDrop"
       >
         <div
           class="flex h-10 w-10 items-center justify-center rounded-full transition-colors"
-          :class="isDragging ? 'bg-primary/15 text-primary' : 'bg-muted text-muted-foreground'"
+          :class="isDragging && !isDemoRestrictedAccount ? 'bg-primary/15 text-primary' : 'bg-muted text-muted-foreground'"
         >
           <Upload :size="20" />
         </div>
         <div>
           <p class="text-sm font-medium text-foreground">
-            <span v-if="uploading">Uploading...</span>
+            <span v-if="isDemoRestrictedAccount">Not available for demo accounts</span>
+            <span v-else-if="uploading">Uploading...</span>
             <span v-else-if="isDragging">Drop files here</span>
             <span v-else>Drag font files here, or <span class="text-primary underline underline-offset-2">browse</span></span>
           </p>
@@ -239,8 +250,9 @@ function formatBytes(bytes: number): string {
           type="file"
           accept=".ttf,.otf,.woff,.woff2"
           multiple
-          class="absolute inset-0 opacity-0 cursor-pointer"
-          :disabled="uploading"
+          class="absolute inset-0 opacity-0"
+          :class="isDemoRestrictedAccount ? 'cursor-not-allowed' : 'cursor-pointer'"
+          :disabled="uploading || isDemoRestrictedAccount"
           @change="handleFileInput"
         />
       </label>
@@ -317,7 +329,7 @@ function formatBytes(bytes: number): string {
 
             <div class="flex items-center gap-1 shrink-0">
               <button
-                v-if="editingFamilyName !== family.name"
+                v-if="editingFamilyName !== family.name && !isDemoRestrictedAccount"
                 class="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
                 title="Rename family"
                 @click.stop="startEditFamily(family.name)"
@@ -333,6 +345,7 @@ function formatBytes(bytes: number): string {
                 <Check :size="13" />
               </button>
               <button
+                v-if="!isDemoRestrictedAccount"
                 class="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
                 title="Delete family"
                 @click.stop="deleteFamily(family.name)"
@@ -384,7 +397,7 @@ function formatBytes(bytes: number): string {
 
               <div class="flex items-center gap-1 shrink-0">
                 <button
-                  v-if="editingVariantId !== variant.id"
+                  v-if="editingVariantId !== variant.id && !isDemoRestrictedAccount"
                   class="flex h-6 w-6 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
                   title="Edit weight/style"
                   @click="startEditVariant(variant)"
@@ -408,7 +421,7 @@ function formatBytes(bytes: number): string {
                   <X :size="12" />
                 </button>
                 <button
-                  v-if="editingVariantId !== variant.id"
+                  v-if="editingVariantId !== variant.id && !isDemoRestrictedAccount"
                   class="flex h-6 w-6 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
                   title="Delete variant"
                   @click="deleteVariant(variant)"

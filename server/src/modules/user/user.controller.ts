@@ -35,6 +35,7 @@ import { SetLibrariesDto } from './dto/set-libraries.dto';
 import { SetPermissionsDto } from './dto/set-permissions.dto';
 import { UpdateMeDto } from './dto/update-me.dto';
 import { UpdateMeSettingsDto } from './dto/update-me-settings.dto';
+import { UpdateReaderStorageModeDto } from './dto/update-reader-storage-mode.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { UpdateSeriesCollapsePreferencesDto } from './dto/update-series-collapse-preferences.dto';
 import { MAX_USER_AVATAR_BYTES } from './user-avatar.service';
@@ -80,6 +81,13 @@ export class UserController {
   @Patch('me/settings')
   updateMySettings(@CurrentUser() user: RequestUser, @Body() dto: UpdateMeSettingsDto) {
     return this.userService.updateMySettings(user.id, dto);
+  }
+
+  @Patch('me/reader-storage-mode')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @ForbidPermission(Permission.DemoRestricted, 'Demo-restricted account cannot change reader storage mode')
+  updateReaderStorageMode(@CurrentUser() user: RequestUser, @Body() dto: UpdateReaderStorageModeDto) {
+    return this.userService.updateReaderStorageMode(user.id, dto.sync);
   }
 
   @Patch('me/series-collapse-preferences')

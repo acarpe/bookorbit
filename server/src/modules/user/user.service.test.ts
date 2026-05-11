@@ -246,6 +246,29 @@ describe('UserService', () => {
     expect(userRepo.update).toHaveBeenCalledWith(5, { settings });
   });
 
+  it('updateReaderStorageMode updates syncReaderPreferences setting', async () => {
+    userRepo.update.mockResolvedValue({ id: 3, settings: { syncReaderPreferences: true } });
+
+    const result = await service.updateReaderStorageMode(3, true);
+
+    expect(userRepo.update).toHaveBeenCalledWith(3, { settings: { syncReaderPreferences: true } });
+    expect(result).toMatchObject({ id: 3 });
+  });
+
+  it('updateReaderStorageMode works for disabling sync', async () => {
+    userRepo.update.mockResolvedValue({ id: 3, settings: { syncReaderPreferences: false } });
+
+    await service.updateReaderStorageMode(3, false);
+
+    expect(userRepo.update).toHaveBeenCalledWith(3, { settings: { syncReaderPreferences: false } });
+  });
+
+  it('updateReaderStorageMode throws NotFoundException when user does not exist', async () => {
+    userRepo.update.mockResolvedValue(null);
+
+    await expect(service.updateReaderStorageMode(99, true)).rejects.toBeInstanceOf(NotFoundException);
+  });
+
   it('deleteUser blocks deleting your own account', async () => {
     await expect(service.deleteUser(1, reqUser({ id: 1, isSuperuser: true }))).rejects.toBeInstanceOf(ConflictException);
   });

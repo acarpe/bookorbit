@@ -25,6 +25,7 @@ describe('UserController', () => {
     findAssignable: vi.fn(),
     updateMe: vi.fn(),
     updateMySettings: vi.fn(),
+    updateReaderStorageMode: vi.fn(),
     findById: vi.fn(),
     createUser: vi.fn(),
     updateUser: vi.fn(),
@@ -245,5 +246,24 @@ describe('UserController', () => {
   it('updateMySettings has no demo-restriction metadata - demo users may update UI settings', () => {
     const settingsForbidden = Reflect.getMetadata(FORBIDDEN_PERMISSION_KEY, UserController.prototype.updateMySettings);
     expect(settingsForbidden).toBeUndefined();
+  });
+
+  it('delegates reader storage mode update to updateReaderStorageMode service method', async () => {
+    userService.updateReaderStorageMode.mockResolvedValue({ id: 7, settings: { syncReaderPreferences: true } });
+
+    await controller.updateReaderStorageMode({ id: 7 } as any, { sync: true } as any);
+
+    expect(userService.updateReaderStorageMode).toHaveBeenCalledWith(7, true);
+  });
+
+  it('updateReaderStorageMode has ForbidPermission DemoRestricted metadata', () => {
+    const meta = Reflect.getMetadata(FORBIDDEN_PERMISSION_KEY, UserController.prototype.updateReaderStorageMode) as {
+      permission: Permission;
+      message?: string;
+    };
+    expect(meta).toEqual({
+      permission: Permission.DemoRestricted,
+      message: 'Demo-restricted account cannot change reader storage mode',
+    });
   });
 });

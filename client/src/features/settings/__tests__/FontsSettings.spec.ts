@@ -14,6 +14,10 @@ vi.mock('@/features/reader/epub/composables/useCustomFonts', () => ({
   useCustomFonts: vi.fn<() => unknown>(),
 }))
 
+vi.mock('@/features/auth/composables/usePermissions', () => ({
+  usePermissions: vi.fn<() => unknown>(),
+}))
+
 vi.mock('../SettingsPageHeader.vue', () => ({
   default: { template: '<div />' },
 }))
@@ -68,11 +72,17 @@ function makeComposable(initialFonts: UserFont[] = []) {
 }
 
 import { useCustomFonts } from '@/features/reader/epub/composables/useCustomFonts'
+import { usePermissions } from '@/features/auth/composables/usePermissions'
 import { toast } from 'vue-sonner'
+
+function makePermissions(isDemo = false) {
+  return { isDemoRestrictedAccount: computed(() => isDemo) }
+}
 
 describe('FontsSettings', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    vi.mocked(usePermissions).mockReturnValue(makePermissions(false) as never)
   })
 
   describe('empty state', () => {
@@ -341,6 +351,89 @@ describe('FontsSettings', () => {
 
       expect(wrapper.text()).toContain('Regular')
       expect(wrapper.text()).toContain('Bold')
+    })
+  })
+
+  describe('demo restriction', () => {
+    beforeEach(() => {
+      vi.mocked(usePermissions).mockReturnValue(makePermissions(true) as never)
+    })
+
+    it('shows "Not available for demo accounts" text in upload zone', async () => {
+      vi.mocked(useCustomFonts).mockReturnValue(makeComposable() as never)
+      const wrapper = mount(FontsSettings, { attachTo: document.body })
+      await flushPromises()
+
+      expect(wrapper.text()).toContain('Not available for demo accounts')
+    })
+
+    it('disables the file input', async () => {
+      vi.mocked(useCustomFonts).mockReturnValue(makeComposable() as never)
+      const wrapper = mount(FontsSettings, { attachTo: document.body })
+      await flushPromises()
+
+      const fileInput = wrapper.find('input[type="file"]')
+      expect(fileInput.attributes('disabled')).toBeDefined()
+    })
+
+    it('does not call uploadFont when file is dropped', async () => {
+      const composable = makeComposable()
+      vi.mocked(useCustomFonts).mockReturnValue(composable as never)
+
+      const wrapper = mount(FontsSettings, { attachTo: document.body })
+      await flushPromises()
+
+      const file = new File(['data'], 'Test.ttf', { type: 'font/ttf' })
+      const label = wrapper.find('label')
+      await label.trigger('drop', { preventDefault: vi.fn<() => void>(), dataTransfer: { files: [file] } })
+      await flushPromises()
+
+      expect(composable.uploadFont).not.toHaveBeenCalled()
+      expect(toast.error).toHaveBeenCalledWith('Demo-restricted account cannot manage fonts')
+    })
+
+    it('hides Rename family and Delete family buttons', async () => {
+      vi.mocked(useCustomFonts).mockReturnValue(makeComposable([georgiaPro]) as never)
+      const wrapper = mount(FontsSettings, { attachTo: document.body })
+      await flushPromises()
+
+      const renameFamilyBtn = wrapper.findAll('button').find((b) => b.attributes('title') === 'Rename family')
+      const deleteFamilyBtn = wrapper.findAll('button').find((b) => b.attributes('title') === 'Delete family')
+
+      expect(renameFamilyBtn).toBeUndefined()
+      expect(deleteFamilyBtn).toBeUndefined()
+    })
+
+    it('hides Edit weight/style and Delete variant buttons when variants are expanded', async () => {
+      vi.mocked(useCustomFonts).mockReturnValue(makeComposable([...literataFonts]) as never)
+      const wrapper = mount(FontsSettings, { attachTo: document.body })
+      await flushPromises()
+
+      const toggleBtn = wrapper.find('button')
+      await toggleBtn.trigger('click')
+      await flushPromises()
+
+      const editVariantBtn = wrapper.findAll('button').find((b) => b.attributes('title') === 'Edit weight/style')
+      const deleteVariantBtn = wrapper.findAll('button').find((b) => b.attributes('title') === 'Delete variant')
+
+      expect(editVariantBtn).toBeUndefined()
+      expect(deleteVariantBtn).toBeUndefined()
+    })
+
+    it('still shows font families (read access is allowed)', async () => {
+      vi.mocked(useCustomFonts).mockReturnValue(makeComposable([georgiaPro]) as never)
+      const wrapper = mount(FontsSettings, { attachTo: document.body })
+      await flushPromises()
+
+      expect(wrapper.text()).toContain('Georgia Pro')
+    })
+
+    it('still shows quota counter', async () => {
+      vi.mocked(useCustomFonts).mockReturnValue(makeComposable([georgiaPro]) as never)
+      const wrapper = mount(FontsSettings, { attachTo: document.body })
+      await flushPromises()
+
+      expect(wrapper.text()).toContain('1 / 50 used')
     })
   })
 })

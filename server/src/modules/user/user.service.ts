@@ -189,6 +189,12 @@ export class UserService {
     return user;
   }
 
+  async updateReaderStorageMode(userId: number, sync: boolean) {
+    const user = await this.userRepo.update(userId, { settings: { syncReaderPreferences: sync } });
+    if (!user) throw new NotFoundException('User not found');
+    return user;
+  }
+
   async deleteUser(id: number, requestingUser: RequestUser) {
     if (id === requestingUser.id) {
       throw new ConflictException('You cannot delete your own account');

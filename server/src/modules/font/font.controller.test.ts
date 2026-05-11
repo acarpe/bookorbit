@@ -2,6 +2,8 @@ import { BadRequestException } from '@nestjs/common';
 import { FontController } from './font.controller';
 import type { FontService } from './font.service';
 import type { RequestUser } from '../../common/types/request-user';
+import { FORBIDDEN_PERMISSION_KEY } from '../../common/decorators/forbid-permission.decorator';
+import { Permission } from '@bookorbit/types';
 
 vi.mock('fs', () => ({
   createReadStream: vi.fn(() => 'mock-stream'),
@@ -145,6 +147,51 @@ describe('FontController', () => {
 
       expect(reply.status).toHaveBeenCalledWith(304);
       expect(reply.send).toHaveBeenCalled();
+    });
+  });
+
+  describe('demo restriction metadata', () => {
+    it('upload has ForbidPermission DemoRestricted', () => {
+      const meta = Reflect.getMetadata(FORBIDDEN_PERMISSION_KEY, FontController.prototype.upload) as {
+        permission: Permission;
+        message?: string;
+      };
+      expect(meta).toEqual({
+        permission: Permission.DemoRestricted,
+        message: 'Demo-restricted account cannot manage fonts',
+      });
+    });
+
+    it('update has ForbidPermission DemoRestricted', () => {
+      const meta = Reflect.getMetadata(FORBIDDEN_PERMISSION_KEY, FontController.prototype.update) as {
+        permission: Permission;
+        message?: string;
+      };
+      expect(meta).toEqual({
+        permission: Permission.DemoRestricted,
+        message: 'Demo-restricted account cannot manage fonts',
+      });
+    });
+
+    it('remove has ForbidPermission DemoRestricted', () => {
+      const meta = Reflect.getMetadata(FORBIDDEN_PERMISSION_KEY, FontController.prototype.remove) as {
+        permission: Permission;
+        message?: string;
+      };
+      expect(meta).toEqual({
+        permission: Permission.DemoRestricted,
+        message: 'Demo-restricted account cannot manage fonts',
+      });
+    });
+
+    it('list does not have ForbidPermission', () => {
+      const meta = Reflect.getMetadata(FORBIDDEN_PERMISSION_KEY, FontController.prototype.list);
+      expect(meta).toBeUndefined();
+    });
+
+    it('serveFile does not have ForbidPermission', () => {
+      const meta = Reflect.getMetadata(FORBIDDEN_PERMISSION_KEY, FontController.prototype.serveFile);
+      expect(meta).toBeUndefined();
     });
   });
 });

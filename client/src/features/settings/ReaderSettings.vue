@@ -4,6 +4,7 @@ import { Monitor, Cloud } from 'lucide-vue-next'
 import { toast } from 'vue-sonner'
 import { api } from '@/lib/api'
 import { useAuth } from '@/features/auth/composables/useAuth'
+import { usePermissions } from '@/features/auth/composables/usePermissions'
 import SettingsPageHeader from './SettingsPageHeader.vue'
 
 const props = withDefaults(
@@ -16,16 +17,21 @@ const props = withDefaults(
 )
 
 const { user } = useAuth()
+const { isDemoRestrictedAccount } = usePermissions()
 
-const syncEnabled = computed(() => user.value?.settings?.syncReaderPreferences ?? false)
+const syncEnabled = computed(() => !isDemoRestrictedAccount.value && (user.value?.settings?.syncReaderPreferences ?? false))
 
 async function setStorageMode(sync: boolean) {
   if (!user.value || syncEnabled.value === sync) return
+  if (isDemoRestrictedAccount.value) {
+    toast.error('Demo-restricted account cannot change reader storage mode')
+    return
+  }
   try {
-    const res = await api('/api/v1/users/me/settings', {
+    const res = await api('/api/v1/users/me/reader-storage-mode', {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ settings: { syncReaderPreferences: sync } }),
+      body: JSON.stringify({ sync }),
     })
     if (res.ok) {
       user.value = { ...user.value, settings: { ...user.value.settings, syncReaderPreferences: sync } }
@@ -76,8 +82,11 @@ async function setStorageMode(sync: boolean) {
 
         <!-- My account -->
         <div
-          class="flex items-start gap-4 px-4 py-3.5 md:px-5 md:py-4 rounded-lg border-2 cursor-pointer transition-colors"
-          :class="syncEnabled ? 'border-primary bg-primary/5' : 'border-border bg-card hover:border-muted-foreground/30'"
+          class="flex items-start gap-4 px-4 py-3.5 md:px-5 md:py-4 rounded-lg border-2 transition-colors"
+          :class="[
+            isDemoRestrictedAccount ? 'border-border bg-card opacity-50 cursor-not-allowed' : 'cursor-pointer',
+            !isDemoRestrictedAccount && (syncEnabled ? 'border-primary bg-primary/5' : 'border-border bg-card hover:border-muted-foreground/30'),
+          ]"
           @click="setStorageMode(true)"
         >
           <div
@@ -91,6 +100,12 @@ async function setStorageMode(sync: boolean) {
               <span class="settings-label">My account</span>
               <span v-if="syncEnabled" class="text-xs font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded bg-primary/15 text-primary">
                 Active
+              </span>
+              <span
+                v-if="isDemoRestrictedAccount"
+                class="text-xs font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded bg-muted text-muted-foreground"
+              >
+                Not available
               </span>
             </div>
             <span class="block text-xs text-muted-foreground leading-relaxed">
