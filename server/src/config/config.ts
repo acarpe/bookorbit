@@ -1,4 +1,5 @@
 import { registerAs } from '@nestjs/config';
+import { resolve } from 'path';
 
 export const appConfig = registerAs('app', () => ({
   nodeEnv: process.env.NODE_ENV ?? 'development',
@@ -17,7 +18,7 @@ export const authConfig = registerAs('auth', () => ({
 }));
 
 export const storageConfig = registerAs('storage', () => ({
-  appDataPath: process.env.APP_DATA_PATH ?? '/data',
+  appDataPath: resolve(process.env.APP_DATA_PATH ?? '/data'),
 }));
 
 export const fileWriteConfig = registerAs('fileWrite', () => ({
