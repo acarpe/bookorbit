@@ -147,6 +147,7 @@ export const BACKGROUND_OPTIONS: { id: Background; label: string; cssClass: stri
 const ACCENT_IDS = ACCENT_OPTIONS.map((a) => a.id)
 const RADIUS_IDS = RADIUS_OPTIONS.map((r) => r.id)
 const BACKGROUND_IDS = BACKGROUND_OPTIONS.map((b) => b.id)
+const DEFAULT_SURFACE_BRIGHTNESS = 35
 
 export const useThemeStore = defineStore('theme', () => {
   const theme = ref<Theme>(storage.get<Theme>('theme', 'dark'))
@@ -160,7 +161,7 @@ export const useThemeStore = defineStore('theme', () => {
   const storedBackground = storage.get<Background>('background', 'vinyl')
   const background = ref<Background>(BACKGROUND_IDS.includes(storedBackground) ? storedBackground : 'dots')
 
-  const brightness = ref<number>(storage.get<number>('brightness', 50))
+  const brightness = ref<number>(storage.get<number>('brightness', DEFAULT_SURFACE_BRIGHTNESS))
 
   function applyTheme(t: Theme) {
     document.documentElement.classList.toggle('dark', t === 'dark')

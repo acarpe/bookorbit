@@ -6,7 +6,9 @@ export type AuthorCoverShape = 'square' | 'circle'
 export type CoverSizeScope = 'per-view' | 'synced'
 export type TableDensity = 'compact' | 'comfortable' | 'roomy'
 
-const DEFAULT_BOOK_COVER_SIZE = 130
+const DEFAULT_PORTRAIT_COVER_SIZE = 130
+const DEFAULT_SQUARE_COVER_SIZE = 150
+const DEFAULT_GRID_GAP = 28
 const CARD_OVERLAY_KEYS: CardOverlayKey[] = ['progress-bar', 'format', 'rating', 'read-status', 'lock-status']
 const DEFAULT_CARD_OVERLAYS: CardOverlayKey[] = ['progress-bar', 'format', 'rating', 'read-status']
 
@@ -24,10 +26,10 @@ function normalizeCardOverlays(value: unknown): CardOverlayKey[] {
   return normalized
 }
 
-const portraitCoverSize = ref(Math.max(storage.get('portraitCoverSize', DEFAULT_BOOK_COVER_SIZE), 100))
-const squareCoverSize = ref(Math.max(storage.get('squareCoverSize', DEFAULT_BOOK_COVER_SIZE), 100))
+const portraitCoverSize = ref(Math.max(storage.get('portraitCoverSize', DEFAULT_PORTRAIT_COVER_SIZE), 100))
+const squareCoverSize = ref(Math.max(storage.get('squareCoverSize', DEFAULT_SQUARE_COVER_SIZE), 100))
 const coverSizeScope = ref<CoverSizeScope>(storage.get('coverSizeScope', 'per-view'))
-const gridGap = ref(storage.get('gridGap', 20))
+const gridGap = ref(storage.get('gridGap', DEFAULT_GRID_GAP))
 const portraitGridGap = ref(storage.get('portraitGridGap', gridGap.value))
 const squareGridGap = ref(storage.get('squareGridGap', gridGap.value))
 export type BookViewMode = 'grid' | 'list' | 'table'

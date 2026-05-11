@@ -748,7 +748,7 @@ function handleCoverChanged(source: 'extracted' | 'custom' | null) {
         </MetadataFieldLabel>
         <MetadataFieldLabel
           v-if="isPrimaryAudio"
-          class="sm:w-24 sm:shrink-0"
+          class="sm:w-30 sm:shrink-0"
           label="Duration (s)"
           field="durationSeconds"
           :locked="isLocked('durationSeconds')"
@@ -782,9 +782,9 @@ function handleCoverChanged(source: 'extracted' | 'custom' | null) {
               v-model="form.abridged"
               type="checkbox"
               class="h-4 w-4 rounded border-input accent-primary"
+              aria-label="Abridged"
               :disabled="isLocked('abridged')"
             />
-            <label for="abridged-check" class="ml-2 text-sm text-foreground select-none">Abridged</label>
           </div>
         </MetadataFieldLabel>
       </div>

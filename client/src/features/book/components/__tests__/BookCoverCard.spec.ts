@@ -25,6 +25,9 @@ vi.mock('@/features/book/lib/book-cover', () => ({
   }),
   titleFontSizeClass: () => 'text-[11cqi]',
 }))
+vi.mock('@/features/auth/composables/usePermissions', () => ({
+  usePermissions: () => ({ hasPermission: () => false }),
+}))
 
 // Stub complex UI sub-components
 const globalStubs = {
@@ -33,7 +36,7 @@ const globalStubs = {
     DropdownMenuContent: { template: '<div><slot /></div>' },
     DropdownMenuItem: { template: '<div><slot /></div>' },
     DropdownMenuTrigger: { template: '<div><slot /></div>' },
-    DropdownMenuSeparator: { template: '<div />' },
+    DropdownMenuSeparator: { template: '<div data-test="dropdown-separator" />' },
     DropdownMenuSub: { template: '<div><slot /></div>' },
     DropdownMenuSubTrigger: { template: '<div><slot /></div>' },
     DropdownMenuSubContent: { template: '<div><slot /></div>' },
@@ -188,6 +191,14 @@ describe('BookCoverCard — present state', () => {
   it('anchors the kebab menu button to the lower-right corner', () => {
     const wrapper = mountCard(presentBook)
     expect(wrapper.find('div.absolute.bottom-2.right-2.z-20').exists()).toBe(true)
+  })
+
+  it('does not render a trailing separator when no post-status actions are visible', () => {
+    const wrapper = mountCard(presentBook)
+    expect(wrapper.text()).toContain('Set Status')
+    expect(wrapper.text()).not.toContain('Send via Email')
+    expect(wrapper.text()).not.toContain('Delete')
+    expect(wrapper.findAll('[data-test="dropdown-separator"]')).toHaveLength(0)
   })
 
   it('renders an orange lock pill when lock-status overlay is enabled and metadata is locked', () => {

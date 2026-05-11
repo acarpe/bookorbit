@@ -23,13 +23,15 @@ function legacyGridGapKey(type: ViewType, id: number) {
   return `bookorbit:gridGap:${type}:${id}`
 }
 
+const DEFAULT_GRID_GAP = 28
+
 export function useViewDisplaySettings(
   viewType: ViewType,
   viewId: Readonly<Ref<number | null>>,
   coverAspectRatio: Readonly<Ref<CoverAspectRatio>> = ref(DEFAULT_COVER_ASPECT_RATIO),
 ) {
   const { portraitCoverSize, squareCoverSize, coverSizeScope, portraitGridGap, squareGridGap } = useDisplaySettings()
-  const fallbackGridGap = storage.get('gridGap', 20)
+  const fallbackGridGap = storage.get('gridGap', DEFAULT_GRID_GAP)
 
   const coverShapeGroup = computed<CoverShapeGroup>(() => (coverAspectRatio.value === '1/1' ? 'square' : 'portrait'))
   const globalCoverSizeForGroup = computed(() => (coverShapeGroup.value === 'square' ? squareCoverSize.value : portraitCoverSize.value))

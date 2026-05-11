@@ -504,7 +504,7 @@ async function handleSetStatus(status: ReadStatus) {
                 <Send class="size-4 mr-2" />
                 Send via Email
               </DropdownMenuItem>
-              <DropdownMenuSeparator />
+              <DropdownMenuSeparator v-if="hasPermission('email_send') || hasPermission('library_delete_books')" />
               <DropdownMenuItem
                 v-if="hasPermission('library_delete_books')"
                 class="text-destructive focus:text-destructive"
