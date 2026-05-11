@@ -1,10 +1,11 @@
 import { execFile as execFileCallback, spawn } from 'child_process';
 import { promisify } from 'util';
-import ffprobeInstaller from '@ffprobe-installer/ffprobe';
-import ffmpegInstaller from '@ffmpeg-installer/ffmpeg';
 import type { AudiobookChapter } from '@bookorbit/types';
 
 const execFile = promisify(execFileCallback);
+
+const FFPROBE_PATH = process.env.FFPROBE_PATH || 'ffprobe';
+const FFMPEG_PATH = process.env.FFMPEG_PATH || 'ffmpeg';
 
 export interface AudioExtractResult {
   title: string | null;
@@ -41,7 +42,7 @@ interface FfprobeOutput {
 
 export async function extractAudioMetadata(absolutePath: string): Promise<AudioExtractResult> {
   try {
-    const { stdout } = await execFile(ffprobeInstaller.path, [
+    const { stdout } = await execFile(FFPROBE_PATH, [
       '-v',
       'quiet',
       '-print_format',
@@ -100,7 +101,7 @@ export async function extractAudioMetadata(absolutePath: string): Promise<AudioE
 
 export async function parseAudioDuration(absolutePath: string): Promise<number | null> {
   try {
-    const { stdout } = await execFile(ffprobeInstaller.path, ['-v', 'quiet', '-print_format', 'json', '-show_format', absolutePath]);
+    const { stdout } = await execFile(FFPROBE_PATH, ['-v', 'quiet', '-print_format', 'json', '-show_format', absolutePath]);
     const data: FfprobeOutput = JSON.parse(stdout);
     if (!data.format.duration) return null;
     return Math.round(parseFloat(data.format.duration));
@@ -115,11 +116,9 @@ async function extractCoverBytes(absolutePath: string, streams: FfprobeStream[])
 
   return new Promise<Buffer | null>((resolve) => {
     const chunks: Buffer[] = [];
-    const proc = spawn(
-      ffmpegInstaller.path,
-      ['-y', '-i', absolutePath, '-map', '0:v', '-frames:v', '1', '-f', 'image2pipe', '-vcodec', 'mjpeg', 'pipe:1'],
-      { stdio: ['ignore', 'pipe', 'ignore'] },
-    );
+    const proc = spawn(FFMPEG_PATH, ['-y', '-i', absolutePath, '-map', '0:v', '-frames:v', '1', '-f', 'image2pipe', '-vcodec', 'mjpeg', 'pipe:1'], {
+      stdio: ['ignore', 'pipe', 'ignore'],
+    });
 
     proc.stdout.on('data', (chunk: Buffer) => chunks.push(chunk));
     proc.on('close', (code) => {

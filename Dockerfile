@@ -41,7 +41,7 @@ FROM ${NODE_IMAGE} AS runtime
 WORKDIR /app
 
 RUN apk upgrade --no-cache && \
-    apk add --no-cache poppler-utils su-exec && \
+    apk add --no-cache poppler-utils su-exec ffmpeg && \
     rm -rf /usr/local/lib/node_modules/npm /usr/local/bin/npm /usr/local/bin/npx
 
 ENV NODE_ENV=production
