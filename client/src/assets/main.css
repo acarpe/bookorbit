@@ -153,32 +153,6 @@
   filter: contrast(150%) brightness(110%);
 }
 
-.pattern-nova::before {
-  content: '';
-  position: fixed;
-  inset: 0;
-  z-index: -1;
-  pointer-events: none;
-  background-image:
-    radial-gradient(at 50% 50%, oklch(0.7 0.15 var(--tint-h) / 0.12) 0%, transparent 60%),
-    linear-gradient(to bottom, oklch(0.7 0.15 calc(var(--tint-h) + 150) / 0.08) 0%, transparent 40%),
-    linear-gradient(to top, oklch(0.7 0.15 calc(var(--tint-h) + 210) / 0.08) 0%, transparent 40%);
-  filter: contrast(150%) brightness(110%);
-}
-
-.pattern-golden-ratio::before {
-  content: '';
-  position: fixed;
-  inset: 0;
-  z-index: -1;
-  pointer-events: none;
-  background-image:
-    radial-gradient(at 38.2% 38.2%, oklch(0.7 0.15 var(--tint-h) / 0.1) 0%, transparent 55%),
-    radial-gradient(at 61.8% 61.8%, oklch(0.7 0.15 calc(var(--tint-h) + 137.5) / 0.1) 0%, transparent 55%),
-    radial-gradient(at 80% 20%, oklch(0.7 0.15 calc(var(--tint-h) + 275) / 0.08) 0%, transparent 50%);
-  filter: contrast(150%) brightness(110%);
-}
-
 .pattern-millimeter::before {
   content: '';
   position: fixed;

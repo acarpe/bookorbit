@@ -59,6 +59,20 @@ const loading = ref(false)
 const oidcProviders = ref<OidcProviderPublic[]>([])
 const oidcLoadingSlug = ref<string | null>(null)
 
+function resolveLoginError(err: unknown): string {
+  if (!(err instanceof Error)) return 'Invalid username or password'
+
+  const normalizedMessage = err.message.trim().toLowerCase()
+  if (normalizedMessage.includes('too many requests') || normalizedMessage.includes('throttler')) {
+    return 'Too many login attempts. Please wait a minute and try again.'
+  }
+  if (normalizedMessage.includes('invalid credentials')) {
+    return 'Invalid username or password'
+  }
+
+  return err.message || 'Invalid username or password'
+}
+
 onMounted(async () => {
   oidcProviders.value = await getPublicProviders()
 })
@@ -68,8 +82,8 @@ async function handleSubmit() {
   loading.value = true
   try {
     await login(username.value, password.value)
-  } catch {
-    error.value = 'Invalid username or password'
+  } catch (err) {
+    error.value = resolveLoginError(err)
   } finally {
     loading.value = false
   }

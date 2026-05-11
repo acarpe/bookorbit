@@ -41,7 +41,7 @@ const BACKGROUND_GROUPS: { label: string; ids: string[] }[] = [
   { label: 'Fundamental', ids: ['none', 'dots', 'cross', 'terminal', 'millimeter'] },
   { label: 'Structural', ids: ['blueprint', 'brushed', 'scanlines', 'vinyl', 'carbon', 'perforated'] },
   { label: 'Ambient', ids: ['aurora', 'horizon', 'glow', 'mesh', 'elevation'] },
-  { label: 'Refractive', ids: ['prism', 'spectrum', 'spectrum-x', 'spectrum-plus', 'eclipse', 'nova', 'golden-ratio'] },
+  { label: 'Refractive', ids: ['prism', 'spectrum', 'spectrum-x', 'spectrum-plus', 'eclipse'] },
 ]
 
 const accentLabel = computed(() => [...ACCENT_VIVID, ...ACCENT_PASTEL].find((opt) => opt.id === themeStore.accent)?.label ?? themeStore.accent)

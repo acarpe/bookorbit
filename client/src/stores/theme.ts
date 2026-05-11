@@ -61,8 +61,6 @@ export type Background =
   | 'spectrum-x'
   | 'spectrum-plus'
   | 'eclipse'
-  | 'nova'
-  | 'golden-ratio'
 
 export const ACCENT_VIVID: { id: Accent; label: string; color: string }[] = [
   { id: 'white', label: 'White', color: '#fafafa' },
@@ -140,8 +138,6 @@ export const BACKGROUND_OPTIONS: { id: Background; label: string; cssClass: stri
   { id: 'spectrum-x', label: 'Spectrum X', cssClass: 'pattern-spectrum-x' },
   { id: 'spectrum-plus', label: 'Spectrum Plus', cssClass: 'pattern-spectrum-plus' },
   { id: 'eclipse', label: 'Eclipse', cssClass: 'pattern-eclipse' },
-  { id: 'nova', label: 'Nova', cssClass: 'pattern-nova' },
-  { id: 'golden-ratio', label: 'Golden Ratio', cssClass: 'pattern-golden-ratio' },
 ]
 
 const ACCENT_IDS = ACCENT_OPTIONS.map((a) => a.id)
