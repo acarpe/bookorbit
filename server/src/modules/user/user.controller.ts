@@ -34,6 +34,7 @@ import { CreateSharedUserDto } from './dto/create-shared-user.dto';
 import { SetLibrariesDto } from './dto/set-libraries.dto';
 import { SetPermissionsDto } from './dto/set-permissions.dto';
 import { UpdateMeDto } from './dto/update-me.dto';
+import { UpdateMeSettingsDto } from './dto/update-me-settings.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { UpdateSeriesCollapsePreferencesDto } from './dto/update-series-collapse-preferences.dto';
 import { MAX_USER_AVATAR_BYTES } from './user-avatar.service';
@@ -74,6 +75,11 @@ export class UserController {
   })
   updateMe(@CurrentUser() user: RequestUser, @Body() dto: UpdateMeDto) {
     return this.userService.updateMe(user.id, dto);
+  }
+
+  @Patch('me/settings')
+  updateMySettings(@CurrentUser() user: RequestUser, @Body() dto: UpdateMeSettingsDto) {
+    return this.userService.updateMySettings(user.id, dto);
   }
 
   @Patch('me/series-collapse-preferences')

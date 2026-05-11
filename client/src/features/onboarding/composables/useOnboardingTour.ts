@@ -112,7 +112,7 @@ export function useOnboardingTour() {
   }
 
   function persistCompletion(): void {
-    api('/api/v1/users/me', {
+    api('/api/v1/users/me/settings', {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ settings: { onboarding: { tourCompleted: true } } }),
@@ -147,7 +147,7 @@ export function useOnboardingTour() {
   }
 
   async function resetTour(): Promise<void> {
-    await api('/api/v1/users/me', {
+    await api('/api/v1/users/me/settings', {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ settings: { onboarding: { tourCompleted: false } } }),

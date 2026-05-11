@@ -51,7 +51,7 @@ function normalizeFilters(saved: StatisticsFilterConfig | undefined): Statistics
 async function persist() {
   const payload: StatisticsSettings = { charts: config.value, filters: filters.value }
   try {
-    await api('/api/v1/users/me', {
+    await api('/api/v1/users/me/settings', {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ settings: { statisticsConfig: payload } }),

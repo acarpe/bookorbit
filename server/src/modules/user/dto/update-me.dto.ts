@@ -1,4 +1,4 @@
-import { IsObject, IsOptional, IsString, MaxLength, MinLength } from 'class-validator';
+import { IsOptional, IsString, MaxLength, MinLength } from 'class-validator';
 
 export class UpdateMeDto {
   @IsString()
@@ -6,8 +6,4 @@ export class UpdateMeDto {
   @MaxLength(255)
   @IsOptional()
   name?: string;
-
-  @IsObject()
-  @IsOptional()
-  settings?: Record<string, unknown>;
 }

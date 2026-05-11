@@ -11,6 +11,7 @@ import { CreateSharedUserDto } from './dto/create-shared-user.dto';
 import { SetPermissionsDto } from './dto/set-permissions.dto';
 import { UpdateMeDto } from './dto/update-me.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
+import { UpdateMeSettingsDto } from './dto/update-me-settings.dto';
 import { UpdateSeriesCollapsePreferencesDto } from './dto/update-series-collapse-preferences.dto';
 import { UserRepository } from './user.repository';
 
@@ -178,6 +179,12 @@ export class UserService {
 
   async updateMe(userId: number, dto: UpdateMeDto) {
     const user = await this.userRepo.update(userId, dto);
+    if (!user) throw new NotFoundException('User not found');
+    return user;
+  }
+
+  async updateMySettings(userId: number, dto: UpdateMeSettingsDto) {
+    const user = await this.userRepo.update(userId, { settings: dto.settings });
     if (!user) throw new NotFoundException('User not found');
     return user;
   }

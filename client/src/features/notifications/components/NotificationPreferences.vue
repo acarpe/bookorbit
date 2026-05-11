@@ -45,7 +45,7 @@ async function handleSave() {
   saving.value = true
   try {
     const existingSettings = user.value?.settings ?? {}
-    const res = await api('/api/v1/users/me', {
+    const res = await api('/api/v1/users/me/settings', {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -55,7 +55,6 @@ async function handleSave() {
         },
       }),
     })
-
     if (!res.ok) {
       const payload = (await res.json().catch(() => null)) as { message?: string | string[] } | null
       const message = Array.isArray(payload?.message)

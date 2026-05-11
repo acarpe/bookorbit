@@ -24,6 +24,7 @@ describe('UserController', () => {
     findAll: vi.fn(),
     findAssignable: vi.fn(),
     updateMe: vi.fn(),
+    updateMySettings: vi.fn(),
     findById: vi.fn(),
     createUser: vi.fn(),
     updateUser: vi.fn(),
@@ -54,6 +55,16 @@ describe('UserController', () => {
     expect(userService.findAll).toHaveBeenCalledWith(undefined, 25, undefined);
     expect(userService.findAssignable).toHaveBeenCalled();
     expect(userService.updateMe).toHaveBeenCalledWith(7, { name: 'Updated' });
+  });
+
+  it('delegates settings update to updateMySettings service method', async () => {
+    const settings = { dashboardConfig: { readingGoal: 12 } };
+    userService.updateMySettings.mockResolvedValue({ id: 7, settings });
+
+    const result = await controller.updateMySettings({ id: 7 } as any, { settings } as any);
+
+    expect(userService.updateMySettings).toHaveBeenCalledWith(7, { settings });
+    expect(result).toEqual({ id: 7, settings });
   });
 
   it('uploads avatar bytes with multipart file limits', async () => {
@@ -229,5 +240,10 @@ describe('UserController', () => {
       permission: Permission.DemoRestricted,
       message: 'Demo-restricted account cannot edit account settings',
     });
+  });
+
+  it('updateMySettings has no demo-restriction metadata - demo users may update UI settings', () => {
+    const settingsForbidden = Reflect.getMetadata(FORBIDDEN_PERMISSION_KEY, UserController.prototype.updateMySettings);
+    expect(settingsForbidden).toBeUndefined();
   });
 });

@@ -221,6 +221,31 @@ describe('UserService', () => {
     await expect(service.updateMe(2, { name: 'x' })).rejects.toBeInstanceOf(NotFoundException);
   });
 
+  it('updateMySettings delegates settings to repository update', async () => {
+    const updated = { id: 2, settings: { dashboardConfig: { readingGoal: 12 } } };
+    userRepo.update.mockResolvedValue(updated);
+
+    const result = await service.updateMySettings(2, { settings: { dashboardConfig: { readingGoal: 12 } } });
+
+    expect(userRepo.update).toHaveBeenCalledWith(2, { settings: { dashboardConfig: { readingGoal: 12 } } });
+    expect(result).toEqual(updated);
+  });
+
+  it('updateMySettings throws NotFoundException when user does not exist', async () => {
+    userRepo.update.mockResolvedValue(null);
+
+    await expect(service.updateMySettings(99, { settings: { theme: 'dark' } })).rejects.toBeInstanceOf(NotFoundException);
+  });
+
+  it('updateMySettings passes arbitrary nested settings without modification', async () => {
+    const settings = { nested: { deeply: { value: true } }, arr: [1, 2, 3] };
+    userRepo.update.mockResolvedValue({ id: 5, settings });
+
+    await service.updateMySettings(5, { settings });
+
+    expect(userRepo.update).toHaveBeenCalledWith(5, { settings });
+  });
+
   it('deleteUser blocks deleting your own account', async () => {
     await expect(service.deleteUser(1, reqUser({ id: 1, isSuperuser: true }))).rejects.toBeInstanceOf(ConflictException);
   });

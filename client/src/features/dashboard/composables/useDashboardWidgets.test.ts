@@ -151,14 +151,14 @@ describe('useDashboardWidgets', () => {
   })
 
   describe('saveWidgets', () => {
-    it('calls PATCH /api/v1/users/me with read-modify-write pattern, appending missing types', async () => {
+    it('calls PATCH /api/v1/users/me/settings with read-modify-write pattern, appending missing types', async () => {
       const { me } = setupAuth({ dashboardConfig: { readingGoal: 12, widgets: [] } })
       const { saveWidgets } = useDashboardWidgets()
 
       const newWidgets: WidgetConfig[] = [{ id: '1', type: 'reading-goal', enabled: true, order: 1 }]
       await saveWidgets(newWidgets)
 
-      expect(mockApi).toHaveBeenCalledWith('/api/v1/users/me', {
+      expect(mockApi).toHaveBeenCalledWith('/api/v1/users/me/settings', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: expect.any(String),
@@ -181,13 +181,18 @@ describe('useDashboardWidgets', () => {
   })
 
   describe('saveReadingGoal', () => {
-    it('preserves existing widgets when saving reading goal', async () => {
+    it('calls PATCH /api/v1/users/me/settings and preserves existing widgets', async () => {
       const existingWidgets: WidgetConfig[] = [{ id: '1', type: 'reading-goal', enabled: true, order: 1 }]
       const { me } = setupAuth({ dashboardConfig: { widgets: existingWidgets } })
       const { saveReadingGoal } = useDashboardWidgets()
 
       await saveReadingGoal(30)
 
+      expect(mockApi).toHaveBeenCalledWith('/api/v1/users/me/settings', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: expect.any(String),
+      })
       const body = JSON.parse((mockApi.mock.calls[0]![1] as { body: string }).body)
       expect(body.settings.dashboardConfig.readingGoal).toBe(30)
       expect(body.settings.dashboardConfig.widgets).toEqual(existingWidgets)

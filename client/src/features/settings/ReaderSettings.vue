@@ -22,7 +22,7 @@ const syncEnabled = computed(() => user.value?.settings?.syncReaderPreferences ?
 async function setStorageMode(sync: boolean) {
   if (!user.value || syncEnabled.value === sync) return
   try {
-    const res = await api('/api/v1/users/me', {
+    const res = await api('/api/v1/users/me/settings', {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ settings: { syncReaderPreferences: sync } }),

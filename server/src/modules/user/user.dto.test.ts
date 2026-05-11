@@ -8,6 +8,7 @@ import { CreateUserDto } from './dto/create-user.dto';
 import { SetLibrariesDto } from './dto/set-libraries.dto';
 import { SetPermissionsDto } from './dto/set-permissions.dto';
 import { UpdateMeDto } from './dto/update-me.dto';
+import { UpdateMeSettingsDto } from './dto/update-me-settings.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 
 async function hasErrors(dto: object): Promise<boolean> {
@@ -40,9 +41,20 @@ describe('User DTO validation', () => {
     expect(await hasErrors(plainToInstance(SetLibrariesDto, { libraryIds: ['2'] }))).toBe(true);
   });
 
-  it('UpdateMeDto requires settings to be an object when provided', async () => {
-    expect(await hasErrors(plainToInstance(UpdateMeDto, { settings: 'bad' }))).toBe(true);
-    expect(await hasErrors(plainToInstance(UpdateMeDto, { settings: { theme: 'dark' } }))).toBe(false);
+  it('UpdateMeDto accepts an optional name string and ignores unknown fields', async () => {
+    expect(await hasErrors(plainToInstance(UpdateMeDto, { name: 'Alice' }))).toBe(false);
+    expect(await hasErrors(plainToInstance(UpdateMeDto, {}))).toBe(false);
+    expect(await hasErrors(plainToInstance(UpdateMeDto, { name: '' }))).toBe(true);
+    expect(await hasErrors(plainToInstance(UpdateMeDto, { name: 'a'.repeat(256) }))).toBe(true);
+  });
+
+  it('UpdateMeSettingsDto requires settings to be a non-empty object', async () => {
+    expect(await hasErrors(plainToInstance(UpdateMeSettingsDto, { settings: { theme: 'dark' } }))).toBe(false);
+    expect(await hasErrors(plainToInstance(UpdateMeSettingsDto, { settings: { dashboardConfig: { readingGoal: 12 } } }))).toBe(false);
+    expect(await hasErrors(plainToInstance(UpdateMeSettingsDto, { settings: 'bad' }))).toBe(true);
+    expect(await hasErrors(plainToInstance(UpdateMeSettingsDto, { settings: 42 }))).toBe(true);
+    expect(await hasErrors(plainToInstance(UpdateMeSettingsDto, {}))).toBe(true);
+    expect(await hasErrors(plainToInstance(UpdateMeSettingsDto, { settings: {} }))).toBe(true);
   });
 
   it('UpdateUserDto enforces boolean active field', async () => {

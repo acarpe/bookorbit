@@ -104,7 +104,7 @@ export function useDashboardWidgets() {
       widgets: normalized,
     }
 
-    const res = await api('/api/v1/users/me', {
+    const res = await api('/api/v1/users/me/settings', {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ settings: { dashboardConfig: updatedConfig } }),
@@ -119,7 +119,7 @@ export function useDashboardWidgets() {
       readingGoal: goalBooks,
     }
 
-    const res = await api('/api/v1/users/me', {
+    const res = await api('/api/v1/users/me/settings', {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ settings: { dashboardConfig: updatedConfig } }),
