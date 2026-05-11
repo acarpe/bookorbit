@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch, type WatchStopHandle } from 'vue'
 import { useRouter } from 'vue-router'
 import {
   Bookmark,
@@ -70,6 +70,7 @@ const progress = useAudioProgress(props.bookId)
 // ── Queue (created lazily after files load) ───────────────────────────────────
 
 let queue: ReturnType<typeof useAudioQueue> | null = null
+let stopQueuePlayingWatch: WatchStopHandle | null = null
 const isPlaying = ref(false)
 const currentPosition = ref(0)
 const currentFileIndex = ref(0)
@@ -100,6 +101,16 @@ function initQueue(startFileId: number, startPosition: number) {
   queue.goToFile(startFileId, startPosition)
   queue.setSpeed(settings.playbackSpeed.value)
   queue.setVolume(settings.volume.value)
+  stopQueuePlayingWatch?.()
+  stopQueuePlayingWatch = watch(
+    queue.isPlaying,
+    (playing) => {
+      if (isPlaying.value !== playing) {
+        isPlaying.value = playing
+      }
+    },
+    { immediate: true },
+  )
   syncRefs()
   currentPosition.value = startPosition
   currentFileIndex.value = queue.currentIndex.value
@@ -141,7 +152,6 @@ function startTicker() {
     if (!queue) return
     const pos = queue.position()
     currentPosition.value = pos
-    isPlaying.value = queue.isPlaying.value
     currentFileIndex.value = queue.currentIndex.value
 
     if (queue.isPlaying.value) {
@@ -196,6 +206,8 @@ let mounted = true
 
 onUnmounted(() => {
   mounted = false
+  stopQueuePlayingWatch?.()
+  stopQueuePlayingWatch = null
   queue?.destroy()
   stopTicker()
   progress.flush()

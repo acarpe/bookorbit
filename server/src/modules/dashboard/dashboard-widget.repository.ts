@@ -15,6 +15,7 @@ import type {
 import { DB } from '../../db';
 import * as schema from '../../db/schema';
 import {
+  audiobookProgress,
   annotations,
   authors,
   bookAuthors,
@@ -63,13 +64,30 @@ export class DashboardWidgetRepository {
   async getCurrentlyReadingBooks(userId: number, accessibleLibraryIds: number[]): Promise<CurrentlyReadingWidgetData> {
     if (accessibleLibraryIds.length === 0) return { books: [] };
 
+    const mergedProgress = sql<number>`
+      coalesce(
+        (
+          case
+            when ${readingProgress.updatedAt} is not null
+              and (${audiobookProgress.updatedAt} is null or ${readingProgress.updatedAt} >= ${audiobookProgress.updatedAt})
+              then ${readingProgress.percentage}
+            else ${audiobookProgress.percentage}
+          end
+        ),
+        ${readingProgress.percentage},
+        ${audiobookProgress.percentage},
+        0
+      )
+    `;
+    const mergedLastReadAt = sql<Date | null>`coalesce(${readingProgress.updatedAt}, ${audiobookProgress.updatedAt})`;
+
     const rows = await this.db
       .select({
         bookId: books.id,
         title: bookMetadata.title,
-        progress: readingProgress.percentage,
+        progress: mergedProgress,
         coverSource: bookMetadata.coverSource,
-        lastReadAt: readingProgress.updatedAt,
+        lastReadAt: mergedLastReadAt,
         fileId: bookFiles.id,
         fileFormat: bookFiles.format,
       })
@@ -78,6 +96,7 @@ export class DashboardWidgetRepository {
       .innerJoin(bookMetadata, eq(bookMetadata.bookId, books.id))
       .leftJoin(bookFiles, eq(bookFiles.id, books.primaryFileId))
       .leftJoin(readingProgress, and(isNotNull(bookFiles.id), eq(readingProgress.bookFileId, bookFiles.id), eq(readingProgress.userId, userId)))
+      .leftJoin(audiobookProgress, and(eq(audiobookProgress.bookId, books.id), eq(audiobookProgress.userId, userId)))
       .where(
         and(
           eq(userBookStatus.userId, userId),
@@ -85,7 +104,7 @@ export class DashboardWidgetRepository {
           inArray(books.libraryId, accessibleLibraryIds),
         ),
       )
-      .orderBy(desc(sql`coalesce(${readingProgress.updatedAt}, ${userBookStatus.updatedAt})`))
+      .orderBy(desc(sql`coalesce(${readingProgress.updatedAt}, ${audiobookProgress.updatedAt}, ${userBookStatus.updatedAt})`))
       .limit(CURRENTLY_READING_LIMIT);
 
     if (rows.length === 0) return { books: [] };
