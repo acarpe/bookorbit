@@ -192,6 +192,43 @@ describe('KoboDownloadService', () => {
     await expect((service as any).streamFile('/books/missing.epub', 99, 'epub', reply)).rejects.toThrow(NotFoundException);
   });
 
+  it('streamFile uses application/epub+zip for kepub.epub format', async () => {
+    const deps = makeDeps();
+    const service = new KoboDownloadService(
+      deps.db as never,
+      deps.config as never,
+      deps.kepubifyBinaryService as never,
+      deps.settingsService as never,
+      deps.bookAccessService as never,
+    );
+    const reply = makeReply();
+    statMock.mockResolvedValueOnce({ size: 4096 } as never);
+    createReadStreamMock.mockReturnValue({} as never);
+
+    await (service as any).streamFile('/cache/44/hash.kepub.epub', 55, 'kepub.epub', reply);
+
+    expect(reply.type).toHaveBeenCalledWith('application/epub+zip');
+    expect(reply.header).toHaveBeenCalledWith('Content-Disposition', 'attachment; filename="book-55.kepub.epub"');
+  });
+
+  it('streamFile falls back to application/octet-stream for unknown formats', async () => {
+    const deps = makeDeps();
+    const service = new KoboDownloadService(
+      deps.db as never,
+      deps.config as never,
+      deps.kepubifyBinaryService as never,
+      deps.settingsService as never,
+      deps.bookAccessService as never,
+    );
+    const reply = makeReply();
+    statMock.mockResolvedValueOnce({ size: 100 } as never);
+    createReadStreamMock.mockReturnValue({} as never);
+
+    await (service as any).streamFile('/books/book.xyz', 10, 'xyz', reply);
+
+    expect(reply.type).toHaveBeenCalledWith('application/octet-stream');
+  });
+
   it('streamKepub serves cached files when present', async () => {
     const deps = makeDeps();
     const service = new KoboDownloadService(

@@ -203,10 +203,6 @@ async function saveSettings() {
               Copy
             </button>
           </div>
-          <p class="mt-3 text-xs text-muted-foreground leading-relaxed">
-            On your Kobo device, go to <span class="font-semibold text-foreground">Settings → Account → Add account → Other</span> and enter this URL.
-            Any username/password will work.
-          </p>
         </div>
         <div
           class="flex items-center gap-2 text-xs font-medium text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/30 px-3 py-2 rounded-md border border-amber-200 dark:border-amber-900/50"

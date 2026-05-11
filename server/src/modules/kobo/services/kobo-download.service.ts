@@ -22,6 +22,7 @@ const execFileAsync = promisify(execFile);
 
 const MIME: Record<string, string> = {
   epub: 'application/epub+zip',
+  'kepub.epub': 'application/epub+zip',
   pdf: 'application/pdf',
 };
 

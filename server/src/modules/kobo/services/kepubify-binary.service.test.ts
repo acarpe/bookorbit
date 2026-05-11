@@ -6,6 +6,7 @@ vi.mock('fs/promises', () => ({
 }));
 
 import { chmod, mkdir, stat, writeFile } from 'fs/promises';
+import { join } from 'path';
 
 import { KepubifyBinaryService } from './kepubify-binary.service';
 
@@ -14,11 +15,13 @@ const mkdirMock = vi.mocked(mkdir);
 const statMock = vi.mocked(stat);
 const writeFileMock = vi.mocked(writeFile);
 
-describe('KepubifyBinaryService', () => {
-  const config = {
-    get: vi.fn().mockReturnValue('/app-data'),
-  };
+const config = { get: vi.fn().mockReturnValue('/app-data') };
 
+function makeService() {
+  return new KepubifyBinaryService(config as never);
+}
+
+describe('KepubifyBinaryService', () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
@@ -28,79 +31,156 @@ describe('KepubifyBinaryService', () => {
     vi.restoreAllMocks();
   });
 
-  it('detects expected binary names by platform/arch', () => {
-    const service = new KepubifyBinaryService(config as never);
+  describe('detectBinaryName', () => {
+    it.each([
+      ['darwin', 'arm64', 'kepubify-darwin-arm64'],
+      ['darwin', 'x64', 'kepubify-darwin-64bit'],
+      ['linux', 'x64', 'kepubify-linux-64bit'],
+      ['linux', 'arm64', 'kepubify-linux-arm64'],
+      ['linux', 'arm', 'kepubify-linux-arm'],
+      ['linux', 'ia32', 'kepubify-linux-32bit'],
+    ])('platform=%s arch=%s → %s', (platform, arch, expected) => {
+      const service = makeService();
+      vi.spyOn(process, 'platform', 'get').mockReturnValue(platform as NodeJS.Platform);
+      vi.spyOn(process, 'arch', 'get').mockReturnValue(arch);
+      expect((service as any).detectBinaryName()).toBe(expected);
+    });
 
-    vi.spyOn(process, 'platform', 'get').mockReturnValue('darwin');
-    vi.spyOn(process, 'arch', 'get').mockReturnValue('arm64');
-    expect((service as any).detectBinaryName()).toBe('kepubify-darwin-arm64');
-
-    vi.spyOn(process, 'platform', 'get').mockReturnValue('linux');
-    vi.spyOn(process, 'arch', 'get').mockReturnValue('x64');
-    expect((service as any).detectBinaryName()).toBe('kepubify-linux-64bit');
+    it('throws for unsupported platforms', () => {
+      const service = makeService();
+      vi.spyOn(process, 'platform', 'get').mockReturnValue('win32' as NodeJS.Platform);
+      vi.spyOn(process, 'arch', 'get').mockReturnValue('x64');
+      expect(() => (service as any).detectBinaryName()).toThrow('Unsupported platform');
+    });
   });
 
-  it('throws for unsupported platforms', () => {
-    const service = new KepubifyBinaryService(config as never);
-    vi.spyOn(process, 'platform', 'get').mockReturnValue('win32');
-    vi.spyOn(process, 'arch', 'get').mockReturnValue('x64');
+  describe('getBinaryPath', () => {
+    it('caches result and only resolves once across multiple calls', async () => {
+      const service = makeService();
+      vi.spyOn(service as any, 'detectBinaryName').mockReturnValue('kepubify-linux-64bit');
+      const resolveSpy = vi.spyOn(service as any, 'resolveBinaryPath').mockResolvedValue('/resolved/kepubify');
 
-    expect(() => (service as any).detectBinaryName()).toThrow('Unsupported platform');
+      const first = await service.getBinaryPath();
+      const second = await service.getBinaryPath();
+
+      expect(first).toBe('/resolved/kepubify');
+      expect(second).toBe('/resolved/kepubify');
+      expect(resolveSpy).toHaveBeenCalledTimes(1);
+    });
   });
 
-  it('caches computed binary path after first resolution', async () => {
-    const service = new KepubifyBinaryService(config as never);
-    const detectSpy = vi.spyOn(service as any, 'detectBinaryName').mockReturnValue('kepubify-linux-64bit');
-    const ensureSpy = vi.spyOn(service as any, 'ensureBinary').mockResolvedValue(undefined);
+  describe('resolveBinaryPath', () => {
+    it('returns bundled path when binary is present in bin/ dir', async () => {
+      const service = makeService();
+      const expectedBundled = join(process.cwd(), 'bin', 'kepubify', 'kepubify-linux-64bit');
+      statMock.mockResolvedValueOnce({} as never);
 
-    await expect(service.getBinaryPath()).resolves.toBe('/app-data/.tools/kepubify/kepubify-linux-64bit');
-    await expect(service.getBinaryPath()).resolves.toBe('/app-data/.tools/kepubify/kepubify-linux-64bit');
+      const result = await (service as any).resolveBinaryPath('kepubify-linux-64bit');
 
-    expect(detectSpy).toHaveBeenCalledTimes(1);
-    expect(ensureSpy).toHaveBeenCalledTimes(1);
+      expect(result).toBe(expectedBundled);
+      expect(chmodMock).toHaveBeenCalledWith(expectedBundled, 0o755);
+      expect(mkdirMock).not.toHaveBeenCalled();
+    });
+
+    it('falls back to download path when bundled binary is missing', async () => {
+      const service = makeService();
+      statMock
+        .mockRejectedValueOnce(new Error('ENOENT')) // bundled path missing
+        .mockResolvedValueOnce({} as never); // download cache hit
+
+      const result = await (service as any).resolveBinaryPath('kepubify-linux-64bit');
+
+      expect(result).toBe('/app-data/.tools/kepubify/kepubify-linux-64bit');
+    });
+
+    it('downloads and returns download path when neither bundled nor cached', async () => {
+      const service = makeService();
+      statMock
+        .mockRejectedValueOnce(new Error('ENOENT')) // bundled missing
+        .mockRejectedValueOnce(new Error('ENOENT')); // download cache missing
+      vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, arrayBuffer: () => Promise.resolve(new ArrayBuffer(0)) }));
+
+      const result = await (service as any).resolveBinaryPath('kepubify-linux-64bit');
+
+      expect(result).toBe('/app-data/.tools/kepubify/kepubify-linux-64bit');
+      expect(mkdirMock).toHaveBeenCalledWith('/app-data/.tools/kepubify', { recursive: true });
+    });
   });
 
-  it('ensureBinary keeps executable bit for already-cached binaries', async () => {
-    const service = new KepubifyBinaryService(config as never);
-    statMock.mockResolvedValue({} as never);
+  describe('ensureDownloaded', () => {
+    it('chmods and returns without downloading when binary is already cached', async () => {
+      const service = makeService();
+      statMock.mockResolvedValueOnce({} as never);
 
-    await expect((service as any).ensureBinary('/tmp/kepubify', 'kepubify-linux-64bit', '/tmp')).resolves.toBeUndefined();
+      await (service as any).ensureDownloaded('/cache/kepubify', 'kepubify-linux-64bit', '/cache');
 
-    expect(chmodMock).toHaveBeenCalledWith('/tmp/kepubify', 0o755);
-    expect(mkdirMock).not.toHaveBeenCalled();
-  });
+      expect(chmodMock).toHaveBeenCalledWith('/cache/kepubify', 0o755);
+      expect(mkdirMock).not.toHaveBeenCalled();
+      expect(writeFileMock).not.toHaveBeenCalled();
+    });
 
-  it('downloads missing binary and writes executable file', async () => {
-    const service = new KepubifyBinaryService(config as never);
-    statMock.mockRejectedValue(new Error('missing'));
-    vi.stubGlobal(
-      'fetch',
-      vi.fn().mockResolvedValue({
-        ok: true,
-        arrayBuffer: () => Promise.resolve(Uint8Array.from([1, 2, 3]).buffer),
-      }),
-    );
+    it('downloads, writes, and chmods when binary is not cached', async () => {
+      const service = makeService();
+      statMock.mockRejectedValueOnce(new Error('ENOENT'));
+      vi.stubGlobal(
+        'fetch',
+        vi.fn().mockResolvedValue({
+          ok: true,
+          arrayBuffer: () => Promise.resolve(Uint8Array.from([0xde, 0xad, 0xbe, 0xef]).buffer),
+        }),
+      );
 
-    await (service as any).ensureBinary('/tmp/kepubify', 'kepubify-linux-64bit', '/tmp');
+      await (service as any).ensureDownloaded('/cache/kepubify', 'kepubify-linux-64bit', '/cache/dir');
 
-    expect(mkdirMock).toHaveBeenCalledWith('/tmp', { recursive: true });
-    expect(writeFileMock).toHaveBeenCalledWith('/tmp/kepubify', Buffer.from([1, 2, 3]));
-    expect(chmodMock).toHaveBeenCalledWith('/tmp/kepubify', 0o755);
-  });
+      expect(mkdirMock).toHaveBeenCalledWith('/cache/dir', { recursive: true });
+      expect(writeFileMock).toHaveBeenCalledWith('/cache/kepubify', Buffer.from([0xde, 0xad, 0xbe, 0xef]));
+      expect(chmodMock).toHaveBeenCalledWith('/cache/kepubify', 0o755);
+    });
 
-  it('throws when binary download returns non-ok status', async () => {
-    const service = new KepubifyBinaryService(config as never);
-    statMock.mockRejectedValue(new Error('missing'));
-    vi.stubGlobal(
-      'fetch',
-      vi.fn().mockResolvedValue({
-        ok: false,
-        status: 503,
-      }),
-    );
+    it('fetches from the bookorbit/bookorbit-tools URL (not neonsolstice)', async () => {
+      const service = makeService();
+      statMock.mockRejectedValueOnce(new Error('ENOENT'));
+      const fetchMock = vi.fn().mockResolvedValue({ ok: true, arrayBuffer: () => Promise.resolve(new ArrayBuffer(0)) });
+      vi.stubGlobal('fetch', fetchMock);
 
-    await expect((service as any).ensureBinary('/tmp/kepubify', 'kepubify-linux-64bit', '/tmp')).rejects.toThrow(
-      'Failed to download kepubify: HTTP 503',
-    );
+      await (service as any).ensureDownloaded('/cache/kepubify', 'kepubify-darwin-arm64', '/cache/dir');
+
+      const calledUrl: string = fetchMock.mock.calls[0][0];
+      expect(calledUrl).toContain('bookorbit/bookorbit-tools');
+      expect(calledUrl).not.toContain('neonsolstice');
+      expect(calledUrl).toContain('kepubify-darwin-arm64');
+    });
+
+    it('throws when download responds with a non-ok status', async () => {
+      const service = makeService();
+      statMock.mockRejectedValueOnce(new Error('ENOENT'));
+      vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 404 }));
+
+      await expect((service as any).ensureDownloaded('/cache/kepubify', 'kepubify-linux-64bit', '/cache/dir')).rejects.toThrow(
+        'Failed to download kepubify: HTTP 404',
+      );
+      expect(writeFileMock).not.toHaveBeenCalled();
+    });
+
+    it('throws when download responds with a 503', async () => {
+      const service = makeService();
+      statMock.mockRejectedValueOnce(new Error('ENOENT'));
+      vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 503 }));
+
+      await expect((service as any).ensureDownloaded('/cache/kepubify', 'kepubify-linux-64bit', '/cache/dir')).rejects.toThrow(
+        'Failed to download kepubify: HTTP 503',
+      );
+    });
+
+    it('re-throws network-level fetch errors', async () => {
+      const service = makeService();
+      statMock.mockRejectedValueOnce(new Error('ENOENT'));
+      vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('connect ECONNREFUSED')));
+
+      await expect((service as any).ensureDownloaded('/cache/kepubify', 'kepubify-linux-64bit', '/cache/dir')).rejects.toThrow(
+        'connect ECONNREFUSED',
+      );
+      expect(writeFileMock).not.toHaveBeenCalled();
+    });
   });
 });
