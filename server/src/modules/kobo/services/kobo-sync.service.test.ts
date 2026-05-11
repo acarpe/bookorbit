@@ -335,6 +335,170 @@ describe('KoboSyncService', () => {
     );
   });
 
+  describe('reconcileSnapshot', () => {
+    function makeTxExecute() {
+      const captured: unknown[] = [];
+      const fn = vi.fn((stmt: unknown) => {
+        captured.push(stmt);
+        return Promise.resolve();
+      });
+      return { fn, captured };
+    }
+
+    function makeReconcileDb(txExecute: ReturnType<typeof vi.fn>) {
+      return {
+        transaction: vi.fn(async (cb: (tx: { execute: ReturnType<typeof vi.fn> }) => Promise<void>) => {
+          await cb({ execute: txExecute });
+        }),
+      };
+    }
+
+    // In Drizzle ORM's SQL objects, the queryChunks array contains:
+    //   - StringChunk objects: { value: string[] }  -- SQL text fragments
+    //   - nested SQL objects:  { queryChunks: ... }  -- nested SQL expressions
+    //   - raw primitives (number | string | null)    -- bound parameter values
+    function extractSqlStrings(obj: unknown): string[] {
+      if (!obj || typeof obj !== 'object') return [];
+      const r = obj as Record<string, unknown>;
+      if (Array.isArray(r.queryChunks)) {
+        return (r.queryChunks as unknown[]).flatMap(extractSqlStrings);
+      }
+      if (Array.isArray(r.value)) {
+        return (r.value as unknown[]).filter((v): v is string => typeof v === 'string');
+      }
+      return [];
+    }
+
+    function extractSqlParams(obj: unknown): unknown[] {
+      // Raw primitives stored directly in queryChunks ARE the bound params
+      if (typeof obj === 'number' || typeof obj === 'string' || obj === null || typeof obj === 'boolean') {
+        return [obj];
+      }
+      if (!obj || typeof obj !== 'object') return [];
+      const r = obj as Record<string, unknown>;
+      // SQL object - recurse into its chunks
+      if (Array.isArray(r.queryChunks)) {
+        return (r.queryChunks as unknown[]).flatMap(extractSqlParams);
+      }
+      // StringChunk { value: string[] } - SQL text, not a param
+      return [];
+    }
+
+    it('issues only CREATE TEMP and 5 maintenance queries when eligibleBooks is empty', async () => {
+      const { fn: txExecute } = makeTxExecute();
+      const db = makeReconcileDb(txExecute);
+      const service = new KoboSyncService(db as never, {} as never, {} as never);
+
+      await (service as any).reconcileSnapshot(42, []);
+
+      // CREATE TEMP + 5 maintenance queries (no batch insert when list is empty)
+      expect(txExecute).toHaveBeenCalledTimes(6);
+    });
+
+    it('issues one batch INSERT when eligibleBooks fits in a single batch', async () => {
+      const { fn: txExecute, captured } = makeTxExecute();
+      const db = makeReconcileDb(txExecute);
+      const service = new KoboSyncService(db as never, {} as never, {} as never);
+
+      await (service as any).reconcileSnapshot(10, [
+        { bookId: 1, fileHash: 'h1', metadataHash: 'm1' },
+        { bookId: 2, fileHash: null, metadataHash: 'm2' },
+      ]);
+
+      // CREATE TEMP + 1 batch INSERT + 5 maintenance queries
+      expect(txExecute).toHaveBeenCalledTimes(7);
+
+      const batchInsert = captured[1];
+      const sqlStrings = extractSqlStrings(batchInsert);
+      expect(sqlStrings.some((s) => s.includes('VALUES'))).toBe(true);
+      expect(sqlStrings.some((s) => s.includes('unnest'))).toBe(false);
+    });
+
+    it('passes correct bookId, fileHash, and metadataHash as individual params in VALUES rows', async () => {
+      const { fn: txExecute, captured } = makeTxExecute();
+      const db = makeReconcileDb(txExecute);
+      const service = new KoboSyncService(db as never, {} as never, {} as never);
+
+      await (service as any).reconcileSnapshot(5, [{ bookId: 7, fileHash: 'abc', metadataHash: 'xyz' }]);
+
+      const batchInsert = captured[1];
+      const params = extractSqlParams(batchInsert);
+      expect(params).toContain(7);
+      expect(params).toContain('abc');
+      expect(params).toContain('xyz');
+    });
+
+    it('passes null fileHash correctly in VALUES rows', async () => {
+      const { fn: txExecute, captured } = makeTxExecute();
+      const db = makeReconcileDb(txExecute);
+      const service = new KoboSyncService(db as never, {} as never, {} as never);
+
+      await (service as any).reconcileSnapshot(5, [{ bookId: 3, fileHash: null, metadataHash: 'mhash' }]);
+
+      const batchInsert = captured[1];
+      const params = extractSqlParams(batchInsert);
+      expect(params).toContain(null);
+      expect(params).toContain('mhash');
+    });
+
+    it('issues two batch INSERTs when eligibleBooks exceeds the 5000-item batch size', async () => {
+      const { fn: txExecute } = makeTxExecute();
+      const db = makeReconcileDb(txExecute);
+      const service = new KoboSyncService(db as never, {} as never, {} as never);
+
+      const eligible = Array.from({ length: 5001 }, (_, i) => ({
+        bookId: i + 1,
+        fileHash: `h${i}`,
+        metadataHash: `m${i}`,
+      }));
+      await (service as any).reconcileSnapshot(99, eligible);
+
+      // CREATE TEMP + 2 batch INSERTs + 5 maintenance queries
+      expect(txExecute).toHaveBeenCalledTimes(8);
+    });
+
+    it('includes snapshotId as a param in all maintenance queries', async () => {
+      const { fn: txExecute, captured } = makeTxExecute();
+      const db = makeReconcileDb(txExecute);
+      const service = new KoboSyncService(db as never, {} as never, {} as never);
+
+      const snapshotId = 77;
+      await (service as any).reconcileSnapshot(snapshotId, [{ bookId: 1, fileHash: 'f', metadataHash: 'm' }]);
+
+      // Statements at index 2-6 are the 5 maintenance queries
+      const maintenanceStmts = captured.slice(2);
+      for (const stmt of maintenanceStmts) {
+        const params = extractSqlParams(stmt);
+        expect(params).toContain(snapshotId);
+      }
+    });
+
+    it('each batch only contains its own chunk of books', async () => {
+      const { fn: txExecute, captured } = makeTxExecute();
+      const db = makeReconcileDb(txExecute);
+      const service = new KoboSyncService(db as never, {} as never, {} as never);
+
+      const eligible = Array.from({ length: 5002 }, (_, i) => ({
+        bookId: i + 1,
+        fileHash: `h${i}`,
+        metadataHash: `m${i}`,
+      }));
+      await (service as any).reconcileSnapshot(1, eligible);
+
+      // batch 1: indices 1-5000 => bookIds 1-5000
+      const batch1Params = extractSqlParams(captured[1]);
+      expect(batch1Params).toContain(1);
+      expect(batch1Params).toContain(5000);
+      expect(batch1Params).not.toContain(5001);
+
+      // batch 2: indices 5000-5001 => bookIds 5001-5002
+      const batch2Params = extractSqlParams(captured[2]);
+      expect(batch2Params).toContain(5001);
+      expect(batch2Params).toContain(5002);
+      expect(batch2Params).not.toContain(1);
+    });
+  });
+
   it('buildMetadataHash is deterministic and changes when metadata inputs change', () => {
     const service = new KoboSyncService(makeDb() as never, bookAccessService as never, readingStateService as never);
 

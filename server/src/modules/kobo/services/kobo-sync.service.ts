@@ -151,13 +151,14 @@ export class KoboSyncService {
 
       for (let index = 0; index < eligibleBooks.length; index += SNAPSHOT_RECONCILE_BATCH_SIZE) {
         const chunk = eligibleBooks.slice(index, index + SNAPSHOT_RECONCILE_BATCH_SIZE);
-        const bookIds = chunk.map((book) => book.bookId);
-        const fileHashes = chunk.map((book) => book.fileHash);
-        const metadataHashes = chunk.map((book) => book.metadataHash);
+        const valueRows = sql.join(
+          chunk.map((b) => sql`(${b.bookId}, ${b.fileHash}, ${b.metadataHash})`),
+          sql`, `,
+        );
 
         await tx.execute(sql`
           INSERT INTO kobo_eligible_books_tmp (book_id, file_hash, metadata_hash)
-          SELECT * FROM unnest(${bookIds}::integer[], ${fileHashes}::text[], ${metadataHashes}::text[])
+          VALUES ${valueRows}
           ON CONFLICT (book_id)
           DO UPDATE
           SET file_hash = EXCLUDED.file_hash,
