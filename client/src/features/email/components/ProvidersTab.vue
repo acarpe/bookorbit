@@ -199,7 +199,7 @@ watch(
     </div>
     <div
       v-if="canManageEmail && !showForm"
-      class="md:hidden sticky top-[8.9rem] z-20 border border-border/60 bg-card/95 backdrop-blur rounded-lg px-3 py-2"
+      class="md:hidden sticky top-11 z-20 border border-border/60 bg-card/95 backdrop-blur rounded-lg px-3 py-2"
     >
       <button
         class="w-full min-h-10 flex items-center justify-center gap-1.5 px-3 text-sm font-medium rounded-md bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"

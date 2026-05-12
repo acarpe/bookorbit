@@ -474,7 +474,7 @@ function handleCoverChanged(source: 'extracted' | 'custom' | null) {
           <div class="hidden lg:flex flex-none w-px h-4 bg-border mx-0.5" />
 
           <button
-            class="hidden lg:flex items-center gap-1.5 h-8 px-2.5 sm:px-3 rounded-lg border border-input bg-background text-sm hover:bg-muted transition-colors disabled:opacity-40"
+            class="flex items-center gap-1.5 h-8 px-2.5 sm:px-3 rounded-lg border border-input bg-background text-sm hover:bg-muted transition-colors disabled:opacity-40"
             :disabled="!isDirty || saving"
             @click="reset"
           >
@@ -482,7 +482,7 @@ function handleCoverChanged(source: 'extracted' | 'custom' | null) {
             Cancel
           </button>
           <button
-            class="hidden lg:flex items-center gap-1.5 h-8 px-2.5 sm:px-3 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors disabled:opacity-40"
+            class="flex items-center gap-1.5 h-8 px-2.5 sm:px-3 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors disabled:opacity-40"
             :disabled="!isDirty || saving"
             @click="submit"
           >

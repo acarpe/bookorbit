@@ -101,9 +101,7 @@ function handleResetToDefault() {
         </button>
       </div>
     </div>
-    <div
-      class="md:hidden sticky top-[5.25rem] z-10 mb-0 px-3 py-2 border-b border-border/70 bg-card/95 backdrop-blur supports-[backdrop-filter]:bg-card/75"
-    >
+    <div class="md:hidden sticky top-11 z-10 mb-0 px-3 py-2 border-b border-border/70 bg-card/95 backdrop-blur supports-[backdrop-filter]:bg-card/75">
       <div class="flex items-center gap-2 flex-wrap">
         <button
           class="settings-btn h-8 px-3 flex items-center gap-1.5 text-xs font-medium text-muted-foreground border border-border rounded-md hover:text-destructive hover:border-destructive/50 hover:bg-destructive/5 transition-colors disabled:opacity-40"

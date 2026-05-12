@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input'
 import { useCollections } from '../composables/useCollections'
 import IconPicker from '@/components/IconPicker.vue'
 import type { Collection } from '@bookorbit/types'
+import { useVirtualKeyboard } from '@/composables/useVirtualKeyboard'
 
 const props = defineProps<{
   open: boolean
@@ -20,6 +21,7 @@ const emit = defineEmits<{
 }>()
 
 const { fetchCollectionsWithMembership, createCollection, addBooksToCollection } = useCollections()
+const { keyboardHeight } = useVirtualKeyboard()
 
 const localCollections = ref<Collection[]>([])
 const addedIds = ref<Set<number>>(new Set())
@@ -114,6 +116,7 @@ function handlePointerDownOutside(e: Event) {
     <SheetContent
       side="bottom"
       class="max-h-[80vh] overflow-y-auto sm:inset-x-auto sm:right-auto sm:left-1/2 sm:-translate-x-1/2 sm:w-full sm:max-w-lg sm:rounded-t-lg"
+      :style="keyboardHeight > 0 ? { bottom: `${keyboardHeight}px` } : undefined"
       @pointer-down-outside="handlePointerDownOutside"
     >
       <SheetHeader>

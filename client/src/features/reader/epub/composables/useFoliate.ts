@@ -57,6 +57,8 @@ export function useFoliate(
     loading.value = true
     error.value = null
 
+    let loadTimeoutId: ReturnType<typeof setTimeout> | undefined
+
     try {
       await loadScript()
 
@@ -81,8 +83,13 @@ export function useFoliate(
       el.appendChild(view)
       viewRef.value = view
 
+      // Safety timeout: if the 'load' event never fires (e.g. service worker or
+      // iframe restrictions on iOS), clear the loading state with a helpful message
+      // so the UI doesn't get stuck forever.
+
       view.addEventListener('load', (e: Event) => {
         const detail = (e as CustomEvent).detail
+        clearTimeout(loadTimeoutId)
         loading.value = false
         // The paginator's internal #view reference is updated in a microtask after the
         // 'load' event fires. Deferring to a macrotask ensures setStyles targets the
@@ -107,9 +114,17 @@ export function useFoliate(
       view.addEventListener('error', (e: Event) => {
         const detail = (e as CustomEvent).detail
         console.error('[foliate] error event', detail)
+        clearTimeout(loadTimeoutId)
         error.value = detail?.message ?? 'Reader error'
         loading.value = false
       })
+
+      loadTimeoutId = setTimeout(() => {
+        if (loading.value) {
+          error.value = 'Could not open the book. Your browser may not fully support the reader. Try refreshing or using a different browser.'
+          loading.value = false
+        }
+      }, 30_000)
 
       if (format === 'epub') {
         const infoRes = await api(`/api/v1/epub/${bookId}/info?fileId=${fileId}`)
@@ -141,6 +156,7 @@ export function useFoliate(
       }
     } catch (e) {
       console.error('[useFoliate]', e)
+      clearTimeout(loadTimeoutId)
       error.value = e instanceof Error ? e.message : 'Failed to open book'
       loading.value = false
     }

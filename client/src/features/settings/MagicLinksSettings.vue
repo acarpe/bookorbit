@@ -139,7 +139,7 @@ function isExpired(expiresAt: string | null | undefined): boolean {
         Create shareable login links for shared accounts.
       </p>
     </div>
-    <div class="md:hidden sticky top-[5.25rem] z-20 border border-border/60 bg-card/95 backdrop-blur rounded-lg px-3 py-2 mt-4 mb-3">
+    <div class="md:hidden sticky top-11 z-20 border border-border/60 bg-card/95 backdrop-blur rounded-lg px-3 py-2 mt-4 mb-3">
       <button class="settings-btn-primary w-full min-h-10 justify-center" :disabled="sharedUsers.length === 0" @click="openCreateForm">
         <Plus :size="14" />
         Create link

@@ -132,7 +132,7 @@ function handleResetClick() {
     </div>
   </div>
   <div
-    class="md:hidden sticky top-[5.25rem] z-10 -mx-4 mb-4 px-4 py-2 border-y border-border/70 bg-card/95 backdrop-blur supports-[backdrop-filter]:bg-card/75"
+    class="md:hidden sticky top-11 z-10 -mx-4 mb-4 px-4 py-2 border-y border-border/70 bg-card/95 backdrop-blur supports-[backdrop-filter]:bg-card/75"
   >
     <div class="flex items-center gap-2 flex-wrap">
       <button

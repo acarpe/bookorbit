@@ -163,7 +163,7 @@ function openMagicLinkCreate() {
   <!-- Tab bar (superusers only) -->
   <div
     v-if="isSuperuser"
-    class="flex gap-1 mt-1 mb-5 md:mb-6 border-b border-border overflow-x-auto md:overflow-visible md:static sticky top-[5.25rem] z-20 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80 snap-x"
+    class="flex gap-1 mt-1 mb-5 md:mb-6 border-b border-border overflow-x-auto md:overflow-visible md:static sticky top-0 z-20 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80 snap-x"
   >
     <button
       class="px-3 py-3 md:py-2 text-sm font-medium shrink-0 border-b-2 -mb-px transition-colors snap-start"
@@ -190,10 +190,7 @@ function openMagicLinkCreate() {
   </div>
 
   <!-- Mobile CTA (when no tab bar is shown, keep the sticky button) -->
-  <div
-    v-if="!isSuperuser"
-    class="md:hidden sticky top-[5.25rem] z-20 border border-border/60 bg-card/95 backdrop-blur rounded-lg px-3 py-2 mt-4 mb-3"
-  >
+  <div v-if="!isSuperuser" class="md:hidden sticky top-0 z-20 border border-border/60 bg-card/95 backdrop-blur rounded-lg px-3 py-2 mt-4 mb-3">
     <button class="settings-btn-primary w-full min-h-10 justify-center" @click="openCreate">
       <UserPlus :size="14" />
       Create user

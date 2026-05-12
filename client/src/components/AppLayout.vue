@@ -24,9 +24,9 @@ const viewKey = computed(() => {
 </script>
 
 <template>
-  <SidebarProvider class="app-shell glow-wrapper min-h-screen" :class="backgroundClass">
+  <SidebarProvider class="app-shell glow-wrapper min-h-svh" :class="backgroundClass">
     <AppSidebar />
-    <SidebarInset class="app-shell-inset flex flex-col h-screen overflow-hidden relative bg-transparent pb-3">
+    <SidebarInset class="app-shell-inset flex flex-col h-svh overflow-hidden relative bg-transparent pb-3">
       <!-- 1. Global App Header: Fixed at the top, independent of views -->
       <AppHeader />
 

@@ -134,7 +134,7 @@ function deviceLabel(type: string | null): string {
     <div class="md:hidden flex items-center justify-between">
       <p class="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Recipients</p>
     </div>
-    <div v-if="!showForm" class="md:hidden sticky top-[8.9rem] z-20 border border-border/60 bg-card/95 backdrop-blur rounded-lg px-3 py-2 mb-6">
+    <div v-if="!showForm" class="md:hidden sticky top-11 z-20 border border-border/60 bg-card/95 backdrop-blur rounded-lg px-3 py-2 mb-6">
       <button
         class="w-full min-h-10 flex items-center justify-center gap-1.5 px-3 text-sm font-medium rounded-md bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
         @click="openCreate()"

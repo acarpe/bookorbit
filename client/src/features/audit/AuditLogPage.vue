@@ -169,7 +169,7 @@ watch(
       </div>
     </div>
 
-    <div class="md:hidden sticky top-[5.25rem] z-20 border border-border/60 bg-card/95 backdrop-blur rounded-lg px-3 py-2">
+    <div class="md:hidden sticky top-0 z-20 border border-border/60 bg-card/95 backdrop-blur rounded-lg px-3 py-2">
       <div class="flex items-center gap-2">
         <button class="settings-btn-primary h-9 flex-1 justify-center" @click="handleSearch">
           <Search :size="13" />

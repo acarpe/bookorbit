@@ -236,7 +236,7 @@ async function handleSetStatus(status: ReadStatus) {
 <template>
   <div
     ref="root"
-    class="group flex flex-col @container"
+    class="group flex flex-col @container touch-manipulation"
     :class="[selectionMode || (primaryFile && !isMissing) ? 'cursor-pointer' : 'cursor-default', selectionMode ? 'select-none' : '']"
     @click="handleCardClick"
     @contextmenu.prevent
@@ -364,7 +364,7 @@ async function handleSetStatus(status: ReadStatus) {
       <div
         v-if="!selectionMode"
         class="absolute inset-0 flex flex-col p-2 bg-black/70 transition-opacity duration-150"
-        :class="[showMobileOverlay || 'group-hover:opacity-100 group-active:opacity-100', showMobileOverlay ? 'opacity-100' : 'opacity-0']"
+        :class="[showMobileOverlay || 'group-hover:opacity-100', showMobileOverlay ? 'opacity-100' : 'opacity-0 pointer-events-none']"
       >
         <!-- Top row: Quick View -->
         <div class="shrink-0 flex justify-end">
@@ -378,7 +378,7 @@ async function handleSetStatus(status: ReadStatus) {
           <button
             v-if="primaryFile && !isMissing"
             class="size-[30cqi] flex items-center justify-center rounded-full bg-primary text-white shadow-2xl transition-all duration-300 scale-75 hover:scale-110 active:scale-90"
-            :class="[showMobileOverlay || 'group-hover:scale-100 group-active:scale-100', showMobileOverlay ? 'scale-100' : '']"
+            :class="[showMobileOverlay || 'group-hover:scale-100', showMobileOverlay ? 'scale-100' : '']"
             @click.stop="openFile(primaryFile)"
           >
             <component :is="isAudiobook ? Play : BookOpen" class="size-[16cqi]" :class="{ 'ml-[2cqi]': isAudiobook }" />
