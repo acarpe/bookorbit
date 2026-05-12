@@ -364,7 +364,7 @@ async function handleSetStatus(status: ReadStatus) {
       <div
         v-if="!selectionMode"
         class="absolute inset-0 flex flex-col p-2 bg-black/70 transition-opacity duration-150"
-        :class="[showMobileOverlay || 'group-hover:opacity-100', showMobileOverlay ? 'opacity-100' : 'opacity-0 pointer-events-none']"
+        :class="[showMobileOverlay ? 'opacity-100' : 'opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto']"
       >
         <!-- Top row: Quick View -->
         <div class="shrink-0 flex justify-end">

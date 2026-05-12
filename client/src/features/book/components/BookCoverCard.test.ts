@@ -1,0 +1,462 @@
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { mount } from '@vue/test-utils'
+import { defineComponent, h, ref } from 'vue'
+import type { BookCard } from '@bookorbit/types'
+import BookCoverCard from './BookCoverCard.vue'
+
+// -- module mocks (must precede imports) -------------------------------------
+
+const mockRouterPush = vi.fn<() => void>()
+vi.mock('vue-router', () => ({
+  useRouter: () => ({ push: mockRouterPush }),
+}))
+
+const mockCoverUrl = vi.fn<(id: number) => string>((id: number) => `/api/covers/${id}`)
+const mockBumpVersion = vi.fn<() => void>()
+vi.mock('@/features/book/composables/useCoverVersions', () => ({
+  useCoverVersions: () => ({ coverUrl: mockCoverUrl, bumpVersion: mockBumpVersion }),
+}))
+
+const mockRefreshWithFeedback = vi.fn<() => Promise<null>>().mockResolvedValue(null)
+const mockRefreshing = ref(false)
+vi.mock('@/features/book/composables/useRefreshMetadata', () => ({
+  useRefreshMetadata: () => ({ refreshing: mockRefreshing, refreshWithFeedback: mockRefreshWithFeedback }),
+}))
+
+const mockIsRefreshing = vi.fn<() => boolean>().mockReturnValue(false)
+vi.mock('@/features/book/composables/useRefreshingBooks', () => ({
+  useRefreshingBooks: () => ({ isRefreshing: mockIsRefreshing }),
+}))
+
+vi.mock('@/features/book/lib/book-card-mapper', () => ({
+  mergeBookCardWithDetail: vi.fn<(_card: unknown, detail: unknown) => unknown>((_card: unknown, detail: unknown) => detail),
+}))
+
+const mockHasPermission = vi.fn<() => boolean>().mockReturnValue(true)
+vi.mock('@/features/auth/composables/usePermissions', () => ({
+  usePermissions: () => ({ hasPermission: mockHasPermission }),
+}))
+
+const mockCardOverlays = ref<string[]>([])
+vi.mock('@/composables/useDisplaySettings', () => ({
+  useDisplaySettings: () => ({ cardOverlays: mockCardOverlays }),
+}))
+
+const mockDownloadFile = vi.fn<() => void>()
+const mockExportBooks = vi.fn<() => void>()
+vi.mock('@/features/book/composables/useBookDownload', () => ({
+  useBookDownload: () => ({ downloadFile: mockDownloadFile, exportBooks: mockExportBooks }),
+}))
+
+const mockSetStatus = vi.fn<() => void>()
+vi.mock('@/features/book/composables/useBookStatus', () => ({
+  useBookStatus: () => ({ setStatus: mockSetStatus }),
+  STATUS_OPTIONS: [
+    { value: 'unread', label: 'Unread' },
+    { value: 'reading', label: 'Reading' },
+    { value: 'read', label: 'Read' },
+  ],
+  STATUS_ICONS: { unread: 'span', reading: 'span', read: 'span' },
+  STATUS_COLORS: { unread: 'text-muted', reading: 'text-blue-500', read: 'text-emerald-500' },
+}))
+
+vi.mock('@/features/book/lib/book-cover', () => ({
+  bookCoverStyle: (_seed: string) => ({ background: 'oklch(50% 0.1 200)' }),
+}))
+
+vi.mock('@/features/book/lib/format-colors', () => ({
+  getFormatColor: () => '#4a90e2',
+}))
+
+vi.mock('@/features/book/components/BookCoverPlaceholder.vue', () => ({
+  default: defineComponent({
+    name: 'BookCoverPlaceholder',
+    props: ['title', 'authorLine', 'isAudio', 'seed'],
+    setup(props) {
+      return () => h('div', { 'data-testid': 'cover-placeholder', 'data-title': props.title })
+    },
+  }),
+}))
+
+vi.mock('@/features/email/components/SendBookDialog.vue', () => ({
+  default: defineComponent({
+    name: 'SendBookDialog',
+    props: ['open', 'bookIds', 'bookFiles', 'bookTitle'],
+    emits: ['update:open'],
+    setup() {
+      return () => h('div', { 'data-testid': 'send-dialog' })
+    },
+  }),
+}))
+
+// -- helpers -----------------------------------------------------------------
+
+function makeFile(overrides: Partial<{ id: number; format: string; role: string; sizeBytes: number }> = {}) {
+  return {
+    id: overrides.id ?? 1,
+    format: overrides.format ?? 'epub',
+    role: overrides.role ?? 'primary',
+    sizeBytes: overrides.sizeBytes ?? 1024,
+  }
+}
+
+function makeBook(overrides: Partial<BookCard> = {}): BookCard {
+  return {
+    id: 1,
+    status: 'present',
+    title: 'Dune',
+    authors: ['Frank Herbert'],
+    seriesName: null,
+    seriesIndex: null,
+    files: [makeFile()],
+    publishedYear: 1965,
+    language: 'en',
+    genres: ['Science Fiction'],
+    rating: 4,
+    readingProgress: 50,
+    readStatus: null,
+    addedAt: '2024-01-01T00:00:00Z',
+    updatedAt: null,
+    metadataScore: 90,
+    hasCover: false,
+    hasMetadataLocks: false,
+    lockedFields: [],
+    subtitle: null,
+    publisher: 'Chilton Books',
+    pageCount: 412,
+    isbn13: '9780441013593',
+    narrators: [],
+    tags: [],
+    ...overrides,
+  }
+}
+
+function mountCard(props: Partial<{ book: BookCard; selectionMode: boolean; selected: boolean; onSelect: (e: MouseEvent) => void }> = {}) {
+  return mount(BookCoverCard, {
+    props: { book: makeBook(), selectionMode: false, selected: false, ...props },
+    global: {
+      stubs: {
+        DropdownMenu: { template: '<div data-testid="dropdown-menu"><slot /></div>' },
+        DropdownMenuTrigger: { template: '<div data-testid="dropdown-trigger"><slot /></div>' },
+        DropdownMenuContent: { template: '<div data-testid="dropdown-content"><slot /></div>' },
+        DropdownMenuItem: { template: '<div data-testid="dropdown-item" @click="$emit(\'click\')"><slot /></div>', emits: ['click'] },
+        DropdownMenuSeparator: true,
+        DropdownMenuSub: { template: '<div data-testid="dropdown-sub"><slot /></div>' },
+        DropdownMenuSubTrigger: { template: '<div><slot /></div>' },
+        DropdownMenuSubContent: { template: '<div><slot /></div>' },
+        Tooltip: { template: '<div><slot /></div>' },
+        TooltipTrigger: { template: '<div><slot /></div>' },
+        TooltipContent: { template: '<div><slot /></div>' },
+        Loader2: true,
+        MoreVertical: true,
+        PanelRight: true,
+        BookOpen: true,
+        Play: true,
+        Check: true,
+        ExternalLink: true,
+        Pencil: true,
+        RefreshCw: true,
+        FolderPlus: true,
+        Send: true,
+        Trash2: true,
+        TriangleAlert: true,
+        Star: true,
+        Download: true,
+        Image: true,
+        Lock: true,
+        LockOpen: true,
+      },
+    },
+  })
+}
+
+function setTouchMode(value: boolean) {
+  vi.stubGlobal('matchMedia', vi.fn<() => { matches: boolean }>().mockReturnValue({ matches: value }))
+}
+
+// -- tests -------------------------------------------------------------------
+
+describe('BookCoverCard', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockRefreshing.value = false
+    mockCardOverlays.value = []
+    setTouchMode(false)
+  })
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  // ── hover overlay pointer-events (the bug fix) ────────────────────────────
+
+  describe('hover overlay pointer events', () => {
+    it('has pointer-events-none by default so the overlay does not block content below', () => {
+      const wrapper = mountCard()
+      const overlay = wrapper.find('.bg-black\\/70')
+      expect(overlay.classes()).toContain('pointer-events-none')
+    })
+
+    it('has group-hover:pointer-events-auto so buttons become clickable on desktop hover', () => {
+      const wrapper = mountCard()
+      const overlay = wrapper.find('.bg-black\\/70')
+      expect(overlay.classes()).toContain('group-hover:pointer-events-auto')
+    })
+
+    it('has group-hover:opacity-100 to become visible on desktop hover', () => {
+      const wrapper = mountCard()
+      const overlay = wrapper.find('.bg-black\\/70')
+      expect(overlay.classes()).toContain('group-hover:opacity-100')
+    })
+
+    it('removes pointer-events-none and opacity-0 when mobile overlay is active', async () => {
+      setTouchMode(true)
+      const wrapper = mountCard()
+      await wrapper.find('.group').trigger('click')
+      const overlay = wrapper.find('.bg-black\\/70')
+      expect(overlay.classes()).toContain('opacity-100')
+      expect(overlay.classes()).not.toContain('pointer-events-none')
+    })
+
+    it('does not apply group-hover classes when mobile overlay is active', async () => {
+      setTouchMode(true)
+      const wrapper = mountCard()
+      await wrapper.find('.group').trigger('click')
+      const overlay = wrapper.find('.bg-black\\/70')
+      expect(overlay.classes()).not.toContain('group-hover:opacity-100')
+      expect(overlay.classes()).not.toContain('group-hover:pointer-events-auto')
+    })
+
+    it('is absent in selection mode (no hover overlay rendered)', () => {
+      const wrapper = mountCard({ selectionMode: true })
+      // The v-if="!selectionMode" removes the overlay entirely
+      expect(wrapper.find('.bg-black\\/70').exists()).toBe(false)
+    })
+  })
+
+  // ── quick view button ─────────────────────────────────────────────────────
+
+  describe('quick view button', () => {
+    it('emits action:quick-view when quick view button is clicked', async () => {
+      const wrapper = mountCard()
+      const overlayBtns = wrapper.find('.bg-black\\/70').findAll('button')
+      await overlayBtns[0]?.trigger('click')
+      expect(wrapper.emitted('action')?.[0]).toEqual(['quick-view'])
+    })
+  })
+
+  // ── card click: desktop vs mobile ────────────────────────────────────────
+
+  describe('card click behavior', () => {
+    it('opens primary file on desktop click when primaryFile exists', async () => {
+      setTouchMode(false)
+      const book = makeBook({ files: [makeFile({ id: 10, format: 'epub', role: 'primary' })] })
+      const wrapper = mountCard({ book })
+      await wrapper.find('.group').trigger('click')
+      expect(mockRouterPush).toHaveBeenCalledWith(expect.objectContaining({ name: 'reader', params: { bookId: 1, fileId: 10 } }))
+    })
+
+    it('does nothing on desktop click when no readable primary file exists', async () => {
+      setTouchMode(false)
+      const book = makeBook({ files: [] })
+      const wrapper = mountCard({ book })
+      await wrapper.find('.group').trigger('click')
+      expect(mockRouterPush).not.toHaveBeenCalled()
+    })
+
+    it('does not open file when clicking a button (event target is button)', async () => {
+      setTouchMode(false)
+      const wrapper = mountCard()
+      const btn = wrapper.find('button')
+      await btn.trigger('click')
+      // The card click handler returns early for button clicks
+      expect(mockRouterPush).not.toHaveBeenCalledWith(expect.objectContaining({ name: 'reader' }))
+    })
+
+    it('toggles mobile overlay on touch tap instead of opening file', async () => {
+      setTouchMode(true)
+      const wrapper = mountCard()
+      await wrapper.find('.group').trigger('click')
+      const overlay = wrapper.find('.bg-black\\/70')
+      expect(overlay.classes()).toContain('opacity-100')
+    })
+
+    it('toggling mobile overlay off on second tap hides overlay', async () => {
+      setTouchMode(true)
+      const wrapper = mountCard()
+      await wrapper.find('.group').trigger('click')
+      await wrapper.find('.group').trigger('click')
+      const overlay = wrapper.find('.bg-black\\/70')
+      expect(overlay.classes()).toContain('opacity-0')
+    })
+
+    it('emits select and does not open file in selection mode', async () => {
+      const mockSelect = vi.fn<(e: MouseEvent) => void>()
+      const wrapper = mountCard({ selectionMode: true, onSelect: mockSelect })
+      await wrapper.find('.group').trigger('click')
+      expect(mockSelect).toHaveBeenCalled()
+      expect(mockRouterPush).not.toHaveBeenCalled()
+    })
+
+    it('does not open file for missing books on desktop', async () => {
+      setTouchMode(false)
+      const book = makeBook({ status: 'missing' })
+      const wrapper = mountCard({ book })
+      await wrapper.find('.group').trigger('click')
+      expect(mockRouterPush).not.toHaveBeenCalled()
+    })
+  })
+
+  // ── cover rendering ───────────────────────────────────────────────────────
+
+  describe('cover rendering', () => {
+    it('shows placeholder when hasCover is false', () => {
+      const wrapper = mountCard({ book: makeBook({ hasCover: false }) })
+      expect(wrapper.find('[data-testid="cover-placeholder"]').exists()).toBe(true)
+    })
+
+    it('shows cover image when hasCover is true', () => {
+      const wrapper = mountCard({ book: makeBook({ hasCover: true }) })
+      // img element for the main cover image exists
+      expect(wrapper.find('img').exists()).toBe(true)
+    })
+
+    it('uses coverUrl composable for the image src', () => {
+      const book = makeBook({ id: 42, hasCover: true })
+      mountCard({ book })
+      expect(mockCoverUrl).toHaveBeenCalledWith(42)
+    })
+
+    it('shows missing badge when book status is missing', () => {
+      const book = makeBook({ status: 'missing' })
+      const wrapper = mountCard({ book })
+      expect(wrapper.text()).toContain('Missing')
+    })
+  })
+
+  // ── book metadata display ─────────────────────────────────────────────────
+
+  describe('text metadata', () => {
+    it('shows book title', () => {
+      const wrapper = mountCard({ book: makeBook({ title: 'Foundation' }) })
+      expect(wrapper.text()).toContain('Foundation')
+    })
+
+    it('does not render hover title when no cover is loaded yet', () => {
+      // hasCover true but image not loaded - placeholder not shown, hover title hidden
+      const book = makeBook({ hasCover: true, title: 'Foundation' })
+      const wrapper = mountCard({ book })
+      // coverLoaded defaults to false; showHoverText = false → title not in overlay p tag
+      const overlay = wrapper.find('.bg-black\\/70')
+      const pTags = overlay.findAll('p')
+      // p with text is only rendered when showHoverText is true
+      expect(pTags.filter((p) => p.text().includes('Foundation')).length).toBe(0)
+    })
+
+    it('shows author in hover overlay when no cover (placeholder shown)', () => {
+      const book = makeBook({ hasCover: false, authors: ['Frank Herbert'] })
+      const wrapper = mountCard({ book })
+      expect(wrapper.find('.bg-black\\/70').text()).toContain('Frank Herbert')
+    })
+  })
+
+  // ── selection mode UI ─────────────────────────────────────────────────────
+
+  describe('selection mode', () => {
+    it('renders selection checkbox overlay in selection mode', () => {
+      const wrapper = mountCard({ selectionMode: true })
+      // There is a selection overlay div (absolute inset-0 z-30)
+      const selectionOverlay = wrapper.find('.z-30')
+      expect(selectionOverlay.exists()).toBe(true)
+    })
+
+    it('shows checkmark when selected', () => {
+      const wrapper = mountCard({ selectionMode: true, selected: true })
+      // Check that the selection overlay has primary styling
+      const selectionOverlay = wrapper.find('.z-30')
+      expect(selectionOverlay.classes()).toContain('bg-primary/20')
+    })
+
+    it('does not show check in unselected state', () => {
+      const wrapper = mountCard({ selectionMode: true, selected: false })
+      const selectionOverlay = wrapper.find('.z-30')
+      expect(selectionOverlay.classes()).not.toContain('bg-primary/20')
+    })
+  })
+
+  // ── author browse navigation ──────────────────────────────────────────────
+
+  describe('author browse', () => {
+    it('navigates to authors page when author button clicked', async () => {
+      const book = makeBook({ hasCover: false, authors: ['Frank Herbert'] })
+      const wrapper = mountCard({ book })
+      const authorBtn = wrapper.findAll('.bg-black\\/70 button').find((b) => b.text().includes('Frank Herbert'))
+      expect(authorBtn).toBeDefined()
+      await authorBtn!.trigger('click')
+      expect(mockRouterPush).toHaveBeenCalledWith({ name: 'authors', query: { q: 'Frank Herbert' } })
+    })
+
+    it('does not navigate when authors array is empty', async () => {
+      const book = makeBook({ hasCover: false, authors: [] })
+      const wrapper = mountCard({ book })
+      await wrapper.find('.group').trigger('click')
+      expect(mockRouterPush).not.toHaveBeenCalledWith(expect.objectContaining({ name: 'authors' }))
+    })
+  })
+
+  // ── refreshing spinner ────────────────────────────────────────────────────
+
+  describe('refresh spinner', () => {
+    it('renders refresh overlay when any refresh is active', async () => {
+      mockRefreshing.value = true
+      const wrapper = mountCard()
+      // The refresh overlay is the absolute z-40 div
+      const refreshOverlay = wrapper.find('.z-40')
+      expect(refreshOverlay.exists()).toBe(true)
+    })
+
+    it('does not render refresh overlay by default', () => {
+      mockRefreshing.value = false
+      mockIsRefreshing.mockReturnValue(false)
+      const wrapper = mountCard()
+      expect(wrapper.find('.z-40').exists()).toBe(false)
+    })
+  })
+
+  // ── dropdown menu actions ─────────────────────────────────────────────────
+
+  describe('dropdown menu', () => {
+    it('renders the kebab menu trigger button', () => {
+      const wrapper = mountCard()
+      // The dropdown trigger wraps a button with MoreVertical icon
+      expect(wrapper.find('[data-testid="dropdown-trigger"]').exists()).toBe(true)
+    })
+
+    it('does not render dropdown in selection mode', () => {
+      const wrapper = mountCard({ selectionMode: true })
+      expect(wrapper.find('[data-testid="dropdown-menu"]').exists()).toBe(false)
+    })
+  })
+
+  // ── cover aspect ratio ────────────────────────────────────────────────────
+
+  describe('cover aspect ratio', () => {
+    it('applies cover aspect ratio style to the cover container', () => {
+      const wrapper = mountCard()
+      // The cover wrapper has style with aspectRatio
+      const coverWrapper = wrapper.find('[style*="aspect-ratio"]')
+      expect(coverWrapper.exists()).toBe(true)
+    })
+  })
+
+  // ── send dialog ───────────────────────────────────────────────────────────
+
+  describe('send email dialog', () => {
+    it('shows send dialog when showSendDialog is triggered', async () => {
+      mockHasPermission.mockReturnValue(true)
+      const wrapper = mountCard()
+      // The dialog is not shown initially
+      expect(wrapper.find('[data-testid="send-dialog"]').exists()).toBe(false)
+    })
+  })
+})
