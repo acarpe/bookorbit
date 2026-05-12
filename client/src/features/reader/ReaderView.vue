@@ -20,7 +20,7 @@ import ReaderSettingsPanel from './epub/components/ReaderSettingsPanel.vue'
 import SelectionPopup from './epub/components/SelectionPopup.vue'
 import ReaderSearchPanel from './epub/components/ReaderSearchPanel.vue'
 import NoteDialog from './epub/components/NoteDialog.vue'
-import PdfReaderView from './pdf/PdfReaderView.vue'
+import PdfV4ReaderView from './pdf-v4/PdfV4ReaderView.vue'
 import CbzReaderView from './cbz/CbzReaderView.vue'
 import AudiobookReaderView from './audiobook/AudiobookReaderView.vue'
 import type { ReaderState } from './epub/composables/useReaderState'
@@ -301,7 +301,7 @@ function closeSearch() {
 </script>
 
 <template>
-  <PdfReaderView v-if="isPdfFormat" :bookId="bookId" :fileId="fileId" />
+  <PdfV4ReaderView v-if="isPdfFormat" :bookId="bookId" :fileId="fileId" />
   <CbzReaderView v-else-if="isComicFormat" :bookId="bookId" :fileId="fileId" />
   <AudiobookReaderView v-else-if="isAudioFormat" :bookId="bookId" :fileId="fileId" />
   <div
