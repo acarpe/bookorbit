@@ -22,7 +22,7 @@ All PRs to `main` must use **squash merge**. The squash commit message becomes t
 
 ### PR title format
 
-PR titles must follow the [commit guidelines](../COMMIT_GUIDELINES.md):
+PR titles must follow the [commit guidelines](COMMIT_GUIDELINES.md):
 
 ```
 <type>(<scope>): <summary>

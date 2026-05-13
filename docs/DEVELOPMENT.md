@@ -379,7 +379,7 @@ Releases are created manually via `workflow_dispatch` on the `release.yml` workf
 
 PR titles are validated by commitlint to ensure they follow the [commit guidelines](COMMIT_GUIDELINES.md). Only releasable types (`feat`, `fix`, `perf`, `security`, `db`, `style`) trigger version bumps.
 
-For the full release runbook, see [`docs/release-process.md`](docs/release-process.md).
+For the full release runbook, see [`docs/RELEASE_PROCESS.md`](docs/RELEASE_PROCESS.md).
 
 ### E2E in CI
 

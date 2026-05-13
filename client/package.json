@@ -1,8 +1,18 @@
 {
   "name": "client",
   "version": "0.0.0",
+  "description": "BookOrbit client - self-hosted library management and reading platform",
+  "author": "neonsolstice",
   "private": true,
   "license": "AGPL-3.0",
+  "homepage": "https://bookorbit.app",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/bookorbit/bookorbit"
+  },
+  "bugs": {
+    "url": "https://github.com/bookorbit/bookorbit/issues"
+  },
   "type": "module",
   "scripts": {
     "dev": "vite",

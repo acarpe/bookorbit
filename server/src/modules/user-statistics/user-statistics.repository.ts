@@ -387,7 +387,7 @@ export class UserStatisticsRepository {
       .from(readingSessions)
       .innerJoin(bookFiles, eq(bookFiles.id, readingSessions.bookFileId))
       .innerJoin(books, eq(books.id, bookFiles.bookId))
-      .where(and(eq(readingSessions.userId, userId), gte(readingSessions.endProgress, 100), libraryFilter))
+      .where(and(eq(readingSessions.userId, userId), gte(readingSessions.endProgress, 99), libraryFilter))
       .groupBy(bookFiles.bookId)
       .as('first_completion');
 
@@ -467,7 +467,7 @@ export class UserStatisticsRepository {
       .from(readingSessions)
       .innerJoin(bookFiles, eq(bookFiles.id, readingSessions.bookFileId))
       .innerJoin(books, eq(books.id, bookFiles.bookId))
-      .where(and(eq(readingSessions.userId, userId), gte(readingSessions.startedAt, since), gte(readingSessions.endProgress, 100), libraryFilter))
+      .where(and(eq(readingSessions.userId, userId), gte(readingSessions.startedAt, since), gte(readingSessions.endProgress, 99), libraryFilter))
       .groupBy(bookFiles.bookId)
       .as('completed_in_window');
 
