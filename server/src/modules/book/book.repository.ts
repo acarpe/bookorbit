@@ -125,14 +125,16 @@ export class BookRepository {
 
     const total = rows.length > 0 ? rows[0]._total : await this.countWhere(visibleWhere);
 
-    const bookIds = rows.map((r) => r.id);
-    const primaryFileIds = rows.map((r) => r.primaryFileId).filter((id): id is number => id != null);
-    const enrichment = await this.enrichBookIds(bookIds, primaryFileIds, userId);
+    const bookRefs = rows.map((r) => ({ id: r.id, primaryFileId: r.primaryFileId ?? null }));
+    const enrichment = await this.enrichBookIds(bookRefs, userId);
 
     return { rows, ...enrichment, total: Number(total) };
   }
 
-  private async enrichBookIds(bookIds: number[], primaryFileIds: number[], userId: number) {
+  private async enrichBookIds(bookRefs: Array<{ id: number; primaryFileId: number | null }>, userId: number) {
+    const bookIds = bookRefs.map((book) => book.id);
+    const primaryFileIds = bookRefs.map((book) => book.primaryFileId).filter((id): id is number => id != null);
+
     if (bookIds.length === 0) {
       return {
         authorRows: [] as { bookId: number; name: string }[],
@@ -152,7 +154,7 @@ export class BookRepository {
       };
     }
 
-    const [authorRows, fileRows, genreRows, tagRows, narratorRows, statusRows, progressRows] = await Promise.all([
+    const [authorRows, fileRows, genreRows, tagRows, narratorRows, statusRows, fileProgressRows, audiobookProgressRows] = await Promise.all([
       this.db
         .select({ bookId: bookAuthors.bookId, name: authors.name })
         .from(bookAuthors)
@@ -192,11 +194,42 @@ export class BookRepository {
         .where(and(eq(userBookStatus.userId, userId), inArray(userBookStatus.bookId, bookIds))),
       primaryFileIds.length > 0
         ? this.db
-            .select({ bookFileId: readingProgress.bookFileId, percentage: readingProgress.percentage })
+            .select({
+              bookFileId: readingProgress.bookFileId,
+              percentage: readingProgress.percentage,
+              updatedAt: readingProgress.updatedAt,
+            })
             .from(readingProgress)
             .where(and(eq(readingProgress.userId, userId), inArray(readingProgress.bookFileId, primaryFileIds)))
-        : Promise.resolve([] as { bookFileId: number; percentage: number }[]),
+        : Promise.resolve([] as { bookFileId: number; percentage: number; updatedAt: Date }[]),
+      this.db
+        .select({
+          bookId: audiobookProgress.bookId,
+          percentage: audiobookProgress.percentage,
+          updatedAt: audiobookProgress.updatedAt,
+        })
+        .from(audiobookProgress)
+        .where(and(eq(audiobookProgress.userId, userId), inArray(audiobookProgress.bookId, bookIds))),
     ]);
+
+    const fileProgressById = new Map(fileProgressRows.map((row) => [row.bookFileId, row]));
+    const audiobookProgressByBookId = new Map(audiobookProgressRows.map((row) => [row.bookId, row]));
+    const progressRows = bookRefs.flatMap((book) => {
+      if (book.primaryFileId == null) return [];
+
+      const fileProgress = fileProgressById.get(book.primaryFileId);
+      const audioProgress = audiobookProgressByBookId.get(book.id);
+      if (!fileProgress && !audioProgress) return [];
+
+      const mergedPercentage =
+        fileProgress && audioProgress
+          ? fileProgress.updatedAt >= audioProgress.updatedAt
+            ? fileProgress.percentage
+            : audioProgress.percentage
+          : (fileProgress?.percentage ?? audioProgress?.percentage ?? null);
+
+      return [{ bookFileId: book.primaryFileId, percentage: mergedPercentage }];
+    });
 
     return { authorRows, fileRows, genreRows, tagRows, progressRows, statusRows, narratorRows };
   }
@@ -388,9 +421,8 @@ export class BookRepository {
       seriesLatestAddedAt: r.sort_added_at ? new Date(r.sort_added_at) : null,
     }));
 
-    const bookIds = mappedRows.map((r) => r.id);
-    const primaryFileIds = mappedRows.map((r) => r.primaryFileId).filter((id): id is number => id != null);
-    const enrichment = await this.enrichBookIds(bookIds, primaryFileIds, userId);
+    const bookRefs = mappedRows.map((row) => ({ id: row.id, primaryFileId: row.primaryFileId ?? null }));
+    const enrichment = await this.enrichBookIds(bookRefs, userId);
 
     return { rows: mappedRows, ...enrichment, total };
   }

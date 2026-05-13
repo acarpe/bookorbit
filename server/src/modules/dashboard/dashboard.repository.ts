@@ -1,10 +1,10 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { and, desc, eq, gt, gte, inArray, isNull, lt, or, sql } from 'drizzle-orm';
+import { and, desc, eq, gte, inArray, isNull, lt, or, sql } from 'drizzle-orm';
 import { NodePgDatabase } from 'drizzle-orm/node-postgres';
 
 import { DB } from '../../db';
 import * as schema from '../../db/schema';
-import { bookFiles, books, readingProgress } from '../../db/schema';
+import { audiobookProgress, bookFiles, books, readingProgress } from '../../db/schema';
 
 type Db = NodePgDatabase<typeof schema>;
 
@@ -26,21 +26,36 @@ export class DashboardRepository {
 
   async findContinueReadingBookIds(accessibleLibraryIds: number[], userId: number, limit: number): Promise<number[]> {
     if (accessibleLibraryIds.length === 0) return [];
+    const mergedProgress = sql<number>`
+      coalesce(
+        case
+          when ${readingProgress.updatedAt} is null then ${audiobookProgress.percentage}
+          when ${audiobookProgress.updatedAt} is null then ${readingProgress.percentage}
+          when ${readingProgress.updatedAt} >= ${audiobookProgress.updatedAt} then ${readingProgress.percentage}
+          else ${audiobookProgress.percentage}
+        end,
+        ${readingProgress.percentage},
+        ${audiobookProgress.percentage},
+        0
+      )
+    `;
+    const mergedUpdatedAt = sql<Date | null>`
+      case
+        when ${readingProgress.updatedAt} is null then ${audiobookProgress.updatedAt}
+        when ${audiobookProgress.updatedAt} is null then ${readingProgress.updatedAt}
+        when ${readingProgress.updatedAt} >= ${audiobookProgress.updatedAt} then ${readingProgress.updatedAt}
+        else ${audiobookProgress.updatedAt}
+      end
+    `;
+
     const rows = await this.db
       .select({ id: books.id })
       .from(books)
-      .innerJoin(bookFiles, eq(bookFiles.id, books.primaryFileId))
-      .innerJoin(
-        readingProgress,
-        and(
-          eq(readingProgress.bookFileId, bookFiles.id),
-          eq(readingProgress.userId, userId),
-          gt(readingProgress.percentage, 0),
-          lt(readingProgress.percentage, 100),
-        ),
-      )
-      .where(inArray(books.libraryId, accessibleLibraryIds))
-      .orderBy(desc(readingProgress.updatedAt), desc(books.id))
+      .leftJoin(bookFiles, eq(bookFiles.id, books.primaryFileId))
+      .leftJoin(readingProgress, and(eq(readingProgress.bookFileId, bookFiles.id), eq(readingProgress.userId, userId)))
+      .leftJoin(audiobookProgress, and(eq(audiobookProgress.bookId, books.id), eq(audiobookProgress.userId, userId)))
+      .where(and(inArray(books.libraryId, accessibleLibraryIds), sql`${mergedProgress} > 0 and ${mergedProgress} < 100`))
+      .orderBy(desc(mergedUpdatedAt), desc(books.id))
       .limit(limit);
 
     return rows.map((row) => row.id);

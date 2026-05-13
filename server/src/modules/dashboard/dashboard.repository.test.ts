@@ -66,6 +66,8 @@ describe('DashboardRepository', () => {
     const result = await repo.findContinueReadingBookIds([8], 55, 10);
 
     expect(result).toEqual([40, 9]);
+    expect(listChain.leftJoin).toHaveBeenCalledTimes(3);
+    expect(listChain.innerJoin).not.toHaveBeenCalled();
     expect(listChain.limit).toHaveBeenCalledWith(10);
   });
 
