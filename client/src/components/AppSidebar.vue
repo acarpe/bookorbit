@@ -29,8 +29,9 @@ import CreateSmartScopeDialog from '@/features/smart-scope/components/CreateSmar
 import CreateCollectionDialog from '@/features/collection/components/CreateCollectionDialog.vue'
 import LibraryCreatorModal from '@/features/library/components/LibraryCreatorModal.vue'
 import { useLibraryCreationRedirect } from '@/features/library/composables/useLibraryCreationRedirect'
-import { useInstallPrompt } from '@/features/pwa/composables/useInstallPrompt'
 import { useThemeStore } from '@/stores/theme'
+import { useAppInfo } from '@/features/settings/composables/useAppInfo'
+import { buildSidebarVersionUi } from '@/components/sidebar/versionUi'
 
 function resolveIcon(name: string | null | undefined, fallback: Component): Component {
   if (name && name in Icons) return (Icons as Record<string, unknown>)[name] as Component
@@ -56,9 +57,12 @@ const { hasPermission } = usePermissions()
 const { subscribeLibrary, getProgress, progressMap } = useScanProgress()
 const { handleLibraryCreated } = useLibraryCreationRedirect()
 const themeStore = useThemeStore()
-const { isInstallable, installApp } = useInstallPrompt()
+const { version, updateAvailable, latestVersion, loadAppInfo } = useAppInfo()
 
 const iconRadiusClass = computed(() => (themeStore.radius === 'sharp' ? 'rounded-none' : 'rounded-full'))
+const versionUi = computed(() => {
+  return buildSidebarVersionUi(version.value, updateAvailable.value, latestVersion.value)
+})
 
 const refreshedFor = new Set<number>()
 watch(progressMap, (map) => {
@@ -147,6 +151,7 @@ onMounted(async () => {
   }
   fetchSmartScopes()
   fetchCollections()
+  loadAppInfo()
 })
 
 const stopLibraryUploadListener = onLibraryUploadCompleted((event) => {
@@ -433,10 +438,33 @@ onUnmounted(() => stopLibraryUploadListener())
       </SidebarGroup>
     </SidebarContent>
 
-    <SidebarFooter v-if="isInstallable" class="border-t border-sidebar-border/60 pb-2">
-      <SidebarMenu>
-        <SidebarNavItem :is-active="false" tooltip="Install App" :icon="Icons.Download" label="Install App" @click="installApp" />
-      </SidebarMenu>
+    <SidebarFooter v-if="versionUi.currentLabel" class="border-t border-sidebar-border/60">
+      <div class="px-2 py-2 group-data-[collapsible=icon]:hidden">
+        <div class="flex flex-wrap items-center justify-center gap-2 text-center text-[12px] font-medium leading-none text-sidebar-foreground/80">
+          <a
+            v-if="versionUi.currentHref"
+            :href="versionUi.currentHref"
+            target="_blank"
+            rel="noopener noreferrer"
+            class="transition-colors hover:text-sidebar-foreground"
+          >
+            {{ versionUi.currentLabel }}
+          </a>
+          <span v-else>{{ versionUi.currentLabel }}</span>
+
+          <span v-if="versionUi.showLatest" class="text-sidebar-foreground/45">•</span>
+
+          <a
+            v-if="versionUi.showLatest"
+            :href="versionUi.latestHref"
+            target="_blank"
+            rel="noopener noreferrer"
+            class="font-semibold text-primary transition-colors hover:text-primary/85"
+          >
+            Latest {{ versionUi.latestLabel }}
+          </a>
+        </div>
+      </div>
     </SidebarFooter>
 
     <SidebarRail />

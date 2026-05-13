@@ -212,6 +212,11 @@ export class AppSettingsService {
     await this.repo.upsert(APP_SETTING_KEYS.METADATA_SCORE_WEIGHTS, JSON.stringify(weights));
     return weights;
   }
+
+  async isUpdateCheckEnabled(): Promise<boolean> {
+    const row = await this.repo.findByKey(APP_SETTING_KEYS.UPDATE_CHECK_ENABLED);
+    return parseBooleanSetting(row?.value, true);
+  }
 }
 
 function parseAutoFinalizeMetadataMode(value: string | undefined): BookDockAutoFinalizeMetadataMode {

@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { Check, RefreshCw, Sparkles, ArrowUpFromLine, CheckCircle2, AlertCircle, Loader2 } from 'lucide-vue-next'
+import { Check, RefreshCw, Sparkles, ArrowUpFromLine, CheckCircle2, AlertCircle, Loader2, Bell } from 'lucide-vue-next'
 import { toast } from 'vue-sonner'
+import ToggleSwitch from '@/components/ui/ToggleSwitch.vue'
 import SettingsPageHeader from './SettingsPageHeader.vue'
 import MigrationModal from '@/features/migration/components/MigrationModal.vue'
 import { api } from '@/lib/api'
@@ -15,6 +16,9 @@ const embeddingError = ref<string | null>(null)
 
 const migrationState = ref<MigrationWorkflowState | null>(null)
 const migrationLoading = ref(true)
+
+const updateCheckEnabled = ref(true)
+const updateCheckLoading = ref(false)
 
 const migrationSource = computed(() => migrationState.value?.active?.source ?? null)
 const migrationRun = computed(() => migrationState.value?.active?.run ?? null)
@@ -34,6 +38,17 @@ onMounted(async () => {
   } finally {
     migrationLoading.value = false
   }
+
+  try {
+    const res = await api('/api/v1/app-settings')
+    if (res.ok) {
+      const settings: { key: string; value: string }[] = await res.json()
+      const row = settings.find((s) => s.key === 'update_check_enabled')
+      if (row) updateCheckEnabled.value = row.value === 'true'
+    }
+  } catch {
+    // non-fatal
+  }
 })
 
 async function onMigrationModalClose() {
@@ -47,6 +62,27 @@ async function onMigrationModalClose() {
 
 function goToMigration() {
   showMigrationModal.value = true
+}
+
+async function toggleUpdateCheck(newVal: boolean) {
+  updateCheckLoading.value = true
+  try {
+    const res = await api('/api/v1/app-settings/update_check_enabled', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ value: String(newVal) }),
+    })
+    if (res.ok) {
+      updateCheckEnabled.value = newVal
+      toast.success(`Update checks ${newVal ? 'enabled' : 'disabled'}`)
+    } else {
+      toast.error('Failed to update setting')
+    }
+  } catch {
+    toast.error('Failed to update setting')
+  } finally {
+    updateCheckLoading.value = false
+  }
 }
 
 async function rebuildEmbeddings() {
@@ -191,6 +227,27 @@ function formatDate(iso: string | null | undefined): string {
             <RefreshCw :size="13" :class="running ? 'animate-spin' : ''" />
             {{ running ? 'Running...' : 'Run' }}
           </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Update checks -->
+    <div>
+      <p class="settings-group-label">Updates</p>
+      <div class="border border-border rounded-lg overflow-hidden divide-y divide-border shadow-xs">
+        <div class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between px-4 py-3.5 md:px-5 md:py-4 bg-card">
+          <div class="flex items-start gap-3">
+            <div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10">
+              <Bell :size="16" class="text-primary" />
+            </div>
+            <div class="min-w-0">
+              <p class="settings-label">Check for updates</p>
+              <p class="settings-hint">
+                Automatically check GitHub for a new release on startup and show an indicator in the sidebar when one is available.
+              </p>
+            </div>
+          </div>
+          <ToggleSwitch :model-value="updateCheckEnabled" :disabled="updateCheckLoading" @update:model-value="toggleUpdateCheck" />
         </div>
       </div>
     </div>

@@ -416,4 +416,21 @@ describe('AppSettingsService', () => {
       expect(repo.upsert).toHaveBeenCalledOnce();
     });
   });
+
+  describe('isUpdateCheckEnabled', () => {
+    it('returns true by default when setting is absent', async () => {
+      repo.findByKey.mockResolvedValue(undefined);
+      expect(await service.isUpdateCheckEnabled()).toBe(true);
+    });
+
+    it('returns false when value is "false"', async () => {
+      repo.findByKey.mockResolvedValue({ key: 'update_check_enabled', value: 'false' } as never);
+      expect(await service.isUpdateCheckEnabled()).toBe(false);
+    });
+
+    it('returns true when value is "true"', async () => {
+      repo.findByKey.mockResolvedValue({ key: 'update_check_enabled', value: 'true' } as never);
+      expect(await service.isUpdateCheckEnabled()).toBe(true);
+    });
+  });
 });

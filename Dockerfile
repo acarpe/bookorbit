@@ -40,6 +40,9 @@ RUN mkdir -p /deploy/migrations && cp -r /app/server/src/db/migrations/. /deploy
 FROM ${NODE_IMAGE} AS runtime
 WORKDIR /app
 
+ARG APP_VERSION=dev
+ENV APP_VERSION=${APP_VERSION}
+
 RUN apk upgrade --no-cache && \
     apk add --no-cache poppler-utils su-exec ffmpeg && \
     rm -rf /usr/local/lib/node_modules/npm /usr/local/bin/npm /usr/local/bin/npx

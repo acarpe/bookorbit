@@ -39,6 +39,7 @@ const DEFAULT_APP_SETTINGS: Array<typeof schema.appSettings.$inferInsert> = [
   { key: APP_SETTING_KEYS.AUTHORS_PROVIDER_AUDNEXUS_ENABLED, value: 'true' },
   { key: APP_SETTING_KEYS.AUDIT_RETENTION_DAYS, value: String(DEFAULT_AUDIT_RETENTION_DAYS) },
   { key: APP_SETTING_KEYS.OIDC_CONFIG, value: JSON.stringify(DEFAULT_OIDC_CONFIG) },
+  { key: APP_SETTING_KEYS.UPDATE_CHECK_ENABLED, value: 'true' },
 ];
 
 @Injectable()

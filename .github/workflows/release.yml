@@ -142,12 +142,13 @@ jobs:
           IMAGE_NAME: ${{ github.repository }}
         run: |
           set -euo pipefail
-          SOURCE_TAG="ghcr.io/${IMAGE_NAME}:sha-${COMMIT_SHA}"
+          SHORT_SHA="${COMMIT_SHA:0:12}"
+          SOURCE_TAG="ghcr.io/${IMAGE_NAME}:sha-${SHORT_SHA}"
           if ! docker buildx imagetools inspect "${SOURCE_TAG}" > /dev/null 2>&1; then
-            echo "::error::Multi-arch image sha-${COMMIT_SHA} not found in GHCR. Wait for the Container Image workflow to complete for this commit before releasing."
+            echo "::error::Multi-arch image sha-${SHORT_SHA} not found in GHCR. Wait for the Container Image workflow to complete for this commit before releasing."
             exit 1
           fi
-          echo "Image sha-${COMMIT_SHA} verified in GHCR."
+          echo "Image sha-${SHORT_SHA} verified in GHCR."
 
       - name: Set up Node.js and pnpm
         uses: ./.github/actions/setup-node-pnpm
@@ -192,7 +193,7 @@ jobs:
     needs: [release]
     if: needs.release.outputs.published == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 60
     permissions:
       contents: write
       packages: write
@@ -200,6 +201,14 @@ jobs:
       REGISTRY: ghcr.io
       IMAGE_NAME: ${{ github.repository }}
     steps:
+      - name: Checkout release tag
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          ref: ${{ needs.release.outputs.tag }}
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@29109295f81e9208d7d86ff1c6c12d2833863392 # v3.6.0
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@4d04d5d9486b7bd6fa91e7baf45bbb4f8b9deedd # v4.0.0
 
@@ -210,46 +219,21 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Verify SHA image and resolve digest
-        id: source
-        shell: bash
-        env:
-          REGISTRY: ${{ env.REGISTRY }}
-          IMAGE: ${{ env.IMAGE_NAME }}
-          SHA: ${{ github.sha }}
-        run: |
-          FULL_IMAGE="${REGISTRY}/${IMAGE}"
-          SOURCE_TAG="${FULL_IMAGE}:sha-${SHA}"
-          if ! docker buildx imagetools inspect "${SOURCE_TAG}" > /dev/null 2>&1; then
-            echo "::error::Multi-arch image sha-${SHA} not found in GHCR. Wait for the Container Image workflow to complete for this commit before releasing."
-            exit 1
-          fi
-          DIGEST=$(docker buildx imagetools inspect --format '{{json .Manifest}}' "${SOURCE_TAG}" | jq -r '.digest')
-          echo "digest=${DIGEST}" >> "$GITHUB_OUTPUT"
-          echo "image=${FULL_IMAGE}" >> "$GITHUB_OUTPUT"
-
-      - name: Promote to version and latest
-        shell: bash
-        env:
-          VERSION: ${{ needs.release.outputs.version }}
-          DIGEST: ${{ steps.source.outputs.digest }}
-          IMAGE: ${{ steps.source.outputs.image }}
-        run: |
-          docker buildx imagetools create \
-            --tag "${IMAGE}:${VERSION}" \
-            "${IMAGE}@${DIGEST}"
-          docker buildx imagetools create \
-            --tag "${IMAGE}:latest" \
-            "${IMAGE}@${DIGEST}"
-
-      - name: Inspect promoted manifests
-        shell: bash
-        env:
-          VERSION: ${{ needs.release.outputs.version }}
-          IMAGE: ${{ steps.source.outputs.image }}
-        run: |
-          docker buildx imagetools inspect "${IMAGE}:${VERSION}"
-          docker buildx imagetools inspect "${IMAGE}:latest"
+      - name: Build and push versioned image
+        id: build
+        uses: docker/build-push-action@bcafcacb16a39f128d818304e6c9c0c18556b85f # v7.1.0
+        with:
+          context: .
+          file: ./Dockerfile
+          push: true
+          platforms: linux/amd64,linux/arm64
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ needs.release.outputs.version }}
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+          build-args: APP_VERSION=v${{ needs.release.outputs.version }}
+          cache-from: |
+            type=gha,scope=container-image-yml-amd64
+            type=gha,scope=container-image-yml-arm64
 
       - name: Enrich release notes
         shell: bash
@@ -259,8 +243,8 @@ jobs:
           TAG: ${{ needs.release.outputs.tag }}
           VERSION: ${{ needs.release.outputs.version }}
           SHA: ${{ github.sha }}
-          IMAGE: ${{ steps.source.outputs.image }}
-          DIGEST: ${{ steps.source.outputs.digest }}
+          IMAGE: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          DIGEST: ${{ steps.build.outputs.digest }}
         run: |
           set -euo pipefail
           BODY_FILE="$(mktemp)"
@@ -300,7 +284,8 @@ jobs:
           VERSION: ${{ needs.release.outputs.version }}
           SHA: ${{ github.sha }}
         run: |
-          echo "## Docker Image Promoted" >> "$GITHUB_STEP_SUMMARY"
+          echo "## Docker Image Published" >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"
-          echo "- **Source:** \`sha-${SHA}\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **Version:** \`${VERSION}\`" >> "$GITHUB_STEP_SUMMARY"
           echo "- **Tags:** \`${VERSION}\`, \`latest\` (linux/amd64, linux/arm64)" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **APP_VERSION baked:** \`v${VERSION}\`" >> "$GITHUB_STEP_SUMMARY"

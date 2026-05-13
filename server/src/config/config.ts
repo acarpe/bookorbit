@@ -4,6 +4,7 @@ import { resolve } from 'path';
 export const appConfig = registerAs('app', () => ({
   nodeEnv: process.env.NODE_ENV ?? 'development',
   appUrl: process.env.APP_URL ?? 'http://localhost:5173',
+  version: process.env.APP_VERSION ?? 'Local build',
 }));
 
 export const dbConfig = registerAs('db', () => ({
