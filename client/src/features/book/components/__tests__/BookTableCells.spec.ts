@@ -8,7 +8,16 @@ import BookTableReadStatusCell from '../table/BookTableReadStatusCell.vue'
 import BookTableDateCell from '../table/BookTableDateCell.vue'
 import BookTableFormatCell from '../table/BookTableFormatCell.vue'
 import BookTableProgressCell from '../table/BookTableProgressCell.vue'
-import type { BookFileRef, UserBookStatus } from '@bookorbit/types'
+import BookTableReadButtonCell from '../table/BookTableReadButtonCell.vue'
+import type { BookCard, BookFileRef, UserBookStatus } from '@bookorbit/types'
+
+const routerPush = vi.fn()
+
+vi.mock('vue-router', () => ({
+  useRouter: () => ({
+    push: routerPush,
+  }),
+}))
 
 vi.mock('@/features/book/composables/useBookStatus', () => ({
   STATUS_OPTIONS: [
@@ -204,6 +213,85 @@ describe('BookTableProgressCell', () => {
     expect(progressbar.attributes('aria-valuenow')).toBe('30')
     expect(progressbar.attributes('aria-valuemin')).toBe('0')
     expect(progressbar.attributes('aria-valuemax')).toBe('100')
+  })
+})
+
+describe('BookTableReadButtonCell', () => {
+  function makeBook(files: BookFileRef[], status = 'present'): BookCard {
+    return {
+      id: 42,
+      status,
+      title: 'Example Book',
+      authors: ['Author'],
+      seriesName: null,
+      seriesIndex: null,
+      files,
+      publishedYear: null,
+      language: null,
+      genres: [],
+      rating: null,
+      readingProgress: null,
+      readStatus: null,
+      addedAt: '2026-01-01T00:00:00.000Z',
+      updatedAt: null,
+      metadataScore: null,
+      hasCover: false,
+      hasMetadataLocks: false,
+      lockedFields: [],
+      subtitle: null,
+      publisher: null,
+      pageCount: null,
+      isbn13: null,
+      narrators: [],
+      tags: [],
+    }
+  }
+
+  function mountReadButton(book: BookCard) {
+    return mount(BookTableReadButtonCell, {
+      props: { book },
+      global: {
+        stubs: statusStubs,
+      },
+    })
+  }
+
+  it('shows dash when no readable formats exist', () => {
+    const wrapper = mountReadButton(makeBook([{ id: 1, format: null, role: 'primary', sizeBytes: null }]))
+    expect(wrapper.text()).toBe('-')
+  })
+
+  it('opens the primary readable file on button click', async () => {
+    routerPush.mockReset()
+    const wrapper = mountReadButton(makeBook([{ id: 1, format: 'epub', role: 'primary', sizeBytes: null }]))
+    await wrapper.get('button').trigger('click')
+    expect(routerPush).toHaveBeenCalledWith({
+      name: 'reader',
+      params: { bookId: 42, fileId: 1 },
+      query: { format: 'epub' },
+    })
+  })
+
+  it('shows play action for audio formats and allows selecting alternate format', async () => {
+    routerPush.mockReset()
+    const wrapper = mountReadButton(
+      makeBook([
+        { id: 10, format: 'm4b', role: 'primary', sizeBytes: null },
+        { id: 11, format: 'epub', role: 'secondary', sizeBytes: null },
+      ]),
+    )
+
+    expect(wrapper.text()).toContain('Play')
+    expect(wrapper.text()).toContain('Read EPUB')
+
+    const option = wrapper.findAll('button').find((node) => node.text().includes('Read EPUB'))
+    expect(option).toBeTruthy()
+    await option!.trigger('click')
+    expect(routerPush).toHaveBeenCalledWith({
+      name: 'reader',
+      params: { bookId: 42, fileId: 11 },
+      query: { format: 'epub' },
+    })
   })
 })
 

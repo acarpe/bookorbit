@@ -2,6 +2,8 @@ import { ref, onMounted, onUnmounted, type Ref } from 'vue'
 import type { ColumnId } from './useTableColumns'
 import type { ColumnDef } from './useTableColumns'
 
+const NON_RESIZABLE_COLUMNS = new Set<ColumnId>(['lockRow', 'cover', 'read'])
+
 export function useTableResize(
   scrollContainerRef: Ref<HTMLDivElement | null>,
   displayColumns: Ref<ColumnDef[]>,
@@ -13,11 +15,12 @@ export function useTableResize(
   const resizeStartWidth = ref(0)
 
   function isResizableCol(col: ColumnDef): boolean {
-    return !isReadOnly.value && col.id !== 'lockRow'
+    return !isReadOnly.value && !NON_RESIZABLE_COLUMNS.has(col.id)
   }
 
   function startResize(e: MouseEvent, colId: ColumnId, currentWidth: number) {
     if (isReadOnly.value) return
+    if (NON_RESIZABLE_COLUMNS.has(colId)) return
     resizingColumnId.value = colId
     resizeStartX.value = e.clientX
     resizeStartWidth.value = currentWidth
@@ -35,6 +38,7 @@ export function useTableResize(
   }
 
   function autoFitColumn(colId: ColumnId): void {
+    if (NON_RESIZABLE_COLUMNS.has(colId)) return
     if (!scrollContainerRef.value) return
     const table = scrollContainerRef.value.querySelector('table')
     if (!table) return
@@ -59,7 +63,7 @@ export function useTableResize(
 
   function autoFitAllColumns(): void {
     for (const col of displayColumns.value) {
-      if (col.id !== 'lockRow') autoFitColumn(col.id)
+      if (!NON_RESIZABLE_COLUMNS.has(col.id)) autoFitColumn(col.id)
     }
   }
 

@@ -103,6 +103,7 @@ function pinBadge(column: ColumnDef & { visible: boolean }): string | null {
 function columnLabel(column: ColumnDef & { visible: boolean }): string {
   if (column.header) return column.header
   if (column.id === 'cover') return 'Cover'
+  if (column.id === 'read') return 'Read'
   return column.id === 'actions' ? 'Actions' : column.id
 }
 </script>

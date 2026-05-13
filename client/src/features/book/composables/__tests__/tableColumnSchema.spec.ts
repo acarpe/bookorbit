@@ -9,8 +9,8 @@ import { formatBytes } from '@/lib/formatting'
 import { COLUMN_DEFS, COLUMN_DEF_MAP, DEFAULT_HIDDEN, DEFAULT_ORDER, DEFAULT_WIDTHS, LOCK_ROW_COLUMN_DEF } from '../tableColumnSchema'
 
 describe('tableColumnSchema', () => {
-  it('exposes 24 total column definitions including the lock row', () => {
-    expect([LOCK_ROW_COLUMN_DEF, ...COLUMN_DEFS]).toHaveLength(24)
+  it('exposes 26 total column definitions including the lock row', () => {
+    expect([LOCK_ROW_COLUMN_DEF, ...COLUMN_DEFS]).toHaveLength(26)
   })
 
   it('builds a map entry for every column definition in COLUMN_DEFS', () => {

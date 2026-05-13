@@ -13,6 +13,7 @@ function makeDefs(): ColumnDef[] {
     { id: 'cover', header: 'Cover', defaultWidth: 60, minWidth: 40, cellType: 'cover', pinned: 'left', isEditable: false },
     { id: 'title', header: 'Title', defaultWidth: 200, minWidth: 80, cellType: 'text', pinned: null, isEditable: true, sortField: 'title' },
     { id: 'authors', header: 'Authors', defaultWidth: 150, minWidth: 80, cellType: 'chips', pinned: null, isEditable: true },
+    { id: 'read', header: '', defaultWidth: 60, minWidth: 60, cellType: 'read', pinned: null, isEditable: false },
     { id: 'lockRow', header: '', defaultWidth: 28, minWidth: 28, cellType: 'text', pinned: null, isEditable: false },
   ] as ColumnDef[]
 }
@@ -37,8 +38,22 @@ describe('useTableResize', () => {
 
   it('isResizableCol returns false for lockRow', () => {
     const { isResizableCol } = useTableResize(scrollRef, displayColumns, setWidthSpy, isReadOnly)
-    expect(isResizableCol(displayColumns.value[3]!)).toBe(false)
-    expect(isResizableCol(displayColumns.value[1]!)).toBe(true)
+    const lockRow = displayColumns.value.find((column) => column.id === 'lockRow')!
+    const title = displayColumns.value.find((column) => column.id === 'title')!
+    expect(isResizableCol(lockRow)).toBe(false)
+    expect(isResizableCol(title)).toBe(true)
+  })
+
+  it('isResizableCol returns false for read column', () => {
+    const { isResizableCol } = useTableResize(scrollRef, displayColumns, setWidthSpy, isReadOnly)
+    const read = displayColumns.value.find((column) => column.id === 'read')!
+    expect(isResizableCol(read)).toBe(false)
+  })
+
+  it('isResizableCol returns false for cover column', () => {
+    const { isResizableCol } = useTableResize(scrollRef, displayColumns, setWidthSpy, isReadOnly)
+    const cover = displayColumns.value.find((column) => column.id === 'cover')!
+    expect(isResizableCol(cover)).toBe(false)
   })
 
   it('isResizableCol returns false when read-only', () => {
@@ -61,6 +76,14 @@ describe('useTableResize', () => {
     const event = { clientX: 100, preventDefault: vi.fn<() => void>() } as unknown as MouseEvent
     startResize(event, 'title', 200)
     expect(resizingColumnId.value).toBeNull()
+  })
+
+  it('startResize does nothing for read column', () => {
+    const { startResize, resizingColumnId } = useTableResize(scrollRef, displayColumns, setWidthSpy, isReadOnly)
+    const event = { clientX: 100, preventDefault: vi.fn<() => void>() } as unknown as MouseEvent
+    startResize(event, 'read', 60)
+    expect(resizingColumnId.value).toBeNull()
+    expect(event.preventDefault).not.toHaveBeenCalled()
   })
 
   it('mouse move during resize calls setColumnWidth with delta', () => {

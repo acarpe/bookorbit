@@ -17,6 +17,13 @@ import {
 export type { ColumnId, CellType, ColumnDef }
 export { LOCK_ROW_COLUMN_DEF, COLUMN_DEFS, COLUMN_DEF_MAP, DEFAULT_ORDER, DEFAULT_HIDDEN, DEFAULT_WIDTHS }
 
+const FIXED_WIDTH_COLUMN_IDS = new Set<ColumnId>(['cover', 'read'])
+
+function resolveColumnWidth(id: string, fallback: number, userWidths: Record<string, number>): number {
+  if (FIXED_WIDTH_COLUMN_IDS.has(id as ColumnId)) return fallback
+  return userWidths[id] ?? fallback
+}
+
 function storageKey(viewType: TableViewType): string {
   return `bookorbit:tableLayout:${viewType}`
 }
@@ -78,7 +85,7 @@ export function useTableColumns(viewType: TableViewType) {
         const def = COLUMN_DEF_MAP.get(id as ColumnId)!
         return {
           ...def,
-          defaultWidth: layout.value.columnWidths[id] ?? def.defaultWidth,
+          defaultWidth: resolveColumnWidth(id, def.defaultWidth, layout.value.columnWidths),
           pinned: resolvePinnedColumn(userPins, id, def.pinned),
         }
       })
@@ -111,6 +118,7 @@ export function useTableColumns(viewType: TableViewType) {
   }
 
   function setColumnWidth(id: ColumnId, px: number): void {
+    if (FIXED_WIDTH_COLUMN_IDS.has(id)) return
     const def = COLUMN_DEF_MAP.get(id)
     const min = def?.minWidth ?? 40
     const max = 800

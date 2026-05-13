@@ -15,6 +15,7 @@ export type ColumnId =
   | 'publishedYear'
   | 'language'
   | 'rating'
+  | 'metadataScore'
   | 'genres'
   | 'tags'
   | 'subtitle'
@@ -27,11 +28,24 @@ export type ColumnId =
   | 'readStatus'
   | 'format'
   | 'fileSize'
+  | 'read'
   | 'updatedAt'
   | 'addedAt'
   | 'actions'
 
-export type CellType = 'lockRow' | 'cover' | 'text' | 'number' | 'rating' | 'chips' | 'readStatus' | 'format' | 'date' | 'progress' | 'actions'
+export type CellType =
+  | 'lockRow'
+  | 'cover'
+  | 'text'
+  | 'number'
+  | 'rating'
+  | 'chips'
+  | 'readStatus'
+  | 'format'
+  | 'read'
+  | 'date'
+  | 'progress'
+  | 'actions'
 
 export type ColumnDef = {
   id: ColumnId
@@ -70,6 +84,17 @@ export const COLUMN_DEFS: ColumnDef[] = [
     minWidth: 48,
     defaultVisible: true,
     pinned: 'left',
+  },
+  {
+    id: 'read',
+    header: '',
+    cellType: 'read',
+    isEditable: false,
+    sortField: null,
+    defaultWidth: 72,
+    minWidth: 72,
+    defaultVisible: false,
+    pinned: null,
   },
   {
     id: 'title',
@@ -161,6 +186,18 @@ export const COLUMN_DEFS: ColumnDef[] = [
     pinned: null,
     accessor: (book) => book.rating,
     lockField: 'rating',
+  },
+  {
+    id: 'metadataScore',
+    header: 'Metadata Score',
+    cellType: 'number',
+    isEditable: false,
+    sortField: 'metadataScore',
+    defaultWidth: 126,
+    minWidth: 110,
+    defaultVisible: false,
+    pinned: null,
+    accessor: (book) => book.metadataScore,
   },
   {
     id: 'genres',

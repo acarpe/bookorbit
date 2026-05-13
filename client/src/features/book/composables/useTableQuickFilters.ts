@@ -18,6 +18,7 @@ const VALUE_FIELD_MAP: Partial<Record<ColumnId, RuleField>> = {
   rating: 'rating',
   pageCount: 'pageCount',
   publishedYear: 'publishedYear',
+  metadataScore: 'metadataScore',
 }
 
 export function useTableQuickFilters(viewType: TableViewType) {
@@ -53,6 +54,7 @@ export function useTableQuickFilters(viewType: TableViewType) {
         'rating',
         'pageCount',
         'publishedYear',
+        'metadataScore',
       ].includes(colId)
     ) {
       return [

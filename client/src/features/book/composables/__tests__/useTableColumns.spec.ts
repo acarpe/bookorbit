@@ -174,6 +174,24 @@ describe('useTableColumns', () => {
     expect(after).toBeGreaterThanOrEqual(def.minWidth)
   })
 
+  it('setColumnWidth ignores fixed-width read column', () => {
+    const { allColumns, visibleColumns, toggleColumn, setColumnWidth } = useTableColumns('library')
+    if (!visibleColumns.value.some((c) => c.id === 'read')) toggleColumn('read')
+    const before = visibleColumns.value.find((c) => c.id === 'read')!.defaultWidth
+    setColumnWidth('read', before + 200)
+    const after = visibleColumns.value.find((c) => c.id === 'read')!.defaultWidth
+    expect(after).toBe(before)
+    expect(allColumns.value.find((c) => c.id === 'read')?.defaultWidth).toBe(before)
+  })
+
+  it('setColumnWidth ignores fixed-width cover column', () => {
+    const { visibleColumns, setColumnWidth } = useTableColumns('library')
+    const before = visibleColumns.value.find((c) => c.id === 'cover')!.defaultWidth
+    setColumnWidth('cover', before + 200)
+    const after = visibleColumns.value.find((c) => c.id === 'cover')!.defaultWidth
+    expect(after).toBe(before)
+  })
+
   it('persists layout to localStorage', async () => {
     const { toggleColumn } = useTableColumns('library')
     toggleColumn('title')
@@ -190,12 +208,13 @@ describe('useTableColumns', () => {
     mockStorage['bookorbit:tableLayout:library'] = JSON.stringify({
       columnOrder: ALL_IDS,
       hiddenColumns: ['language', 'addedAt'],
-      columnWidths: { title: 999 },
+      columnWidths: { title: 999, read: 240 },
     })
     const { visibleColumns } = useTableColumns('library')
     expect(visibleColumns.value.some((c) => c.id === 'language')).toBe(false)
     expect(visibleColumns.value.some((c) => c.id === 'addedAt')).toBe(false)
     expect(visibleColumns.value.find((c) => c.id === 'title')?.defaultWidth).toBe(999)
+    expect(visibleColumns.value.find((c) => c.id === 'read')?.defaultWidth).toBe(COLUMN_DEFS.find((c) => c.id === 'read')!.defaultWidth)
   })
 
   it('per-view-type isolation: library and collection layouts do not share state', () => {

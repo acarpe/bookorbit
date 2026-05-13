@@ -43,7 +43,7 @@ describe('useTableQuickFilters', () => {
 
     it('returns options for all value field columns', () => {
       const { getQuickFilterOptions } = useTableQuickFilters('library')
-      for (const colId of ['authors', 'genres', 'tags', 'readStatus', 'rating', 'pageCount', 'publishedYear'] as const) {
+      for (const colId of ['authors', 'genres', 'tags', 'readStatus', 'rating', 'pageCount', 'publishedYear', 'metadataScore'] as const) {
         expect(getQuickFilterOptions(colId)).toHaveLength(2)
       }
     })
@@ -115,6 +115,11 @@ describe('useTableQuickFilters', () => {
     it('returns rating isEmpty rule for rating+missing', () => {
       const rule = buildQuickFilterRule('rating', 'missing')
       expect(rule).toEqual({ type: 'rule', field: 'rating', operator: 'isEmpty' })
+    })
+
+    it('returns metadataScore isEmpty rule for metadataScore+missing', () => {
+      const rule = buildQuickFilterRule('metadataScore', 'missing')
+      expect(rule).toEqual({ type: 'rule', field: 'metadataScore', operator: 'isEmpty' })
     })
 
     it('returns null for unrecognized column', () => {

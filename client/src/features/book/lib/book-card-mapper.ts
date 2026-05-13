@@ -67,6 +67,7 @@ export function detectChangedColumns(previous: BookCard, next: BookCard): Column
   if (previous.publishedYear !== next.publishedYear) changed.add('publishedYear')
   if (previous.language !== next.language) changed.add('language')
   if (previous.rating !== next.rating) changed.add('rating')
+  if (previous.metadataScore !== next.metadataScore) changed.add('metadataScore')
   if (!sameStringArray(previous.genres, next.genres)) changed.add('genres')
   if (previous.publisher !== next.publisher) changed.add('publisher')
   if (previous.pageCount !== next.pageCount) changed.add('pageCount')
@@ -79,10 +80,12 @@ export function detectChangedColumns(previous: BookCard, next: BookCard): Column
   }
   if (previous.updatedAt !== next.updatedAt) changed.add('updatedAt')
   if (previous.addedAt !== next.addedAt) changed.add('addedAt')
+  if (previous.status !== next.status) changed.add('read')
   if (previous.hasCover !== next.hasCover || !sameFiles(previous.files, next.files)) {
     changed.add('cover')
     changed.add('format')
     changed.add('fileSize')
+    changed.add('read')
   }
 
   return [...changed]

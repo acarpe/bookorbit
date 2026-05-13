@@ -146,10 +146,16 @@ function isSortableColumn(col: ColumnDef): boolean {
           <span class="min-w-0 truncate text-xs font-semibold uppercase tracking-wide text-muted-foreground">{{ col.header }}</span>
         </div>
         <div
-          v-if="!isReadOnly && col.id !== 'lockRow' && col.id !== 'actions'"
+          v-if="!isReadOnly && col.id !== 'lockRow' && col.id !== 'actions' && col.id !== 'read' && col.id !== 'cover'"
           class="group/rz absolute right-0 top-0 flex h-full w-4 cursor-col-resize items-center justify-end pr-0.5"
           @mousedown="emit('resizeStart', $event, col.id, col.defaultWidth)"
           @dblclick.stop="emit('autoFitColumn', col.id)"
+        >
+          <div class="h-4 w-[2px] rounded-full bg-border/60 transition-colors group-hover/rz:bg-primary/70" />
+        </div>
+        <div
+          v-else-if="col.id === 'cover' || col.id === 'read'"
+          class="pointer-events-none absolute right-0 top-0 flex h-full w-3 items-center justify-end pr-0.5"
         >
           <div class="h-4 w-[2px] rounded-full bg-border/60 transition-colors group-hover/rz:bg-primary/70" />
         </div>

@@ -21,7 +21,7 @@ const barColor = computed(() => {
         <div class="h-1.5 min-w-0 flex-1 overflow-hidden rounded-full bg-muted">
           <div class="h-full rounded-full transition-all" :class="barColor" :style="{ width: `${clamped}%` }" />
         </div>
-        <span class="w-12 shrink-0 text-right text-xs tabular-nums text-muted-foreground">{{ displayPct }}</span>
+        <span class="w-14 shrink-0 text-right text-sm font-medium tabular-nums text-muted-foreground">{{ displayPct }}</span>
       </div>
     </TooltipTrigger>
     <TooltipContent>{{ displayPct }} complete</TooltipContent>

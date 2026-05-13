@@ -8,9 +8,11 @@ import BookTableRatingCell from './BookTableRatingCell.vue'
 import BookTableChipsCell from './BookTableChipsCell.vue'
 import BookTableReadStatusCell from './BookTableReadStatusCell.vue'
 import BookTableFormatCell from './BookTableFormatCell.vue'
+import BookTableReadButtonCell from './BookTableReadButtonCell.vue'
 import BookTableDateCell from './BookTableDateCell.vue'
 import BookTableActionsCell from './BookTableActionsCell.vue'
 import BookTableProgressCell from './BookTableProgressCell.vue'
+import BookTableMetadataScoreCell from './BookTableMetadataScoreCell.vue'
 import BookTableLockableCell from './BookTableLockableCell.vue'
 import type { BookCard } from '@bookorbit/types'
 import type { CellType, ColumnId } from '@/features/book/composables/tableColumnSchema'
@@ -108,6 +110,8 @@ const lockStateClass = computed(() => {
     />
   </BookTableLockableCell>
 
+  <BookTableMetadataScoreCell v-else-if="colId === 'metadataScore'" :value="asNumber(value)" />
+
   <BookTableLockableCell v-else-if="cellType === 'number'" :is-locked="isLocked" :has-lock-field="hasLockField" @toggle-lock="emit('toggleLock')">
     <BookTableNumberCell
       :value="asNumber(value)"
@@ -154,6 +158,7 @@ const lockStateClass = computed(() => {
   />
 
   <BookTableFormatCell v-else-if="cellType === 'format'" :files="book.files" />
+  <BookTableReadButtonCell v-else-if="cellType === 'read'" :book="book" />
   <BookTableDateCell v-else-if="cellType === 'date'" :value="asString(value)" />
 
   <BookTableActionsCell
