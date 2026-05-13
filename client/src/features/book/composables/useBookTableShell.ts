@@ -12,13 +12,12 @@ interface BookTableShellOptions {
   total?: Ref<number>
   loading?: Ref<boolean>
   exitSelectionMode?: () => void
-  loadFn: (force?: boolean) => void | Promise<void>
   querySelection?: Ref<QuerySelectionState | null>
 }
 
 type BookActionType = 'quick-view' | 'add-to-collection' | 'delete'
 
-export function useBookTableShell({ books, loadFn, querySelection }: BookTableShellOptions) {
+export function useBookTableShell({ books, querySelection }: BookTableShellOptions) {
   const tableControls = useTableViewControls()
   const selection = useBookViewSelection(books)
 
@@ -40,7 +39,7 @@ export function useBookTableShell({ books, loadFn, querySelection }: BookTableSh
       selection.exitSelectionMode()
     },
     books,
-    () => loadFn(true),
+    undefined,
     querySelection,
   )
 

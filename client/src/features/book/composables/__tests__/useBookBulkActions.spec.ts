@@ -12,6 +12,23 @@ const mocks = vi.hoisted(() => ({
   exportBooks: vi.fn<(bookIds: number[], includeAll?: boolean, formatGroup?: string) => Promise<void>>(),
 }))
 
+function makeSseStream(lines: string[]): { ok: true; body: { getReader: () => { read: () => Promise<{ done: boolean; value?: Uint8Array }> } } } {
+  const encoder = new TextEncoder()
+  let index = 0
+  return {
+    ok: true,
+    body: {
+      getReader: () => ({
+        async read() {
+          if (index >= lines.length) return { done: true as const, value: undefined }
+          const line = lines[index++]
+          return { done: false as const, value: encoder.encode(line + '\n') }
+        },
+      }),
+    },
+  }
+}
+
 vi.mock('@/lib/api', () => ({
   api: mocks.api,
 }))
@@ -395,5 +412,123 @@ describe('useBookBulkActions', () => {
     )
     expect(onDeleted).toHaveBeenCalledWith([])
     expect(mocks.toastSuccess).toHaveBeenCalledWith('Deleted 500 books')
+  })
+
+  it('bumps versions for all selected IDs after SSE stream even when no events are received', async () => {
+    mocks.api.mockResolvedValue(makeSseStream([]))
+    mocks.bumpVersion.mockReset()
+
+    const selectedIds = ref(new Set([5, 6, 7]))
+    const { handleBulkRefreshMetadata } = useBookBulkActions(selectedIds, vi.fn())
+
+    await handleBulkRefreshMetadata()
+
+    expect(mocks.bumpVersion).toHaveBeenCalledWith(5)
+    expect(mocks.bumpVersion).toHaveBeenCalledWith(6)
+    expect(mocks.bumpVersion).toHaveBeenCalledWith(7)
+  })
+
+  it('bumps version per SSE event and not before the stream for bulk metadata refresh', async () => {
+    const order: string[] = []
+    mocks.bumpVersion.mockImplementation((id: number) => order.push(`bump:${id}`))
+
+    mocks.api.mockImplementation(async () => {
+      order.push('api:called')
+      return makeSseStream([
+        `data: ${JSON.stringify({ bookId: 10, success: true })}`,
+        `data: ${JSON.stringify({ bookId: 20, success: true })}`,
+        `data: ${JSON.stringify({ done: true, processed: 2, failed: 0 })}`,
+      ])
+    })
+
+    const selectedIds = ref(new Set([10, 20]))
+    const { handleBulkRefreshMetadata } = useBookBulkActions(selectedIds, vi.fn())
+
+    await handleBulkRefreshMetadata()
+
+    expect(order.indexOf('api:called')).toBeLessThan(order.indexOf('bump:10'))
+    expect(order.indexOf('api:called')).toBeLessThan(order.indexOf('bump:20'))
+  })
+
+  it('bumps version exactly once per book when all SSE events are received for bulk metadata refresh', async () => {
+    mocks.api.mockResolvedValue(
+      makeSseStream([
+        `data: ${JSON.stringify({ bookId: 10, success: true })}`,
+        `data: ${JSON.stringify({ bookId: 20, success: true })}`,
+        `data: ${JSON.stringify({ done: true, processed: 2, failed: 0 })}`,
+      ]),
+    )
+    mocks.bumpVersion.mockReset()
+
+    const selectedIds = ref(new Set([10, 20]))
+    const { handleBulkRefreshMetadata } = useBookBulkActions(selectedIds, vi.fn())
+
+    await handleBulkRefreshMetadata()
+
+    expect(mocks.bumpVersion.mock.calls.filter((c) => c[0] === 10).length).toBe(1)
+    expect(mocks.bumpVersion.mock.calls.filter((c) => c[0] === 20).length).toBe(1)
+  })
+
+  it('bumps versions for books that receive no SSE event in finally for bulk metadata refresh', async () => {
+    mocks.api.mockResolvedValue(
+      makeSseStream([`data: ${JSON.stringify({ bookId: 10, success: true })}`, `data: ${JSON.stringify({ done: true, processed: 1, failed: 0 })}`]),
+    )
+    mocks.bumpVersion.mockReset()
+
+    const selectedIds = ref(new Set([10, 20]))
+    const { handleBulkRefreshMetadata } = useBookBulkActions(selectedIds, vi.fn())
+
+    await handleBulkRefreshMetadata()
+
+    expect(mocks.bumpVersion).toHaveBeenCalledWith(10)
+    expect(mocks.bumpVersion).toHaveBeenCalledWith(20)
+    expect(mocks.bumpVersion.mock.calls.filter((c) => c[0] === 10).length).toBe(1)
+    expect(mocks.bumpVersion.mock.calls.filter((c) => c[0] === 20).length).toBe(1)
+  })
+
+  it('does not bump for query-selection books that received no SSE event', async () => {
+    mocks.api.mockResolvedValue(
+      makeSseStream([`data: ${JSON.stringify({ bookId: 42, success: true })}`, `data: ${JSON.stringify({ done: true, processed: 1, failed: 0 })}`]),
+    )
+    mocks.bumpVersion.mockReset()
+
+    const selectedIds = ref(new Set<number>())
+    const querySelection = ref<QuerySelectionState | null>(makeQuerySelection())
+    const { handleBulkRefreshMetadata } = useBookBulkActions(selectedIds, vi.fn(), undefined, undefined, querySelection)
+
+    await handleBulkRefreshMetadata()
+
+    expect(mocks.bumpVersion).toHaveBeenCalledTimes(1)
+    expect(mocks.bumpVersion).toHaveBeenCalledWith(42)
+  })
+
+  it('bumps version per SSE event and bumps missed books in finally for bulk re-extract cover', async () => {
+    mocks.api.mockResolvedValue(
+      makeSseStream([`data: ${JSON.stringify({ bookId: 30, updated: true })}`, `data: ${JSON.stringify({ done: true, processed: 2, updated: 1 })}`]),
+    )
+    mocks.bumpVersion.mockReset()
+
+    const selectedIds = ref(new Set([30, 40]))
+    const { handleBulkReExtractCover } = useBookBulkActions(selectedIds, vi.fn())
+
+    await handleBulkReExtractCover()
+
+    expect(mocks.bumpVersion).toHaveBeenCalledWith(30)
+    expect(mocks.bumpVersion).toHaveBeenCalledWith(40)
+    expect(mocks.bumpVersion.mock.calls.filter((c) => c[0] === 30).length).toBe(1)
+    expect(mocks.bumpVersion.mock.calls.filter((c) => c[0] === 40).length).toBe(1)
+  })
+
+  it('bumps all re-extract IDs in finally when stream delivers no events', async () => {
+    mocks.api.mockResolvedValue(makeSseStream([]))
+    mocks.bumpVersion.mockReset()
+
+    const selectedIds = ref(new Set([11, 22]))
+    const { handleBulkReExtractCover } = useBookBulkActions(selectedIds, vi.fn())
+
+    await handleBulkReExtractCover()
+
+    expect(mocks.bumpVersion).toHaveBeenCalledWith(11)
+    expect(mocks.bumpVersion).toHaveBeenCalledWith(22)
   })
 })

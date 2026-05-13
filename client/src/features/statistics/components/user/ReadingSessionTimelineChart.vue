@@ -5,6 +5,7 @@ import { CalendarRange } from 'lucide-vue-next'
 import { toast } from 'vue-sonner'
 import type { UserReadingSessionTimeline, UserReadingSessionTimelineItem } from '@bookorbit/types'
 
+import { useCoverVersions } from '@/features/book/composables/useCoverVersions'
 import { getFormatColor } from '@/features/book/lib/format-colors'
 import { fetchUserReadingSessionTimeline, updateUserReadingSessionTimelineSession } from '../../api/statistics.api'
 import { useStatisticsConfig } from '../../composables/useStatisticsConfig'
@@ -52,6 +53,7 @@ interface PointerOffset {
 }
 
 const { filters } = useStatisticsConfig()
+const { coverUrl } = useCoverVersions()
 
 const now = new Date()
 const selectedYear = ref(getUtcIsoWeekYear(now))
@@ -214,7 +216,7 @@ function makeOption(data: SessionSegment[], preview: DragPreview | null) {
         const title = escapeHtml(d.bookTitle ?? 'Reading session')
         const format = escapeHtml(d.bookFormat ?? 'Unknown')
         const cover = d.bookId
-          ? `<img src="/api/v1/books/${d.bookId}/thumbnail" alt="Cover" style="width:32px;height:48px;object-fit:cover;border-radius:4px;" />`
+          ? `<img src="${coverUrl(d.bookId)}" alt="Cover" style="width:32px;height:48px;object-fit:cover;border-radius:4px;" />`
           : ''
 
         return [

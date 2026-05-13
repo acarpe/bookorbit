@@ -189,6 +189,7 @@ export function useBookBulkActions(
       for (const id of ids) {
         if (refreshFeedback.getFeedback(id)?.state === 'refreshing') {
           refreshFeedback.markFailed(id, 'Metadata refresh interrupted')
+          bumpVersion(id)
         }
       }
       clearRefreshing(ids)
@@ -229,6 +230,7 @@ export function useBookBulkActions(
     const decoder = new TextDecoder()
     let processed = 0
     let updated = 0
+    const bumpedIds = new Set<number>()
     try {
       while (true) {
         const { done, value } = await reader.read()
@@ -238,6 +240,7 @@ export function useBookBulkActions(
           try {
             const data = JSON.parse(line.slice(6))
             if (data.bookId !== undefined) {
+              bumpedIds.add(data.bookId)
               bumpVersion(data.bookId)
               clearRefreshing([data.bookId])
               inFlight.value = { label: 'Re-extracting covers', processed: inFlight.value!.processed + 1, total }
@@ -252,6 +255,9 @@ export function useBookBulkActions(
         }
       }
     } finally {
+      for (const id of ids) {
+        if (!bumpedIds.has(id)) bumpVersion(id)
+      }
       clearRefreshing(ids)
       inFlight.value = null
     }

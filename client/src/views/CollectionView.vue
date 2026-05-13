@@ -183,7 +183,6 @@ const {
   handleTableBookUpdate,
 } = useBookTableShell({
   books,
-  loadFn: () => load(true),
 })
 
 const metadataExportOpen = ref(false)

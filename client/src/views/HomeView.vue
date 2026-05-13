@@ -406,7 +406,6 @@ const {
   handleTableBookUpdate,
 } = useBookTableShell({
   books,
-  loadFn: () => load(true),
   querySelection,
 })
 

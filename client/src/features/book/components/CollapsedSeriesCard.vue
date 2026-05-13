@@ -4,6 +4,7 @@ import { useRoute, useRouter } from 'vue-router'
 import type { BookCard } from '@bookorbit/types'
 import BookCoverPlaceholder from './BookCoverPlaceholder.vue'
 import { COVER_ASPECT_RATIO_KEY, DEFAULT_COVER_ASPECT_RATIO } from '../lib/cover-aspect-ratio'
+import { useCoverVersions } from '../composables/useCoverVersions'
 
 const props = defineProps<{
   book: BookCard
@@ -12,6 +13,7 @@ const props = defineProps<{
 const route = useRoute()
 const router = useRouter()
 const coverAspectRatio = inject(COVER_ASPECT_RATIO_KEY, ref(DEFAULT_COVER_ASPECT_RATIO))
+const { coverUrl } = useCoverVersions()
 
 const collapsed = computed(() => props.book.collapsedSeries!)
 const seriesName = computed(() => props.book.seriesName ?? '')
@@ -29,10 +31,6 @@ function handleCoverError(bookId: number) {
 
 function handleClick() {
   router.push({ name: 'series-detail', params: { seriesName: seriesName.value }, query: { from: route.fullPath } })
-}
-
-function thumbnailUrl(bookId: number): string {
-  return `/api/v1/books/${bookId}/thumbnail`
 }
 
 function tileClass(index: number): string {
@@ -56,7 +54,7 @@ function tileClass(index: number): string {
           <div class="relative overflow-hidden" :class="tileClass(i)" data-testid="series-cover-tile">
             <img
               v-if="!failedCovers.has(bookId)"
-              :src="thumbnailUrl(bookId)"
+              :src="coverUrl(bookId)"
               class="absolute inset-0 h-full w-full object-cover"
               loading="lazy"
               alt=""

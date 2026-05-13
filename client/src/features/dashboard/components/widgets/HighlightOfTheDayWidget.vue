@@ -2,10 +2,12 @@
 import { Highlighter, BookOpen, ExternalLink } from 'lucide-vue-next'
 import { useRouter } from 'vue-router'
 
+import { useCoverVersions } from '@/features/book/composables/useCoverVersions'
 import { useHighlightOfTheDayWidget } from '../../composables/useHighlightOfTheDayWidget'
 
 const { data, loading, error } = useHighlightOfTheDayWidget()
 const router = useRouter()
+const { coverUrl } = useCoverVersions()
 
 function goToBook() {
   if (!data.value) return
@@ -46,7 +48,7 @@ function goToBook() {
       </blockquote>
       <button class="flex cursor-pointer items-center gap-2 rounded-lg pb-1 pl-1 text-left transition-colors hover:bg-muted/40" @click="goToBook">
         <div v-if="data.hasCover" class="h-9 w-6 shrink-0 overflow-hidden rounded shadow-sm">
-          <img :src="`/api/v1/books/${data.bookId}/thumbnail`" :alt="data.bookTitle ?? 'Cover'" class="h-full w-full object-cover" />
+          <img :src="coverUrl(data.bookId)" :alt="data.bookTitle ?? 'Cover'" class="h-full w-full object-cover" />
         </div>
         <div v-else class="flex h-8 w-5 shrink-0 items-center justify-center rounded bg-muted">
           <BookOpen :size="10" class="text-muted-foreground" />

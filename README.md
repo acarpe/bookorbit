@@ -16,7 +16,7 @@ A self-hosted library management and reading platform for ebooks, PDFs, audioboo
 -->
 
 [![Website](https://img.shields.io/badge/Website-bookorbit.app-blue?style=flat&logo=googlechrome&logoColor=white)](https://bookorbit.app)
-[![Demo](https://img.shields.io/badge/Demo-live-brightgreen?style=flat&logo=rocket&logoColor=white)](https://demo.bookorbit.app)
+[![Demo](https://img.shields.io/badge/Demo-live-brightgreen?style=flat&logo=rocket&logoColor=white)](https://demo.bookorbit.app/magic?token=2d92cb900e184cf0eb8b11f72cffc6011673d1016e1b300d750eb3d76abc1572)
 [![Discussions](https://img.shields.io/badge/Discussions-GitHub-333?style=flat&logo=github&logoColor=white)](https://github.com/bookorbit/bookorbit/discussions)
 [![Contributing](https://img.shields.io/badge/Contributing-guide-orange?style=flat&logo=handshake&logoColor=white)](https://github.com/bookorbit/bookorbit/blob/main/docs/CONTRIBUTING.md)
 [![GHCR](https://img.shields.io/badge/GHCR-bookorbit/bookorbit-blue?style=flat&logo=docker&logoColor=white)](https://github.com/bookorbit/bookorbit/pkgs/container/bookorbit)
@@ -64,11 +64,11 @@ BookOrbit is a self-hosted digital library and reading platform. Organize and re
 
 ## Live Demo
 
-Try BookOrbit without installing anything.
+Explore BookOrbit instantly, no installation or account required.
 
-**[Open Demo](https://demo.bookorbit.app/magic?token=2d92cb900e184cf0eb8b11f72cffc6011673d1016e1b300d750eb3d76abc1572)** - no account needed, the link logs you in automatically.
+**[🚀 Launch Demo](https://demo.bookorbit.app/magic?token=2d92cb900e184cf0eb8b11f72cffc6011673d1016e1b300d750eb3d76abc1572)**
 
-The demo is pre-loaded with a sample library of public domain books and resets automatically.
+Note: The demo includes a sample library of public domain books. Some features are limited in the public demo, self-hosting BookOrbit provides the full experience.
 
 ---
 

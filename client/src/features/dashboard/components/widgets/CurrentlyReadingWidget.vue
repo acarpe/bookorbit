@@ -2,10 +2,12 @@
 import { BookOpen, Play } from 'lucide-vue-next'
 import { useRouter } from 'vue-router'
 
+import { useCoverVersions } from '@/features/book/composables/useCoverVersions'
 import { useCurrentlyReadingWidget } from '../../composables/useCurrentlyReadingWidget'
 
 const { data, loading, error } = useCurrentlyReadingWidget()
 const router = useRouter()
+const { coverUrl } = useCoverVersions()
 
 function goToBook(bookId: number) {
   void router.push({ name: 'book-detail', params: { bookId } })
@@ -61,12 +63,7 @@ function continueReading(bookId: number, fileId: number | null, fileFormat: stri
         >
           <!-- Cover thumbnail -->
           <div class="h-14 w-9 shrink-0 overflow-hidden rounded shadow-sm">
-            <img
-              v-if="book.hasCover"
-              :src="`/api/v1/books/${book.bookId}/thumbnail`"
-              :alt="book.title ?? 'Book cover'"
-              class="h-full w-full object-cover"
-            />
+            <img v-if="book.hasCover" :src="coverUrl(book.bookId)" :alt="book.title ?? 'Book cover'" class="h-full w-full object-cover" />
             <div v-else class="flex h-full w-full items-center justify-center bg-muted text-muted-foreground">
               <BookOpen :size="12" />
             </div>
