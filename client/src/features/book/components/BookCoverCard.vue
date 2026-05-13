@@ -316,7 +316,7 @@ async function handleSetStatus(status: ReadStatus) {
       <!-- Reading progress bar - bottom edge -->
       <div
         v-if="showProgressBar && !selectionMode"
-        class="absolute bottom-0 left-0 z-10 h-0.75 transition-[width] duration-500"
+        class="absolute bottom-0 left-0 z-10 h-0.75 transition-[width] duration-500 [box-shadow:0_-1px_0_rgba(255,255,255,0.25)]"
         style="transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1)"
         :class="book.readingProgress === 100 ? 'bg-green-500/80' : 'bg-primary/70'"
         :style="{ width: `${book.readingProgress}%` }"
