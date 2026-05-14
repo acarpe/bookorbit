@@ -14,13 +14,16 @@ export interface ParsedFilename {
  * Transformations applied:
  *  - Strip file extension
  *  - Strip leading series index ("01. Title" → "Title")
- *  - Replace underscores with colons (common filename substitution)
+ *  - Replace underscores with spaces
+ *  - Collapse duplicate whitespace to single spaces
  *  - Strip trailing year "(YYYY)" and return it separately
  */
 export function parseBookFilename(absolutePath: string): ParsedFilename {
   const stem = basename(absolutePath, extname(absolutePath))
     .replace(/^\d+\.\s*/, '') // strip leading "01. "
-    .replace(/_/g, ':'); // underscore → colon
+    .replace(/_+/g, ' ') // underscores → single spaces
+    .replace(/\s+/g, ' ')
+    .trim();
 
   // Strip trailing "(YYYY)" or "(YYYY) (extra stuff)" — keep only first 4-digit year
   const yearMatch = stem.match(/\((\d{4})\)/);
@@ -33,6 +36,8 @@ export function parseBookFilename(absolutePath: string): ParsedFilename {
     prev = title;
     title = title.replace(/\s*\([^)]*\)\s*$/, '').trim();
   } while (title !== prev);
+
+  title = title.replace(/\s+/g, ' ').trim();
 
   return { title, publishedYear: year };
 }

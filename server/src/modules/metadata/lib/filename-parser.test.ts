@@ -17,9 +17,14 @@ describe('parseBookFilename', () => {
       expect(r.title).toBe('Foundation');
     });
 
-    it('replaces underscores with colons', () => {
+    it('replaces underscores with spaces', () => {
       const r = parseBookFilename('/books/The_Way_of_Kings.epub');
-      expect(r.title).toBe('The:Way:of:Kings');
+      expect(r.title).toBe('The Way of Kings');
+    });
+
+    it('collapses repeated underscores into single spaces', () => {
+      const r = parseBookFilename('/books/The_Arrow_01__c2c___Centaur___Oct_1940__Rangerhouse.cbz');
+      expect(r.title).toBe('The Arrow 01 c2c Centaur Oct 1940 Rangerhouse');
     });
 
     it('handles Windows-style paths', () => {
@@ -92,7 +97,7 @@ describe('parseBookFilename', () => {
 
     it('handles underscores and year together', () => {
       const r = parseBookFilename('/books/The_Hitchhikers_Guide (1979).epub');
-      expect(r.title).toBe('The:Hitchhikers:Guide');
+      expect(r.title).toBe('The Hitchhikers Guide');
       expect(r.publishedYear).toBe(1979);
     });
   });
