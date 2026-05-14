@@ -76,8 +76,13 @@ export function useReaderState() {
     const mode = activeMode.value
     const theme = currentTheme.value
     const lightMode = theme.light
-    const darkMode = theme.dark
     const mediaActiveClass = 'media-active'
+    const dark = isDark.value
+    // Force bg whenever dark mode is active OR the light theme uses a non-white background.
+    // Styles are applied unconditionally (no prefers-color-scheme wrappers) so the app's
+    // own light/dark toggle takes precedence over the OS-level preference. Without this,
+    // iOS in Dark Mode always matches prefers-color-scheme:dark and ignores the app setting.
+    const forceBg = dark || lightMode.bg !== '#ffffff'
 
     const fontFamilyRule = ff
       ? `
@@ -103,7 +108,7 @@ export function useReaderState() {
       }
       @media screen {
           html {
-              color-scheme: light dark;
+              color-scheme: ${dark ? 'dark' : 'light'};
               color: ${mode.fg};
               font-size: ${fs}px;
           }${fontFamilyRule}
@@ -116,14 +121,6 @@ export function useReaderState() {
           }
           a:any-link:hover {
               text-decoration-color: unset;
-          }
-          @media (prefers-color-scheme: dark) {
-              html {
-                  color: ${darkMode.fg};
-              }
-              a:any-link {
-                  color: ${darkMode.link};
-              }
           }
           aside[epub|type~="footnote"] {
               display: none;
@@ -150,52 +147,30 @@ export function useReaderState() {
           white-space: pre-wrap !important;
           tab-size: 2;
       }
-      @media screen and (prefers-color-scheme: light) {
-          ${
-            lightMode.bg !== '#ffffff'
-              ? `
-          html, body {
-              color: ${lightMode.fg} !important;
-              background: none !important;
-          }
-          body * {
-              color: inherit !important;
-              border-color: currentColor !important;
-              background-color: ${lightMode.bg} !important;
-          }
-          a:any-link {
-              color: ${lightMode.link} !important;
-          }
-          svg, img {
-              background-color: transparent !important;
-              mix-blend-mode: multiply;
-          }
-          .${mediaActiveClass}, .${mediaActiveClass} * {
-              color: ${lightMode.fg} !important;
-              background: color-mix(in hsl, ${lightMode.fg}, #fff 50%) !important;
-              background: color-mix(in hsl, ${lightMode.fg}, ${lightMode.bg} 85%) !important;
-          }`
-              : ''
-          }
+      ${
+        forceBg
+          ? `
+      html, body {
+          color: ${mode.fg} !important;
+          background: none !important;
       }
-      @media screen and (prefers-color-scheme: dark) {
-          html, body {
-              color: ${darkMode.fg} !important;
-              background: none !important;
-          }
-          body * {
-              color: inherit !important;
-              border-color: currentColor !important;
-              background-color: ${darkMode.bg} !important;
-          }
-          a:any-link {
-              color: ${darkMode.link} !important;
-          }
-          .${mediaActiveClass}, .${mediaActiveClass} * {
-              color: ${darkMode.fg} !important;
-              background: color-mix(in hsl, ${darkMode.fg}, #000 50%) !important;
-              background: color-mix(in hsl, ${darkMode.fg}, ${darkMode.bg} 75%) !important;
-          }
+      body * {
+          color: inherit !important;
+          border-color: currentColor !important;
+          background-color: ${mode.bg} !important;
+      }
+      a:any-link {
+          color: ${mode.link} !important;
+      }
+      svg, img {
+          background-color: transparent !important;
+          ${!dark ? 'mix-blend-mode: multiply;' : ''}
+      }
+      .${mediaActiveClass}, .${mediaActiveClass} * {
+          color: ${mode.fg} !important;
+          background: color-mix(in hsl, ${mode.fg}, ${mode.bg} ${dark ? '75%' : '85%'}) !important;
+      }`
+          : ''
       }
       p, li, blockquote, dd {
           line-height: ${lh};
