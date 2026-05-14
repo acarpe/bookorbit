@@ -21,6 +21,8 @@ import SelectionPopup from './epub/components/SelectionPopup.vue'
 import ReaderSearchPanel from './epub/components/ReaderSearchPanel.vue'
 import NoteDialog from './epub/components/NoteDialog.vue'
 import DictionaryPopover from './epub/components/DictionaryPopover.vue'
+import TranslationPopover from './epub/components/TranslationPopover.vue'
+import TranslationSheet from './epub/components/TranslationSheet.vue'
 import PdfV4ReaderView from './pdf-v4/PdfV4ReaderView.vue'
 import CbzReaderView from './cbz/CbzReaderView.vue'
 import AudiobookReaderView from './audiobook/AudiobookReaderView.vue'
@@ -101,6 +103,11 @@ const showDictionary = ref(false)
 const dictionaryWord = ref('')
 const dictionaryPosition = ref({ x: 0, y: 0, showBelow: false })
 
+const showTranslation = ref(false)
+const translationText = ref('')
+const translationPosition = ref({ x: 0, y: 0, showBelow: false })
+const isMobile = typeof window !== 'undefined' && ('ontouchstart' in window || navigator.maxTouchPoints > 0)
+
 function handleDefine() {
   dictionaryWord.value = selection.text.value
   dictionaryPosition.value = {
@@ -110,6 +117,17 @@ function handleDefine() {
   }
   selection.dismiss()
   showDictionary.value = true
+}
+
+function handleTranslate() {
+  translationText.value = selection.text.value
+  translationPosition.value = {
+    x: selection.position.value.x,
+    y: selection.position.value.y,
+    showBelow: selection.showBelow.value,
+  }
+  selection.dismiss()
+  showTranslation.value = true
 }
 
 function onRelocateHandler(detail: RelocateDetail) {
@@ -434,6 +452,7 @@ function closeSearch() {
       @copy="selection.dismiss()"
       @highlight="handleHighlight"
       @search="() => openSearchWithText(selection.text.value)"
+      @translate="handleTranslate"
       @define="handleDefine"
       @note="selection.openNoteDialog()"
       @deleteAnnotation="handleDeleteAnnotation"
@@ -447,6 +466,15 @@ function closeSearch() {
       :lang="bookLanguage"
       @close="showDictionary = false"
     />
+
+    <TranslationPopover
+      v-if="showTranslation && !isMobile"
+      :text="translationText"
+      :position="translationPosition"
+      @close="showTranslation = false"
+    />
+
+    <TranslationSheet v-if="showTranslation && isMobile" :text="translationText" @close="showTranslation = false" />
   </div>
 </template>
 
