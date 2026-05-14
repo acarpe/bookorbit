@@ -2,7 +2,7 @@
 import { useWindowSize } from '@vueuse/core'
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { ArrowUpDown, ChevronDown, ChevronLeft } from 'lucide-vue-next'
+import { ArrowUpDown, ChevronDown, ChevronLeft, LayoutGrid, List } from 'lucide-vue-next'
 import { toast } from 'vue-sonner'
 
 import type { AuthorSummary, BookCard } from '@bookorbit/types'
@@ -25,8 +25,10 @@ const router = useRouter()
 const { hasPermission, isSuperuser } = usePermissions()
 const { width: windowWidth } = useWindowSize()
 
-const { portraitCoverSize, gridGap, viewMode } = useDisplaySettings()
+const { portraitCoverSize, gridGap } = useDisplaySettings()
 const { libraries, fetchLibraries } = useLibraries()
+
+const authorBooksViewMode = ref<'grid' | 'list'>('grid')
 
 const authorId = computed(() => Number(route.params.id))
 const { author, loading: loadingAuthor, error: authorError, notFound: authorNotFound, load: loadAuthor } = useAuthorDetail(authorId)
@@ -470,7 +472,7 @@ watch(authorName, () => {
         <div class="mb-3 flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
           <h2 class="text-sm font-semibold text-foreground">Books</h2>
           <div class="w-full space-y-2 sm:hidden">
-            <div class="grid grid-cols-[minmax(0,1fr)_auto] gap-2">
+            <div class="grid grid-cols-[minmax(0,1fr)_auto_auto] gap-2">
               <div class="relative min-w-0">
                 <select
                   :value="sort"
@@ -490,6 +492,27 @@ watch(authorName, () => {
               >
                 {{ order === 'asc' ? 'Asc' : 'Desc' }}
               </button>
+
+              <div class="flex items-center rounded-md border border-input bg-background">
+                <button
+                  class="flex h-8 w-8 items-center justify-center rounded-l-md transition-colors"
+                  :class="
+                    authorBooksViewMode === 'grid' ? 'text-primary bg-primary/10' : 'text-muted-foreground hover:text-foreground hover:bg-muted'
+                  "
+                  @click="authorBooksViewMode = 'grid'"
+                >
+                  <LayoutGrid :size="14" />
+                </button>
+                <button
+                  class="flex h-8 w-8 items-center justify-center rounded-r-md transition-colors"
+                  :class="
+                    authorBooksViewMode === 'list' ? 'text-primary bg-primary/10' : 'text-muted-foreground hover:text-foreground hover:bg-muted'
+                  "
+                  @click="authorBooksViewMode = 'list'"
+                >
+                  <List :size="14" />
+                </button>
+              </div>
             </div>
 
             <div class="relative min-w-0">
@@ -533,6 +556,23 @@ watch(authorName, () => {
               <option value="">All Libraries</option>
               <option v-for="library in libraries" :key="library.id" :value="library.id">{{ library.name }}</option>
             </select>
+
+            <div class="flex items-center rounded-md border border-input bg-background">
+              <button
+                class="flex h-8 w-8 items-center justify-center rounded-l-md transition-colors"
+                :class="authorBooksViewMode === 'grid' ? 'text-primary bg-primary/10' : 'text-muted-foreground hover:text-foreground hover:bg-muted'"
+                @click="authorBooksViewMode = 'grid'"
+              >
+                <LayoutGrid :size="14" />
+              </button>
+              <button
+                class="flex h-8 w-8 items-center justify-center rounded-r-md transition-colors"
+                :class="authorBooksViewMode === 'list' ? 'text-primary bg-primary/10' : 'text-muted-foreground hover:text-foreground hover:bg-muted'"
+                @click="authorBooksViewMode = 'list'"
+              >
+                <List :size="14" />
+              </button>
+            </div>
           </div>
         </div>
 
@@ -546,7 +586,7 @@ watch(authorName, () => {
         </div>
 
         <VirtualBookGrid
-          v-if="viewMode === 'grid' && books.length > 0"
+          v-if="authorBooksViewMode === 'grid' && books.length > 0"
           :books="books"
           :cover-size="authorBookCoverSize"
           :grid-gap="authorBookGridGap"
@@ -554,7 +594,7 @@ watch(authorName, () => {
           @update:book="handleBookUpdate"
         />
 
-        <div v-if="viewMode === 'list' && books.length > 0" class="flex flex-col divide-y divide-border">
+        <div v-if="authorBooksViewMode === 'list' && books.length > 0" class="flex flex-col divide-y divide-border">
           <BookListRow v-for="book in books" :key="book.id" :book="book" @action="handleBookAction(book, $event)" />
         </div>
 

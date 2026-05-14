@@ -11,7 +11,7 @@ import BookTableProgressCell from '../table/BookTableProgressCell.vue'
 import BookTableReadButtonCell from '../table/BookTableReadButtonCell.vue'
 import type { BookCard, BookFileRef, UserBookStatus } from '@bookorbit/types'
 
-const routerPush = vi.fn()
+const routerPush = vi.fn<() => void>()
 
 vi.mock('vue-router', () => ({
   useRouter: () => ({

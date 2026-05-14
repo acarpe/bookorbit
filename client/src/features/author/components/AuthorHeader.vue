@@ -127,18 +127,17 @@ watch(resolvedBio, () => {
           <div class="mt-3">
             <p
               v-if="resolvedBio"
-              :class="[
-                'text-sm leading-6 text-foreground/90 sm:overflow-visible sm:text-clip sm:[display:block] sm:[-webkit-line-clamp:unset]',
+              :class="
                 bioExpanded
-                  ? 'overflow-visible [display:block]'
-                  : 'overflow-hidden text-ellipsis [display:-webkit-box] [-webkit-line-clamp:2] [-webkit-box-orient:vertical]',
-              ]"
+                  ? 'text-sm leading-6 text-foreground/90'
+                  : 'text-sm leading-6 text-foreground/90 overflow-hidden text-ellipsis [display:-webkit-box] [-webkit-line-clamp:5] [-webkit-box-orient:vertical]'
+              "
             >
               {{ resolvedBio }}
             </p>
             <button
               v-if="resolvedBio"
-              class="mt-1 text-xs font-medium text-primary transition-colors hover:text-primary/80 sm:hidden"
+              class="mt-1 text-xs font-medium text-primary transition-colors hover:text-primary/80"
               @click="bioExpanded = !bioExpanded"
             >
               {{ bioExpanded ? 'Show less' : 'Show more' }}

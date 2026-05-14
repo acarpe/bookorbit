@@ -1,5 +1,11 @@
 import { BadRequestException, ForbiddenException, NotFoundException } from '@nestjs/common';
 
+vi.mock('../book/utils/assemble-book-cards', () => ({
+  assembleBookCards: vi.fn(),
+}));
+
+import { assembleBookCards } from '../book/utils/assemble-book-cards';
+
 import { AUTHOR_ENRICHMENT_REASONS } from './author-enrichment-reasons';
 import { AuthorsService } from './authors.service';
 
@@ -79,6 +85,7 @@ describe('AuthorsService', () => {
     enrichmentOrchestrator.schedule.mockResolvedValue(1);
     enrichmentOrchestrator.backfillLinkedAuthors.mockResolvedValue(8);
     appSettings.getAuthorsAutoEnrichmentWriteMode.mockResolvedValue('missing_only');
+    vi.mocked(assembleBookCards).mockReturnValue([]);
   });
 
   it('merge rejects when sources do not contain any id different from target', async () => {
@@ -305,6 +312,73 @@ describe('AuthorsService', () => {
     authorsRepo.findById.mockResolvedValue(null);
 
     await expect(service.findBooks(reqUser(), 99, {})).rejects.toBeInstanceOf(NotFoundException);
+  });
+
+  it('findBooks rejects when pagination window is too deep', async () => {
+    await expect(service.findBooks(reqUser(), 1, { page: 2_000_000, size: 100 })).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it('findBooks returns empty items when author has no books in the given libraries', async () => {
+    authorsRepo.findById.mockResolvedValue({ id: 10, name: 'Author', bookCount: 0 });
+    authorsRepo.findBookIdsPage.mockResolvedValue({ bookIds: [], total: 0, page: 0, size: 50 });
+
+    const result = await service.findBooks(reqUser(), 10, {});
+
+    expect(result).toEqual({ items: [], total: 0, page: 0, size: 50 });
+    expect(bookRepo.findCards).not.toHaveBeenCalled();
+  });
+
+  it('findBooks passes sort, order, size, and libraryId to findBookIdsPage', async () => {
+    authorsRepo.findById.mockResolvedValue({ id: 10, name: 'Author', bookCount: 3 });
+    authorsRepo.findBookIdsPage.mockResolvedValue({ bookIds: [], total: 0, page: 0, size: 10 });
+
+    await service.findBooks(reqUser(), 10, { sort: 'title', order: 'asc', size: 10, page: 0, libraryId: 2 });
+
+    expect(authorsRepo.findBookIdsPage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        authorId: 10,
+        sort: 'title',
+        order: 'asc',
+        size: 10,
+        page: 0,
+        libraryIds: expect.arrayContaining([2]),
+      }),
+    );
+  });
+
+  it('findBooks assembles and returns books in bookIds page order', async () => {
+    const book1 = { id: 1, title: 'A' } as any;
+    const book3 = { id: 3, title: 'C' } as any;
+    const book2 = { id: 2, title: 'B' } as any;
+
+    authorsRepo.findById.mockResolvedValue({ id: 5, name: 'Author', bookCount: 3 });
+    authorsRepo.findBookIdsPage.mockResolvedValue({ bookIds: [3, 1, 2], total: 3, page: 0, size: 50 });
+    bookRepo.findCards.mockResolvedValue({ rows: [], authorRows: [], fileRows: [], genreRows: [], progressRows: [] });
+    vi.mocked(assembleBookCards).mockReturnValue([book1, book2, book3]);
+
+    const result = await service.findBooks(reqUser(), 5, {});
+
+    expect(result.total).toBe(3);
+    expect(result.items.map((b) => b.id)).toEqual([3, 1, 2]);
+  });
+
+  it('findBooks uses defaults when dto fields are omitted', async () => {
+    authorsRepo.findById.mockResolvedValue({ id: 7, name: 'Author', bookCount: 0 });
+    authorsRepo.findBookIdsPage.mockResolvedValue({ bookIds: [], total: 0, page: 0, size: 50 });
+
+    await service.findBooks(reqUser(), 7, {});
+
+    expect(authorsRepo.findBookIdsPage).toHaveBeenCalledWith(expect.objectContaining({ sort: 'addedAt', order: 'desc', page: 0, size: 50 }));
+  });
+
+  it('findBooks scopes results to user-accessible libraries only', async () => {
+    libraryService.findAll.mockResolvedValue([{ id: 3 }]);
+    authorsRepo.findById.mockResolvedValue({ id: 8, name: 'Author', bookCount: 2 });
+    authorsRepo.findBookIdsPage.mockResolvedValue({ bookIds: [], total: 0, page: 0, size: 50 });
+
+    await service.findBooks(reqUser(), 8, {});
+
+    expect(authorsRepo.findBookIdsPage).toHaveBeenCalledWith(expect.objectContaining({ libraryIds: [3] }));
   });
 
   it('returns metadata providers directly from the metadata fetch service', () => {
