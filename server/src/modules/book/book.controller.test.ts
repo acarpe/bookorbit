@@ -178,7 +178,7 @@ describe('BookController', () => {
     expect(bookService.embedAll).toHaveBeenCalledTimes(1);
   });
 
-  it('returns 304 when cover etag matches (unversioned → 1h cache)', async () => {
+  it('returns 304 when cover etag matches (unversioned → 24h private cache)', async () => {
     const { controller, bookService } = makeController();
     const { reply, headers } = makeReply();
     bookService.getCoverPath.mockResolvedValue('/tmp/cover.jpg');
@@ -187,7 +187,7 @@ describe('BookController', () => {
     await controller.getCover(7, makeUser(), reply, undefined, '"1234"');
 
     expect(reply.status).toHaveBeenCalledWith(304);
-    expect(headers['Cache-Control']).toBe('public, max-age=3600');
+    expect(headers['Cache-Control']).toBe('private, max-age=86400');
     expect(headers['ETag']).toBe('"1234"');
     expect(reply.send).toHaveBeenCalled();
     expect(mockCreateReadStream).not.toHaveBeenCalled();
@@ -205,7 +205,7 @@ describe('BookController', () => {
     expect(headers['Cache-Control']).toBe('public, max-age=31536000, immutable');
   });
 
-  it('streams cover with 1h cache when no ?t= param', async () => {
+  it('streams cover with 24h private cache when no ?t= param', async () => {
     const { controller, bookService } = makeController();
     const { reply, headers } = makeReply();
     bookService.getCoverPath.mockResolvedValue('/tmp/cover.png');
@@ -213,7 +213,7 @@ describe('BookController', () => {
 
     await controller.getCover(7, makeUser(), reply, undefined, undefined);
 
-    expect(headers['Cache-Control']).toBe('public, max-age=3600');
+    expect(headers['Cache-Control']).toBe('private, max-age=86400');
     expect(headers['ETag']).toBe('"4321"');
     expect(reply.type).toHaveBeenCalledWith('image/png');
     expect(mockCreateReadStream).toHaveBeenCalledWith('/tmp/cover.png');
@@ -592,11 +592,11 @@ describe('BookController', () => {
     await controller.getThumbnail(7, makeUser(), first.reply, undefined, '"1000"');
     expect(first.reply.status).toHaveBeenCalledWith(304);
     expect(first.headers['ETag']).toBe('"1000"');
-    expect(first.headers['Cache-Control']).toBe('public, max-age=3600');
+    expect(first.headers['Cache-Control']).toBe('private, max-age=86400');
 
     await controller.getThumbnail(7, makeUser(), second.reply, undefined, undefined);
     expect(second.reply.type).toHaveBeenCalledWith('image/jpeg');
-    expect(second.headers['Cache-Control']).toBe('public, max-age=3600');
+    expect(second.headers['Cache-Control']).toBe('private, max-age=86400');
     expect(mockCreateReadStream).toHaveBeenCalledWith('/tmp/thumb.jpg');
   });
 

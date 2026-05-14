@@ -208,6 +208,11 @@ export async function createBookCoverArtifacts(
 
   await writeFixtureFile(ctx.fixture.booksPath, `covers/${bookId}/cover.${coverExtension}`, coverContent);
   await writeFixtureFile(ctx.fixture.booksPath, `covers/${bookId}/thumbnail.jpg`, thumbnailContent);
+
+  await ctx.db
+    .insert(schema.bookMetadata)
+    .values({ bookId, coverSource: 'custom' })
+    .onConflictDoUpdate({ target: schema.bookMetadata.bookId, set: { coverSource: 'custom' } });
 }
 
 export async function createUserAndLogin(

@@ -521,13 +521,21 @@ describe('Users admin lifecycle (e2e)', { timeout: 180_000 }, () => {
         headers: authHeader(regularA.accessToken),
         payload: {
           name: 'Regular A Updated',
-          settings: { syncReaderPreferences: true },
         },
       });
       expect(updateProfile.statusCode).toBe(200);
-      const updatedProfile = updateProfile.json() as { name: string; settings: { syncReaderPreferences?: boolean } };
+      const updatedProfile = updateProfile.json() as { name: string };
       expect(updatedProfile.name).toBe('Regular A Updated');
-      expect(updatedProfile.settings.syncReaderPreferences).toBe(true);
+
+      const updateSettings = await ctx.app.inject({
+        method: 'PATCH',
+        url: '/api/v1/users/me/settings',
+        headers: authHeader(regularA.accessToken),
+        payload: { settings: { syncReaderPreferences: true } },
+      });
+      expect(updateSettings.statusCode).toBe(200);
+      const updatedSettings = updateSettings.json() as { settings: { syncReaderPreferences?: boolean } };
+      expect(updatedSettings.settings.syncReaderPreferences).toBe(true);
 
       const noFileUpload = await ctx.app.inject({
         method: 'POST',

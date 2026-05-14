@@ -383,7 +383,7 @@ For the full release runbook, see [`docs/RELEASE_PROCESS.md`](docs/RELEASE_PROCE
 
 ### E2E in CI
 
-E2E suites are dispatched automatically based on which files changed. On nightly builds and manual dispatches, all suites run. Each suite runs in its own job with a dedicated PostgreSQL service container.
+E2E suites run only on nightly scheduled CI builds. Each suite runs in its own job with a dedicated PostgreSQL service container. For on-demand E2E runs, use the manual `.github/workflows/e2e.yml` workflow.
 
 ### Reading CI Failures
 

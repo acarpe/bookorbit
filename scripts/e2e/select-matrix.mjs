@@ -56,12 +56,12 @@ function toMatrixItems(suites) {
 function selectSuitesForEvent(eventName, changedFiles) {
   const suites = listE2ESuites();
 
-  if (eventName === "workflow_dispatch" || eventName === "push" || eventName === "schedule") {
+  if (eventName === "schedule") {
     return toMatrixItems(suites);
   }
 
   if (eventName !== "pull_request") {
-    return toMatrixItems(suites);
+    return [];
   }
 
   const smokeSuites = suites.filter((suite) => suite.lane === "smoke");

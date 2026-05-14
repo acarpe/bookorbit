@@ -38,6 +38,7 @@ import { SetupDto } from './dto/setup.dto';
 import { OidcDiscoveryService } from './oidc/oidc-discovery.service';
 import { OidcSessionRepository } from './oidc/oidc-session.repository';
 import { MagicLinkRepository } from './magic-link.repository';
+import { AppSettingsService } from '../app-settings/app-settings.service';
 
 function parseDurationMs(duration: string): number {
   const match = duration.match(/^(\d+)([smhd])$/);
@@ -76,6 +77,7 @@ export class AuthService {
     private readonly oidcDiscovery: OidcDiscoveryService,
     private readonly auditEvents: AuditEventsService,
     private readonly magicLinkRepo: MagicLinkRepository,
+    private readonly appSettings: AppSettingsService,
     @Inject(DB) private readonly db: NodePgDatabase<typeof schema>,
   ) {}
 
@@ -388,11 +390,18 @@ export class AuthService {
 
     const oidcLogoutStart = Date.now();
     try {
-      if (!oidcSession.providerId) return {};
-      const provider = await this.db.query.oidcProviders.findFirst({ where: eq(schema.oidcProviders.id, oidcSession.providerId) });
-      if (!provider?.enabled) return {};
+      let issuerUri: string;
+      if (oidcSession.providerId) {
+        const provider = await this.db.query.oidcProviders.findFirst({ where: eq(schema.oidcProviders.id, oidcSession.providerId) });
+        if (!provider?.enabled) return {};
+        issuerUri = provider.issuerUri;
+      } else {
+        const oidcConfig = await this.appSettings.getOidcConfig();
+        if (!oidcConfig.enabled) return {};
+        issuerUri = oidcSession.oidcIssuer;
+      }
 
-      const disc = await this.oidcDiscovery.getDiscoveryDoc(provider.issuerUri);
+      const disc = await this.oidcDiscovery.getDiscoveryDoc(issuerUri);
       if (!disc.endSessionEndpoint) return {};
 
       const origin = req.headers['origin'] ?? req.headers['referer'];
@@ -649,7 +658,7 @@ export class AuthService {
     const ttlSeconds = parseDurationMs(this.config.get<string>('auth.jwtExpiresIn') ?? '15m') / 1000;
     reply.setCookie('access_token', accessToken, {
       httpOnly: true,
-      sameSite: 'strict',
+      sameSite: 'lax',
       path: '/api',
       maxAge: ttlSeconds,
       secure: 'auto',
@@ -659,7 +668,7 @@ export class AuthService {
   private clearAccessCookie(reply: FastifyReply) {
     reply.setCookie('access_token', '', {
       httpOnly: true,
-      sameSite: 'strict',
+      sameSite: 'lax',
       path: '/api',
       maxAge: 0,
       secure: 'auto',

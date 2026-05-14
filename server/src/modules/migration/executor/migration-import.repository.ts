@@ -534,7 +534,7 @@ export class MigrationImportRepository {
       .select({
         id: schema.bookFiles.id,
         bookId: schema.bookFiles.bookId,
-        hash: schema.bookFiles.hash,
+        hash: schema.bookFiles.fileHash,
         absolutePath: schema.bookFiles.absolutePath,
       })
       .from(schema.bookFiles)

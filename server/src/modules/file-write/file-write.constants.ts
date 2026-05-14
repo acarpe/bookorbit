@@ -19,6 +19,7 @@ export const BOOK_WRITE_FIELD_KEYS: readonly BookWritePayloadKey[] = [
   'seriesIndex',
   'isbn10',
   'isbn13',
+  'rating',
   'authors',
   'genres',
   'tags',

@@ -838,7 +838,7 @@ async function insertTargetBook(ctx: MigrationBookloreE2EContext, input: InsertT
         ino: nextInode++,
         sizeBytes: 128,
         mtime: new Date('2024-01-01T12:00:00Z'),
-        hash: file.hash,
+        fileHash: file.hash,
         format: file.format,
         role: 'content',
         sortOrder: index,

@@ -114,6 +114,7 @@ export class FileWriteRepository {
       hardcoverId: meta.hardcoverId,
       openLibraryId: meta.openLibraryId,
       itunesId: meta.itunesId,
+      rating: meta.rating,
       authors: authorRows,
       genres: genreRows.map((g) => g.name),
       tags: tagRows.map((t) => t.name),

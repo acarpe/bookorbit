@@ -484,7 +484,7 @@ export class KoboSyncService {
         seriesName: schema.bookMetadata.seriesName,
         seriesIndex: schema.bookMetadata.seriesIndex,
         metadataUpdatedAt: schema.bookMetadata.updatedAt,
-        fileHash: schema.bookFiles.hash,
+        fileHash: schema.bookFiles.fileHash,
         authorNamesCsv: sql<string>`coalesce(string_agg(${schema.authors.name}, ',' ORDER BY ${schema.bookAuthors.displayOrder}, ${schema.bookAuthors.authorId}), '')`,
       })
       .from(schema.books)
@@ -499,7 +499,7 @@ export class KoboSyncService {
         schema.bookMetadata.seriesName,
         schema.bookMetadata.seriesIndex,
         schema.bookMetadata.updatedAt,
-        schema.bookFiles.hash,
+        schema.bookFiles.fileHash,
       );
 
     return rows.map((row) => ({
@@ -534,7 +534,7 @@ export class KoboSyncService {
         seriesIndex: schema.bookMetadata.seriesIndex,
         fileFormat: schema.bookFiles.format,
         fileSizeBytes: schema.bookFiles.sizeBytes,
-        fileHash: schema.bookFiles.hash,
+        fileHash: schema.bookFiles.fileHash,
         metadataUpdatedAt: schema.bookMetadata.updatedAt,
         addedAt: schema.books.addedAt,
         updatedAt: schema.books.updatedAt,

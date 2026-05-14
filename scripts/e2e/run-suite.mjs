@@ -8,7 +8,7 @@ import { fileURLToPath } from "node:url";
 
 import { getE2ESuite, listE2ESuites } from "./suite-registry.mjs";
 
-const DEFAULT_E2E_DATABASE_URL = "postgres://projectx:projectx@localhost:5432/projectx_e2e";
+const DEFAULT_E2E_DATABASE_URL = "postgres://bookorbit:bookorbit@localhost:5432/bookorbit_e2e";
 
 const scriptDir = dirname(fileURLToPath(import.meta.url));
 const rootDir = join(scriptDir, "..", "..");

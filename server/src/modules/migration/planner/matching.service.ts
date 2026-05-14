@@ -207,9 +207,9 @@ export class MatchingService {
     for (let i = 0; i < allHashes.length; i += chunkSize) {
       const chunk = allHashes.slice(i, i + chunkSize);
       const rows = await this.db
-        .select({ bookId: schema.bookFiles.bookId, hash: schema.bookFiles.hash })
+        .select({ bookId: schema.bookFiles.bookId, hash: schema.bookFiles.fileHash })
         .from(schema.bookFiles)
-        .where(inArray(schema.bookFiles.hash, chunk));
+        .where(inArray(schema.bookFiles.fileHash, chunk));
       for (const row of rows) {
         if (!row.hash) continue;
         const existing = bookIdsByHash.get(row.hash) ?? [];

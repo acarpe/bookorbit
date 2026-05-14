@@ -35,6 +35,7 @@ const ADMIN_SETUP_DTO = {
 
 const SCENARIO_TIMEOUT_MS = 60_000;
 const DEFAULT_ISSUER = 'https://issuer.example';
+const DEFAULT_SLUG = 'example-oidc';
 
 interface OidcContractContext {
   app: NestFastifyApplication;
@@ -55,8 +56,9 @@ interface OidcContractContext {
 }
 
 type OidcConfigInput = {
+  slug: string;
+  displayName: string;
   enabled: boolean;
-  providerName: string;
   issuerUri: string;
   clientId: string;
   clientSecret: string;
@@ -120,8 +122,9 @@ function buildDiscoveryResponse(issuerUri = DEFAULT_ISSUER) {
 
 function buildOidcConfig(overrides: Partial<OidcConfigInput> = {}): OidcConfigInput {
   return {
+    slug: DEFAULT_SLUG,
+    displayName: 'Example OIDC',
     enabled: true,
-    providerName: 'Example OIDC',
     issuerUri: DEFAULT_ISSUER,
     clientId: 'client-id',
     clientSecret: 'client-secret',
@@ -141,6 +144,12 @@ function buildOidcConfig(overrides: Partial<OidcConfigInput> = {}): OidcConfigIn
     },
     ...overrides,
   };
+}
+
+function makeFakeLogoutToken(claims: Record<string, unknown>): string {
+  const header = Buffer.from(JSON.stringify({ alg: 'none', typ: 'JWT' })).toString('base64url');
+  const payload = Buffer.from(JSON.stringify(claims)).toString('base64url');
+  return `${header}.${payload}.fakesig`;
 }
 
 function responseMessage(response: { message?: string | string[] }): string {
@@ -391,19 +400,28 @@ async function login(app: NestFastifyApplication, username: string, password: st
 }
 
 async function putOidcConfig(ctx: OidcContractContext, config: OidcConfigInput): Promise<void> {
-  const response = await ctx.app.inject({
-    method: 'PUT',
-    url: '/api/v1/app-settings/oidc',
+  const createResponse = await ctx.app.inject({
+    method: 'POST',
+    url: '/api/v1/app-settings/oidc/providers',
     headers: authHeader(ctx.adminToken),
     payload: config,
   });
-  expect(response.statusCode).toBe(200);
+  if (createResponse.statusCode === 201) return;
+
+  const { slug, ...updatePayload } = config;
+  const updateResponse = await ctx.app.inject({
+    method: 'PUT',
+    url: `/api/v1/app-settings/oidc/providers/${slug}`,
+    headers: authHeader(ctx.adminToken),
+    payload: updatePayload,
+  });
+  expect(updateResponse.statusCode).toBe(200);
 }
 
-async function issueState(app: NestFastifyApplication): Promise<string> {
+async function issueState(app: NestFastifyApplication, slug = DEFAULT_SLUG): Promise<string> {
   const response = await app.inject({
     method: 'POST',
-    url: '/api/v1/auth/oidc/state',
+    url: `/api/v1/auth/oidc/${slug}/state`,
   });
   expect(response.statusCode).toBe(200);
   const body = response.json() as { state: string };
@@ -461,7 +479,7 @@ describe('App settings OIDC contract (e2e)', { timeout: SCENARIO_TIMEOUT_MS }, (
       const limitedUser = await createLocalUser(ctx.db);
       const limitedSession = await login(ctx.app, limitedUser.username, limitedUser.password);
       const config = buildOidcConfig({
-        providerName: 'Contract OIDC',
+        displayName: 'Contract OIDC',
         autoProvision: {
           enabled: true,
           allowLocalLinking: true,
@@ -473,42 +491,51 @@ describe('App settings OIDC contract (e2e)', { timeout: SCENARIO_TIMEOUT_MS }, (
 
       const publicResponse = await ctx.app.inject({
         method: 'GET',
-        url: '/api/v1/app-settings/oidc/public',
+        url: '/api/v1/app-settings/oidc/providers/public',
       });
       expect(publicResponse.statusCode).toBe(200);
-      expect(publicResponse.json()).toEqual({
-        enabled: true,
-        providerName: 'Contract OIDC',
-        issuerUri: DEFAULT_ISSUER,
-        clientId: 'client-id',
-        scopes: 'openid profile email',
-      });
+      expect(publicResponse.json()).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            slug: DEFAULT_SLUG,
+            displayName: 'Contract OIDC',
+            enabled: true,
+            clientId: 'client-id',
+            scopes: 'openid profile email',
+          }),
+        ]),
+      );
 
       const forbiddenResponse = await ctx.app.inject({
         method: 'GET',
-        url: '/api/v1/app-settings/oidc',
+        url: `/api/v1/app-settings/oidc/providers/${DEFAULT_SLUG}`,
         headers: authHeader(limitedSession.accessToken),
       });
       expect(forbiddenResponse.statusCode).toBe(403);
 
       const adminResponse = await ctx.app.inject({
         method: 'GET',
-        url: '/api/v1/app-settings/oidc',
+        url: `/api/v1/app-settings/oidc/providers/${DEFAULT_SLUG}`,
         headers: authHeader(ctx.adminToken),
       });
       expect(adminResponse.statusCode).toBe(200);
-      expect(adminResponse.json()).toEqual({
-        ...config,
+      expect(adminResponse.json()).toMatchObject({
+        slug: DEFAULT_SLUG,
+        displayName: 'Contract OIDC',
+        enabled: true,
+        issuerUri: DEFAULT_ISSUER,
+        clientId: 'client-id',
         clientSecret: '***',
+        scopes: 'openid profile email',
       });
 
       const testResponse = await ctx.app.inject({
         method: 'POST',
-        url: '/api/v1/app-settings/oidc/test',
+        url: `/api/v1/app-settings/oidc/providers/${DEFAULT_SLUG}/test`,
         headers: authHeader(ctx.adminToken),
       });
       expect(testResponse.statusCode).toBe(200);
-      expect(testResponse.json()).toEqual({
+      expect(testResponse.json()).toMatchObject({
         success: true,
         issuer: DEFAULT_ISSUER,
         authorizationEndpoint: `${DEFAULT_ISSUER}/auth`,
@@ -548,7 +575,7 @@ describe('App settings OIDC contract (e2e)', { timeout: SCENARIO_TIMEOUT_MS }, (
         picture: 'https://issuer.example/avatars/provisioned.png',
       });
 
-      const state = await issueState(ctx.app);
+      const state = await issueState(ctx.app, DEFAULT_SLUG);
       const callbackPayload = {
         code: 'authorization-code-provisioned',
         codeVerifier: 'verifier-provisioned',
@@ -625,7 +652,7 @@ describe('App settings OIDC contract (e2e)', { timeout: SCENARIO_TIMEOUT_MS }, (
         url: '/api/v1/auth/oidc/callback',
         payload: callbackPayload,
       });
-      expectError(reusedState, 401, 'Invalid or expired state');
+      expectError(reusedState, 401, 'Your login session expired');
     });
 
     it('links an existing local user and backchannel logout revokes active sessions only for the matched OIDC identity', async () => {
@@ -657,7 +684,7 @@ describe('App settings OIDC contract (e2e)', { timeout: SCENARIO_TIMEOUT_MS }, (
         email: linkedUser.email,
       });
 
-      const state = await issueState(ctx.app);
+      const state = await issueState(ctx.app, DEFAULT_SLUG);
       const callbackResponse = await ctx.app.inject({
         method: 'POST',
         url: '/api/v1/auth/oidc/callback',
@@ -707,7 +734,7 @@ describe('App settings OIDC contract (e2e)', { timeout: SCENARIO_TIMEOUT_MS }, (
       const unknownLogoutResponse = await ctx.app.inject({
         method: 'POST',
         url: '/api/v1/auth/oidc/backchannel-logout',
-        payload: { logout_token: 'unknown-logout-token' },
+        payload: { logout_token: makeFakeLogoutToken({ iss: DEFAULT_ISSUER }) },
       });
       expect(unknownLogoutResponse.statusCode).toBe(200);
       expect(await activeSessionCount(ctx.db, linkedUser.userId)).toBe(1);
@@ -728,7 +755,7 @@ describe('App settings OIDC contract (e2e)', { timeout: SCENARIO_TIMEOUT_MS }, (
       const matchedLogoutResponse = await ctx.app.inject({
         method: 'POST',
         url: '/api/v1/auth/oidc/backchannel-logout',
-        payload: { logout_token: 'matched-logout-token' },
+        payload: { logout_token: makeFakeLogoutToken({ iss: DEFAULT_ISSUER }) },
       });
       expect(matchedLogoutResponse.statusCode).toBe(200);
 
@@ -778,10 +805,10 @@ describe('App settings OIDC contract (e2e)', { timeout: SCENARIO_TIMEOUT_MS }, (
           state: `invalid-${randomUUID()}`,
         },
       });
-      expectError(invalidStateResponse, 401, 'Invalid or expired state');
+      expectError(invalidStateResponse, 401, 'Your login session expired');
       expect(ctx.oidcTokenClientMock.exchangeCode).not.toHaveBeenCalled();
 
-      const state = await issueState(ctx.app);
+      const state = await issueState(ctx.app, DEFAULT_SLUG);
       ctx.oidcTokenValidatorMock.validateIdToken.mockResolvedValueOnce({
         sid: 'oidc-missing-subject-sid',
         preferred_username: `missing-subject-${randomUUID()}`,
@@ -800,10 +827,25 @@ describe('App settings OIDC contract (e2e)', { timeout: SCENARIO_TIMEOUT_MS }, (
           state,
         },
       });
-      expectError(missingSubjectResponse, 401, 'Invalid ID token: missing subject claim');
+      expectError(missingSubjectResponse, 401, 'Could not complete sign-in with your provider');
     });
 
     it('rejects callback when OIDC is disabled or the linked account is deactivated', async () => {
+      // Generate state while provider is enabled, then disable it so the callback is rejected.
+      await putOidcConfig(
+        ctx,
+        buildOidcConfig({
+          enabled: true,
+          autoProvision: {
+            enabled: true,
+            allowLocalLinking: true,
+            defaultPermissionNames: [],
+          },
+        }),
+      );
+
+      const disabledState = await issueState(ctx.app, DEFAULT_SLUG);
+
       await putOidcConfig(
         ctx,
         buildOidcConfig({
@@ -816,7 +858,6 @@ describe('App settings OIDC contract (e2e)', { timeout: SCENARIO_TIMEOUT_MS }, (
         }),
       );
 
-      const disabledState = await issueState(ctx.app);
       const disabledCallbackResponse = await ctx.app.inject({
         method: 'POST',
         url: '/api/v1/auth/oidc/callback',
@@ -828,7 +869,7 @@ describe('App settings OIDC contract (e2e)', { timeout: SCENARIO_TIMEOUT_MS }, (
           state: disabledState,
         },
       });
-      expectError(disabledCallbackResponse, 401, 'OIDC is not enabled');
+      expectError(disabledCallbackResponse, 401, 'OIDC provider is not enabled');
 
       const inactiveUser = await createLocalUser(ctx.db, {
         username: `oidc-inactive-${randomUUID().replace(/-/g, '')}`,
@@ -847,7 +888,7 @@ describe('App settings OIDC contract (e2e)', { timeout: SCENARIO_TIMEOUT_MS }, (
         }),
       );
 
-      const inactiveState = await issueState(ctx.app);
+      const inactiveState = await issueState(ctx.app, DEFAULT_SLUG);
       ctx.oidcTokenValidatorMock.validateIdToken.mockResolvedValueOnce({
         sub: 'oidc-inactive-subject',
         sid: 'oidc-inactive-sid',
@@ -867,7 +908,7 @@ describe('App settings OIDC contract (e2e)', { timeout: SCENARIO_TIMEOUT_MS }, (
           state: inactiveState,
         },
       });
-      expectError(inactiveCallbackResponse, 401, 'Account is deactivated');
+      expectError(inactiveCallbackResponse, 401, 'Your account has been deactivated');
 
       const inactiveUserSession = await ctx.db.query.oidcSessions.findFirst({
         where: eq(schema.oidcSessions.userId, inactiveUser.userId),

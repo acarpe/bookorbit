@@ -313,9 +313,8 @@ report artifacts are retained for 7 days.
 
 E2E suites are selected by `scripts/e2e/select-matrix.mjs`:
 
-- **Pull request:** The smoke suite (`guard-mechanics`) always runs. Full-lane suites run only
-  when their `changedPaths` match the PR diff.
-- **Push to main / nightly / manual dispatch:** All 18 suites run.
+- **Nightly schedule (`CI`):** All 18 suites run.
+- **Pull request / push to main / manual `CI` dispatch:** E2E is skipped in `.github/workflows/ci.yml`.
 
 Each selected suite runs as its own GitHub Actions job via the reusable
 `.github/workflows/e2e-runner.yml` workflow, which spins up a PostgreSQL 16 + pgvector service

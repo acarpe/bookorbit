@@ -416,6 +416,16 @@ describe('Authorization matrix (e2e)', () => {
           path: '/notifications',
           token: 'allPerms',
         },
+        [Permission.KoreaderSync]: {
+          method: 'GET',
+          path: '/koreader/credentials',
+          token: 'allPerms',
+        },
+        [Permission.DemoRestricted]: {
+          method: 'GET',
+          path: '/notifications',
+          token: 'allPerms',
+        },
       };
 
       const failures: MatrixFailure[] = [];

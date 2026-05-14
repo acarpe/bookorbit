@@ -114,6 +114,7 @@ function makeService(dbOverrides?: Record<string, unknown>) {
     oidcDiscovery as never,
     { emit: vi.fn() } as never,
     magicLinkRepo as never,
+    appSettings as never,
     db,
   );
 
@@ -391,7 +392,7 @@ describe('AuthService', () => {
       expect((reply as unknown as { setCookie: vi.Mock }).setCookie).toHaveBeenCalledWith(
         'access_token',
         'signed-jwt',
-        expect.objectContaining({ path: '/api', secure: 'auto', sameSite: 'strict' }),
+        expect.objectContaining({ path: '/api', secure: 'auto', sameSite: 'lax' }),
       );
       expect((reply as unknown as { setCookie: vi.Mock }).setCookie).toHaveBeenCalledWith(
         'refresh_token',
