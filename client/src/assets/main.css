@@ -300,6 +300,19 @@
     @apply bg-background text-foreground font-sans antialiased;
   }
 
+  @supports (-webkit-touch-callout: none) {
+    @media (pointer: coarse) {
+      /* iOS Safari auto-zooms focused inputs below 16px. Keep editable controls at 16px on touch devices. */
+      input:not([type='checkbox']):not([type='radio']):not([type='range']):not([type='color']):not([type='file']):not([type='button']):not(
+          [type='submit']
+        ):not([type='reset']):not([data-ios-zoom-exempt]),
+      textarea:not([data-ios-zoom-exempt]),
+      select:not([data-ios-zoom-exempt]) {
+        font-size: 16px;
+      }
+    }
+  }
+
   @media (pointer: coarse) {
     .app-shell-inset,
     .app-shell-scroll {

@@ -109,7 +109,7 @@ function exthUint32(records: ExthRecord[], type: number): number | null {
 }
 
 function stripHtml(html: string): string {
-  return html.replace(/<[^>]+>/g, '').trim();
+  return html.replace(/<[^>]*>/g, '').trim();
 }
 
 export function parseMobiBuffer(buf: Buffer): MobiParsed {

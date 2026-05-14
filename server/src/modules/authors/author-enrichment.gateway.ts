@@ -6,6 +6,7 @@ import { Permission, type AuthorEnrichmentStatusEvent } from '@bookorbit/types';
 import { Server, Socket } from 'socket.io';
 
 import type { RequestUser } from '../../common/types/request-user';
+import { sanitizeLogValue } from '../../common/utils/log-sanitize.utils';
 import { AuthService } from '../auth/auth.service';
 import { AuthorEnrichmentRepository } from './author-enrichment.repository';
 import { AuthorEnrichmentSessionService } from './author-enrichment-session.service';
@@ -55,7 +56,7 @@ export class AuthorEnrichmentGateway implements OnGatewayInit, OnGatewayConnecti
       client.emit(AUTHOR_ENRICHMENT_STATUS_EVENT, { ...summary, paused, ...this.session.getSnapshot() });
     } catch (err) {
       const errorClass = err instanceof Error ? err.name : 'Error';
-      const message = (err instanceof Error ? err.message : String(err)).replace(/"/g, '\\"');
+      const message = sanitizeLogValue(err instanceof Error ? err.message : String(err));
       this.logger.warn(`[${event}] [fail] socketId=${client.id} errorClass=${errorClass} error="${message}" - websocket rejected`);
       client.disconnect();
     }

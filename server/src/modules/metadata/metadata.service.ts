@@ -14,6 +14,7 @@ import {
   isCustomBookCoverFileName,
   isExtractedBookCoverFileName,
 } from '../../common/book-cover-storage';
+import { sanitizeLogValue } from '../../common/utils/log-sanitize.utils';
 import { BookEmbedderService } from '../embedding/book-embedder.service';
 import { BookMetadataLockService } from '../book-metadata-lock/book-metadata-lock.service';
 import { ComicMetadataRepository } from './comic-metadata.repository';
@@ -121,7 +122,7 @@ export class MetadataService {
 
       this.scoreService.calculateAndSave(bookId).catch((error: Error) => {
         this.logger.warn(
-          `[metadata.score_calculation] [fail] bookId=${bookId} errorClass=${error.name} error="${error.message.replace(/"/g, '\\"')}" - metadata score calculation failed`,
+          `[metadata.score_calculation] [fail] bookId=${bookId} errorClass=${error.name} error="${sanitizeLogValue(error.message)}" - metadata score calculation failed`,
         );
       });
 
@@ -130,7 +131,7 @@ export class MetadataService {
       );
     } catch (error) {
       const errorClass = error instanceof Error ? error.name : 'Error';
-      const errorMessage = (error instanceof Error ? error.message : String(error)).replace(/"/g, '\\"');
+      const errorMessage = sanitizeLogValue(error instanceof Error ? error.message : String(error));
       this.logger.warn(
         `[${event}] [fail] bookId=${bookId} format=${format} durationMs=${Date.now() - startedAt} errorClass=${errorClass} error="${errorMessage}" - metadata extraction failed`,
       );
@@ -197,7 +198,7 @@ export class MetadataService {
       return true;
     } catch (error) {
       const errorClass = error instanceof Error ? error.name : 'Error';
-      const errorMessage = (error instanceof Error ? error.message : String(error)).replace(/"/g, '\\"');
+      const errorMessage = sanitizeLogValue(error instanceof Error ? error.message : String(error));
       this.logger.warn(
         `[${event}] [fail] bookId=${bookId} durationMs=${Date.now() - startedAt} errorClass=${errorClass} error="${errorMessage}" - cover download failed`,
       );
@@ -241,7 +242,7 @@ export class MetadataService {
       return true;
     } catch (error) {
       const errorClass = error instanceof Error ? error.name : 'Error';
-      const errorMessage = (error instanceof Error ? error.message : String(error)).replace(/"/g, '\\"');
+      const errorMessage = sanitizeLogValue(error instanceof Error ? error.message : String(error));
       this.logger.warn(
         `[${event}] [fail] bookId=${bookId} format=${format} durationMs=${Date.now() - startedAt} errorClass=${errorClass} error="${errorMessage}" - cover refresh failed`,
       );
@@ -476,7 +477,7 @@ export class MetadataService {
     }
     this.embedder?.embedBook(bookId).catch((error: Error) => {
       this.logger.warn(
-        `[metadata.embedding] [fail] bookId=${bookId} errorClass=${error.name} error="${error.message.replace(/"/g, '\\"')}" - book embedding failed`,
+        `[metadata.embedding] [fail] bookId=${bookId} errorClass=${error.name} error="${sanitizeLogValue(error.message)}" - book embedding failed`,
       );
     });
   }
@@ -517,9 +518,7 @@ export class MetadataService {
       await this.narratorService.replaceForBook(bookId, filtered.audioMetadata.narrators);
     }
 
-    this.logger.debug(
-      `[metadata.persist_audio] [end] bookId=${bookId} title="${(data.title ?? '').replace(/"/g, '\\"')}" - audio metadata persisted`,
-    );
+    this.logger.debug(`[metadata.persist_audio] [end] bookId=${bookId} title="${sanitizeLogValue(data.title ?? '')}" - audio metadata persisted`);
   }
 
   private async persistBookMetadata(bookId: number, data: ParsedBookData, format: string): Promise<void> {
@@ -587,7 +586,7 @@ export class MetadataService {
     }
 
     this.logger.debug(
-      `[metadata.persist_book] [end] bookId=${bookId} format=${format} title="${(data.title ?? '').replace(/"/g, '\\"')}" - book metadata persisted`,
+      `[metadata.persist_book] [end] bookId=${bookId} format=${format} title="${sanitizeLogValue(data.title ?? '')}" - book metadata persisted`,
     );
   }
 

@@ -192,6 +192,13 @@ describe('NotificationService', () => {
       await expect(service.notify(makePayload({ kind: 'all' }))).rejects.toThrow('DB connection failed');
     });
 
+    it('catches and re-throws errors with special chars in message', async () => {
+      const error = new Error('DB "connection" lost\nnewline injected');
+      repo.findAllActiveUserIds.mockRejectedValue(error);
+
+      await expect(service.notify(makePayload({ kind: 'all' }))).rejects.toThrow('DB "connection" lost');
+    });
+
     it('skips insert when all users filtered out by preferences', async () => {
       repo.findUserSettings.mockResolvedValue(new Map<number, Record<string, unknown>>([[42, { notificationPreferences: { scanning: false } }]]));
 

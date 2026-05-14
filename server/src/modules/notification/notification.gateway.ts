@@ -7,6 +7,7 @@ import type { NotificationItem } from '@bookorbit/types';
 import { Server, Socket } from 'socket.io';
 
 import type { RequestUser } from '../../common/types/request-user';
+import { sanitizeLogValue } from '../../common/utils/log-sanitize.utils';
 import { UserService } from '../user/user.service';
 import { NotificationRepository } from './notification.repository';
 
@@ -54,7 +55,7 @@ export class NotificationGateway implements OnGatewayInit, OnGatewayConnection, 
       client.emit('notification:unread-count', { count: unreadCount });
     } catch (err) {
       const errorClass = err instanceof Error ? err.name : 'Error';
-      const message = (err instanceof Error ? err.message : String(err)).replace(/"/g, '\\"');
+      const message = sanitizeLogValue(err instanceof Error ? err.message : String(err));
       this.logger.warn(`[${event}] [fail] socketId=${client.id} errorClass=${errorClass} error="${message}" - websocket rejected`);
       client.disconnect();
     }

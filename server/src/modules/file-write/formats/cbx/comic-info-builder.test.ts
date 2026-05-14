@@ -105,4 +105,45 @@ describe('buildComicInfoXml', () => {
     expect(parsed.ComicInfo.Notes).toContain('[bookorbit:goodreadsId] 111');
     expect(parsed.ComicInfo.Notes).not.toContain('[bookorbit:goodreadsId] 222');
   });
+
+  describe('stripHtml (via description field)', () => {
+    function summaryOf(description: string): string {
+      const xml = buildComicInfoXml(null, { description }, new Set(['description']));
+      const parsed = parser.parse(xml) as { ComicInfo: Record<string, string> };
+      return parsed.ComicInfo.Summary ?? '';
+    }
+
+    it('strips plain HTML tags', () => {
+      expect(summaryOf('<p>Hello <b>world</b></p>')).toBe('Hello world');
+    });
+
+    it('decodes &amp; entity in plain text', () => {
+      expect(summaryOf('Rock &amp; Roll')).toBe('Rock & Roll');
+    });
+
+    it('decodes entity-encoded tags before stripping - prevents double-escaping bypass', () => {
+      // Old (buggy) order: strip tags first, then decode -> &lt;b&gt;text&lt;/b&gt; survives
+      // New (correct) order: decode first -> <b>text</b>, then strip -> text
+      expect(summaryOf('&lt;b&gt;bold text&lt;/b&gt;')).toBe('bold text');
+    });
+
+    it('removes entity-encoded script tags to prevent bypass', () => {
+      const result = summaryOf('&lt;script src="evil.js"&gt;alert(1)&lt;/script&gt; safe');
+      expect(result).not.toContain('<script');
+      expect(result).not.toContain('</script');
+      expect(result).toContain('safe');
+    });
+
+    it('handles mixed HTML and entities correctly', () => {
+      expect(summaryOf('<p>Epic &amp; vast</p>')).toBe('Epic & vast');
+    });
+
+    it('handles &quot; and &#39; entities', () => {
+      expect(summaryOf('She said &quot;hello&quot; and it&#39;s fine')).toBe(`She said "hello" and it's fine`);
+    });
+
+    it('collapses extra whitespace from removed tags', () => {
+      expect(summaryOf('<p>  lots   of   space  </p>')).toBe('lots of space');
+    });
+  });
 });

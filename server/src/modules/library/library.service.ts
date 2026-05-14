@@ -13,6 +13,7 @@ import { join } from 'path';
 
 import { DEFAULT_FORMAT_PRIORITY } from '@bookorbit/types';
 import type { AccessLevel, LibraryFileSyncProgressEvent, OrganizationMode, WriteResult } from '@bookorbit/types';
+import { sanitizeLogValue } from '../../common/utils/log-sanitize.utils';
 import type { RequestUser } from '../../common/types/request-user';
 import { FileWriteService } from '../file-write/file-write.service';
 import { isPrimaryFormat } from '../scanner/lib/classify';
@@ -371,7 +372,7 @@ export class LibraryService {
           } catch (err) {
             failedCount++;
             const errorClass = err instanceof Error ? err.name : 'Error';
-            const errorMessage = getErrorMessage(err).replace(/"/g, '\\"');
+            const errorMessage = sanitizeLogValue(getErrorMessage(err));
             this.logger.warn(
               `[${event}] [fail] bookId=${bookId} durationMs=${Date.now() - startedAt} errorClass=${errorClass} error="${errorMessage}" - cover directory cleanup failed`,
             );

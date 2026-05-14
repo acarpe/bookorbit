@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { NOTIFICATION_CATEGORIES, Permission } from '@bookorbit/types';
 import type { NotificationCategory, NotificationItem, NotificationType, NotificationPreferences } from '@bookorbit/types';
+import { sanitizeLogValue } from '../../common/utils/log-sanitize.utils';
 
 import { NotificationGateway } from './notification.gateway';
 import { NotificationRepository } from './notification.repository';
@@ -76,7 +77,7 @@ export class NotificationService {
       );
     } catch (error) {
       const errorClass = error instanceof Error ? error.name : 'Error';
-      const errorMessage = (error instanceof Error ? error.message : String(error)).replace(/"/g, '\\"');
+      const errorMessage = sanitizeLogValue(error instanceof Error ? error.message : String(error));
       this.logger.error(
         `[${event}] [fail] type=${payload.type} durationMs=${Date.now() - startedAt} errorClass=${errorClass} error="${errorMessage}" - notification dispatch failed`,
       );

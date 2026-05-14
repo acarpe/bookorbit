@@ -2,6 +2,7 @@ import { Injectable, Logger, OnApplicationBootstrap, OnModuleDestroy, Optional }
 import type { BookMetadataFetchReason, MetadataField } from '@bookorbit/types';
 import { MetadataProviderKey, NotificationType } from '@bookorbit/types';
 import { NotificationService } from '../notification/notification.service';
+import { sanitizeLogValue } from '../../common/utils/log-sanitize.utils';
 import { BookReadService } from '../book/book-read.service';
 import * as schema from '../../db/schema';
 import { MetadataScoreService } from '../metadata-score/metadata-score.service';
@@ -149,7 +150,7 @@ export class BookMetadataFetchOrchestratorService implements OnApplicationBootst
       }
     } catch (error) {
       const errorClass = error instanceof Error ? error.name : 'Error';
-      const message = (error instanceof Error ? error.message : String(error)).replace(/"/g, '\\"');
+      const message = sanitizeLogValue(error instanceof Error ? error.message : String(error));
       this.logger.warn(
         `[book.metadata_fetch.poll] [fail] durationMs=${Date.now() - startedAt} errorClass=${errorClass} error="${message}" - metadata fetch poll failed`,
       );
@@ -218,7 +219,7 @@ export class BookMetadataFetchOrchestratorService implements OnApplicationBootst
         .calculateAndSave(bookId)
         .catch((err: Error) =>
           this.logger.warn(
-            `[book.metadata_fetch.score_recalc] [fail] bookId=${bookId} errorClass=${err.name} error="${err.message.replace(/"/g, '\\"')}" - metadata score recalculation failed`,
+            `[book.metadata_fetch.score_recalc] [fail] bookId=${bookId} errorClass=${err.name} error="${sanitizeLogValue(err.message)}" - metadata score recalculation failed`,
           ),
         );
 
@@ -232,9 +233,7 @@ export class BookMetadataFetchOrchestratorService implements OnApplicationBootst
       const httpStatus = extractHttpStatus(error);
       const errorClass = error instanceof Error ? error.name : 'Error';
       this.logger.warn(
-        `[book.metadata_fetch] [fail] bookId=${bookId} durationMs=${Date.now() - startedAt} status=${httpStatus ?? 'none'} errorClass=${errorClass} error="${message
-          .slice(0, 200)
-          .replace(/"/g, '\\"')}" - metadata fetch failed`,
+        `[book.metadata_fetch] [fail] bookId=${bookId} durationMs=${Date.now() - startedAt} status=${httpStatus ?? 'none'} errorClass=${errorClass} error="${sanitizeLogValue(message.slice(0, 200))}" - metadata fetch failed`,
       );
       await this.queueRepo.markFailed(bookId, message, httpStatus);
       this.session.setCurrentItemName(null);

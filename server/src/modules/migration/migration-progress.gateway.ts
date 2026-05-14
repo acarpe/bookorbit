@@ -5,6 +5,7 @@ import { OnGatewayConnection, OnGatewayDisconnect, OnGatewayInit, SubscribeMessa
 import { Server, Socket } from 'socket.io';
 
 import { Permission, type MigrationProgressEvent, type MigrationRunState } from '@bookorbit/types';
+import { sanitizeLogValue } from '../../common/utils/log-sanitize.utils';
 import type { RequestUser } from '../../common/types/request-user';
 import { AuthService } from '../auth/auth.service';
 import { MigrationRepository } from './migration.repository';
@@ -46,7 +47,7 @@ export class MigrationProgressGateway implements OnGatewayInit, OnGatewayConnect
       this.logger.debug(`[migration.ws_connection] [start] userId=${user.id} socketId=${client.id} - websocket connected`);
     } catch (err) {
       this.logger.warn(
-        `[migration.ws_connection] [fail] socketId=${client.id} errorClass=${err instanceof Error ? err.name : 'Error'} error="${(err instanceof Error ? err.message : String(err)).replace(/"/g, '\\"')}" - websocket rejected`,
+        `[migration.ws_connection] [fail] socketId=${client.id} errorClass=${err instanceof Error ? err.name : 'Error'} error="${sanitizeLogValue(err instanceof Error ? err.message : String(err))}" - websocket rejected`,
       );
       client.disconnect();
     }

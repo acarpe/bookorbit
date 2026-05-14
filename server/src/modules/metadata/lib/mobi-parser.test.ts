@@ -167,6 +167,16 @@ describe('parseMobiBuffer', () => {
       expect(parseMobiBuffer(buf).description).toBe('A great book.');
     });
 
+    it('strips empty tags from description', () => {
+      const buf = buildMobiBuffer({ description: 'text<>more' });
+      expect(parseMobiBuffer(buf).description).toBe('textmore');
+    });
+
+    it('strips malformed unclosed tags from description', () => {
+      const buf = buildMobiBuffer({ description: 'before<br after="x">rest' });
+      expect(parseMobiBuffer(buf).description).toBe('beforerest');
+    });
+
     it('parses isbn', () => {
       const buf = buildMobiBuffer({ isbn: '9780441013593' });
       expect(parseMobiBuffer(buf).isbn).toBe('9780441013593');

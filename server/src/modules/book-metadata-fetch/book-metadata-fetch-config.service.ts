@@ -5,6 +5,7 @@ import { NodePgDatabase } from 'drizzle-orm/node-postgres';
 
 import { DB } from '../../db';
 import * as schema from '../../db/schema';
+import { sanitizeLogValue } from '../../common/utils/log-sanitize.utils';
 import { appSettings, libraries } from '../../db/schema';
 
 type Db = NodePgDatabase<typeof schema>;
@@ -105,7 +106,7 @@ export class BookMetadataFetchConfigService {
       return JSON.parse(value) as T;
     } catch (error) {
       const errorClass = error instanceof Error ? error.name : 'Error';
-      const message = (error instanceof Error ? error.message : String(error)).replace(/"/g, '\\"');
+      const message = sanitizeLogValue(error instanceof Error ? error.message : String(error));
       this.logger.warn(
         `[book.metadata_fetch.config_parse] [fail] key=${key} errorClass=${errorClass} error="${message}" - failed to parse stored config`,
       );

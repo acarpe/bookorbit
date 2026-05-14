@@ -43,6 +43,7 @@ export class KoboProxyService {
         body = typeof req.body === 'string' ? req.body : JSON.stringify(req.body);
       }
 
+      // codeql[js/request-forgery] - hostname validated by buildTargetUrl() to KOBO_API_HOSTNAME
       const upstream = await fetch(targetUrl, {
         method: req.method,
         headers,

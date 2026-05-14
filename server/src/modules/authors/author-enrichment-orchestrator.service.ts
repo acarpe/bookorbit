@@ -5,6 +5,7 @@ import { NotificationType } from '@bookorbit/types';
 import { AppSettingsService } from '../app-settings/app-settings.service';
 import { NotificationService } from '../notification/notification.service';
 import { METADATA_AUTHORS_REPLACED, MetadataAuthorsReplacedEvent, MetadataEventsService } from '../metadata/metadata-events.service';
+import { sanitizeLogValue } from '../../common/utils/log-sanitize.utils';
 import { AuthorEnrichmentConfigService } from './author-enrichment-config.service';
 import { AuthorEnrichmentExecutorService } from './author-enrichment-executor.service';
 import { AuthorEnrichmentGateway } from './author-enrichment.gateway';
@@ -167,7 +168,7 @@ export class AuthorEnrichmentOrchestratorService implements OnApplicationBootstr
       }
     } catch (error) {
       const errorClass = error instanceof Error ? error.name : 'Error';
-      const message = (error instanceof Error ? error.message : String(error)).replace(/"/g, '\\"');
+      const message = sanitizeLogValue(error instanceof Error ? error.message : String(error));
       this.logger.warn(`[author.enrichment.poll] [fail] errorClass=${errorClass} error="${message}" - author enrichment poll failed`);
     } finally {
       this.running = false;
@@ -245,11 +246,11 @@ export class AuthorEnrichmentOrchestratorService implements OnApplicationBootstr
 
     if (nextAttemptAt) {
       this.logger.debug(
-        `[author.enrichment.process] [fail] authorId=${authorId} attempts=${attemptNumber}/${MAX_ATTEMPTS} status=${result.httpStatus ?? 'none'} nextAttemptAt=${nextAttemptAt.toISOString()} errorClass=AuthorEnrichmentError error="${truncateError(result.message).replace(/"/g, '\\"')}" - author enrichment failed and will retry`,
+        `[author.enrichment.process] [fail] authorId=${authorId} attempts=${attemptNumber}/${MAX_ATTEMPTS} status=${result.httpStatus ?? 'none'} nextAttemptAt=${nextAttemptAt.toISOString()} errorClass=AuthorEnrichmentError error="${sanitizeLogValue(truncateError(result.message))}" - author enrichment failed and will retry`,
       );
     } else {
       this.logger.warn(
-        `[author.enrichment.process] [fail] authorId=${authorId} attempts=${attemptNumber} status=${result.httpStatus ?? 'none'} errorClass=AuthorEnrichmentError error="${truncateError(result.message).replace(/"/g, '\\"')}" - author enrichment failed`,
+        `[author.enrichment.process] [fail] authorId=${authorId} attempts=${attemptNumber} status=${result.httpStatus ?? 'none'} errorClass=AuthorEnrichmentError error="${sanitizeLogValue(truncateError(result.message))}" - author enrichment failed`,
       );
     }
 

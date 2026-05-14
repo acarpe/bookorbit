@@ -23,6 +23,7 @@ import { stat } from 'fs/promises';
 import type { FastifyReply } from 'fastify';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { RequirePermission } from '../../common/decorators/require-permission.decorator';
+import { sanitizeLogValue } from '../../common/utils/log-sanitize.utils';
 import { Auditable } from '../../common/decorators/auditable.decorator';
 import { ForbidPermission } from '../../common/decorators/forbid-permission.decorator';
 import { imageContentTypeFromPath } from '../../common/image-content-type';
@@ -268,7 +269,7 @@ export class BookController {
       );
     } catch (err) {
       const errorClass = err instanceof Error ? err.name : 'Error';
-      const errorMessage = (err instanceof Error ? err.message : String(err)).replace(/"/g, '\\"');
+      const errorMessage = sanitizeLogValue(err instanceof Error ? err.message : String(err));
       this.logger.warn(
         `[${event}] [fail] userId=${user.id} format=${dto.format} durationMs=${Date.now() - startedAt} errorClass=${errorClass} error="${errorMessage}" - export failed`,
       );
@@ -324,7 +325,7 @@ export class BookController {
       }
 
       const errorClass = err instanceof Error ? err.name : 'Error';
-      const errorMessage = (err instanceof Error ? err.message : String(err)).replace(/"/g, '\\"');
+      const errorMessage = sanitizeLogValue(err instanceof Error ? err.message : String(err));
       this.logger.warn(
         `[${event}] [fail] userId=${user.id} count=${bookIds.length} scope=${scope} files=${plannedFiles} projectedBytes=${projectedBytes} durationMs=${Date.now() - startedAt} errorClass=${errorClass} error="${errorMessage}" - export books failed`,
       );
@@ -459,7 +460,7 @@ export class BookController {
       );
     } catch (err) {
       const errorClass = err instanceof Error ? err.name : 'Error';
-      const errorMessage = (err instanceof Error ? err.message : String(err)).replace(/"/g, '\\"');
+      const errorMessage = sanitizeLogValue(err instanceof Error ? err.message : String(err));
       this.logger.warn(
         `[${event}] [fail] fileId=${fileId} userId=${user.id} durationMs=${Date.now() - startedAt} errorClass=${errorClass} error="${errorMessage}" - download file failed`,
       );

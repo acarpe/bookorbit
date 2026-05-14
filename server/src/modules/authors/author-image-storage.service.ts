@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { lookup } from 'dns/promises';
+import { sanitizeLogValue } from '../../common/utils/log-sanitize.utils';
 import { access, copyFile, mkdir, readdir, rm, stat, unlink, writeFile } from 'fs/promises';
 import { constants as fsConstants } from 'fs';
 import { isIP } from 'net';
@@ -58,7 +59,7 @@ export class AuthorImageStorageService {
         const errorClass = error instanceof Error ? error.name : 'Error';
         const message = error instanceof Error ? error.message : String(error);
         this.logger.warn(
-          `[author.image.cleanup] [fail] authorId=${authorId} file=${file} errorClass=${errorClass} error="${message.replace(/"/g, '\\"')}" - author image cleanup failed`,
+          `[author.image.cleanup] [fail] authorId=${authorId} file=${file} errorClass=${errorClass} error="${sanitizeLogValue(message)}" - author image cleanup failed`,
         );
       });
     }
@@ -117,7 +118,7 @@ export class AuthorImageStorageService {
     await rm(dir, { recursive: true, force: true }).catch((error: unknown) => {
       const message = error instanceof Error ? error.message : String(error);
       this.logger.warn(
-        `[author.image.delete_dir] [fail] authorId=${authorId} error="${message.replace(/"/g, '\\"')}" - author image directory cleanup failed`,
+        `[author.image.delete_dir] [fail] authorId=${authorId} error="${sanitizeLogValue(message)}" - author image directory cleanup failed`,
       );
     });
   }

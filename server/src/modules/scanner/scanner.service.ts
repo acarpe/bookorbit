@@ -710,7 +710,7 @@ export class ScannerService implements OnApplicationBootstrap {
     const { role, format } = classifyFile(filePath);
     if (role !== 'content') {
       this.logger.log(
-        `[${event}] [end] libraryId=${libraryId} path="${filePath.replace(/"/g, '\\' + '"')}" durationMs=${Date.now() - startedAt} skippedNonContent=true scanScope=file - targeted book scan completed`,
+        `[${event}] [end] libraryId=${libraryId} path="${sanitizeLogValue(filePath)}" durationMs=${Date.now() - startedAt} skippedNonContent=true scanScope=file - targeted book scan completed`,
       );
       return;
     }
@@ -718,7 +718,7 @@ export class ScannerService implements OnApplicationBootstrap {
     const allowed = settings.allowedFormats.length > 0 ? new Set(settings.allowedFormats) : null;
     if (allowed && format !== null && !allowed.has(format)) {
       this.logger.log(
-        `[${event}] [end] libraryId=${libraryId} path="${filePath.replace(/"/g, '\\' + '"')}" durationMs=${Date.now() - startedAt} skippedByAllowedFormats=true scanScope=file - targeted book scan completed`,
+        `[${event}] [end] libraryId=${libraryId} path="${sanitizeLogValue(filePath)}" durationMs=${Date.now() - startedAt} skippedByAllowedFormats=true scanScope=file - targeted book scan completed`,
       );
       return;
     }
@@ -726,7 +726,7 @@ export class ScannerService implements OnApplicationBootstrap {
     const fileStat = await stat(filePath).catch(() => null);
     if (!fileStat || !fileStat.isFile()) {
       this.logger.log(
-        `[${event}] [end] libraryId=${libraryId} path="${filePath.replace(/"/g, '\\' + '"')}" durationMs=${Date.now() - startedAt} candidateFound=false scanScope=file - targeted book scan completed`,
+        `[${event}] [end] libraryId=${libraryId} path="${sanitizeLogValue(filePath)}" durationMs=${Date.now() - startedAt} candidateFound=false scanScope=file - targeted book scan completed`,
       );
       return;
     }
@@ -754,7 +754,7 @@ export class ScannerService implements OnApplicationBootstrap {
     });
     this.emitTargetedScanResult(libraryId, result);
     this.logger.log(
-      `[${event}] [end] libraryId=${libraryId} path="${filePath.replace(/"/g, '\\' + '"')}" durationMs=${Date.now() - startedAt} added=${result.added} updated=${result.updated} scanScope=file - targeted book scan completed`,
+      `[${event}] [end] libraryId=${libraryId} path="${sanitizeLogValue(filePath)}" durationMs=${Date.now() - startedAt} added=${result.added} updated=${result.updated} scanScope=file - targeted book scan completed`,
     );
   }
 
@@ -769,7 +769,7 @@ export class ScannerService implements OnApplicationBootstrap {
     const fileStat = await stat(filePath).catch(() => null);
     if (!fileStat || !fileStat.isFile()) {
       this.logger.log(
-        `[${event}] [end] libraryId=${libraryId} path="${filePath.replace(/"/g, '\\' + '"')}" durationMs=${Date.now() - startedAt} candidateFound=false scanScope=root_file - targeted book scan completed`,
+        `[${event}] [end] libraryId=${libraryId} path="${sanitizeLogValue(filePath)}" durationMs=${Date.now() - startedAt} candidateFound=false scanScope=root_file - targeted book scan completed`,
       );
       return;
     }
@@ -777,7 +777,7 @@ export class ScannerService implements OnApplicationBootstrap {
     const { role, format } = classifyFile(filePath);
     if (role !== 'content') {
       this.logger.log(
-        `[${event}] [end] libraryId=${libraryId} path="${filePath.replace(/"/g, '\\' + '"')}" durationMs=${Date.now() - startedAt} skippedNonContent=true scanScope=root_file - targeted book scan completed`,
+        `[${event}] [end] libraryId=${libraryId} path="${sanitizeLogValue(filePath)}" durationMs=${Date.now() - startedAt} skippedNonContent=true scanScope=root_file - targeted book scan completed`,
       );
       return;
     }
@@ -785,7 +785,7 @@ export class ScannerService implements OnApplicationBootstrap {
     const allowed = settings.allowedFormats.length > 0 ? new Set(settings.allowedFormats) : null;
     if (allowed && format !== null && !allowed.has(format)) {
       this.logger.log(
-        `[${event}] [end] libraryId=${libraryId} path="${filePath.replace(/"/g, '\\' + '"')}" durationMs=${Date.now() - startedAt} skippedByAllowedFormats=true scanScope=root_file - targeted book scan completed`,
+        `[${event}] [end] libraryId=${libraryId} path="${sanitizeLogValue(filePath)}" durationMs=${Date.now() - startedAt} skippedByAllowedFormats=true scanScope=root_file - targeted book scan completed`,
       );
       return;
     }
@@ -813,7 +813,7 @@ export class ScannerService implements OnApplicationBootstrap {
     });
     this.emitTargetedScanResult(libraryId, result);
     this.logger.log(
-      `[${event}] [end] libraryId=${libraryId} path="${filePath.replace(/"/g, '\\' + '"')}" durationMs=${Date.now() - startedAt} added=${result.added} updated=${result.updated} scanScope=root_file - targeted book scan completed`,
+      `[${event}] [end] libraryId=${libraryId} path="${sanitizeLogValue(filePath)}" durationMs=${Date.now() - startedAt} added=${result.added} updated=${result.updated} scanScope=root_file - targeted book scan completed`,
     );
   }
 
@@ -851,19 +851,19 @@ export class ScannerService implements OnApplicationBootstrap {
     try {
       candidate = await buildSingleBookCandidate(resolvedBookFolder, libraryFolder.path, settings.excludePatterns, (msg) =>
         this.logger.warn(
-          `[scanner.walk_candidates] [fail] libraryId=${libraryId} path="${resolvedBookFolder.replace(/"/g, '\\' + '"')}" error="${msg.replace(/"/g, '\\' + '"')}" - candidate walk warning`,
+          `[scanner.walk_candidates] [fail] libraryId=${libraryId} path="${sanitizeLogValue(resolvedBookFolder)}" error="${sanitizeLogValue(msg)}" - candidate walk warning`,
         ),
       );
     } catch (err) {
       this.logger.warn(
-        `[${event}] [fail] libraryId=${libraryId} path="${filePath.replace(/"/g, '\\' + '"')}" durationMs=${Date.now() - startedAt} scanScope=folder errorClass=${err instanceof Error ? err.name : 'Error'} error="${(err instanceof Error ? err.message : String(err)).replace(/"/g, '\\' + '"')}" - cannot walk target book folder`,
+        `[${event}] [fail] libraryId=${libraryId} path="${sanitizeLogValue(filePath)}" durationMs=${Date.now() - startedAt} scanScope=folder errorClass=${err instanceof Error ? err.name : 'Error'} error="${sanitizeLogValue(err instanceof Error ? err.message : String(err))}" - cannot walk target book folder`,
       );
       return;
     }
 
     if (!candidate) {
       this.logger.log(
-        `[${event}] [end] libraryId=${libraryId} path="${filePath.replace(/"/g, '\\' + '"')}" durationMs=${Date.now() - startedAt} candidateFound=false scanScope=folder - targeted book scan completed`,
+        `[${event}] [end] libraryId=${libraryId} path="${sanitizeLogValue(filePath)}" durationMs=${Date.now() - startedAt} candidateFound=false scanScope=folder - targeted book scan completed`,
       );
       return;
     }
@@ -877,7 +877,7 @@ export class ScannerService implements OnApplicationBootstrap {
       });
       if (!filtered.some((f) => (f.role ?? classifyFile(f.absolutePath).role) === 'content')) {
         this.logger.log(
-          `[${event}] [end] libraryId=${libraryId} path="${filePath.replace(/"/g, '\\' + '"')}" durationMs=${Date.now() - startedAt} candidateFound=true skippedByAllowedFormats=true scanScope=folder - targeted book scan completed`,
+          `[${event}] [end] libraryId=${libraryId} path="${sanitizeLogValue(filePath)}" durationMs=${Date.now() - startedAt} candidateFound=true skippedByAllowedFormats=true scanScope=folder - targeted book scan completed`,
         );
         return;
       }
@@ -892,7 +892,7 @@ export class ScannerService implements OnApplicationBootstrap {
     });
     this.emitTargetedScanResult(libraryId, result);
     this.logger.log(
-      `[${event}] [end] libraryId=${libraryId} path="${filePath.replace(/"/g, '\\' + '"')}" durationMs=${Date.now() - startedAt} scanScope=folder folder="${basename(resolvedBookFolder).replace(/"/g, '\\' + '"')}" added=${result.added} updated=${result.updated} - targeted book scan completed`,
+      `[${event}] [end] libraryId=${libraryId} path="${sanitizeLogValue(filePath)}" durationMs=${Date.now() - startedAt} scanScope=folder folder="${sanitizeLogValue(basename(resolvedBookFolder))}" added=${result.added} updated=${result.updated} - targeted book scan completed`,
     );
   }
 
@@ -1688,7 +1688,7 @@ export class ScannerService implements OnApplicationBootstrap {
       const code = (err as NodeJS.ErrnoException).code;
       if (code === 'ENOENT' || code === 'EACCES') {
         this.logger.debug(
-          `[scanner.process_file] [end] bookId=${bookId} path="${fileStat.absolutePath.replace(/"/g, '\\' + '"')}" action=skip_inaccessible - file no longer accessible`,
+          `[scanner.process_file] [end] bookId=${bookId} path="${sanitizeLogValue(fileStat.absolutePath)}" action=skip_inaccessible - file no longer accessible`,
         );
         return { isNew: false, reassigned: false, fileId: null };
       }

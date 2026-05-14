@@ -1,25 +1,7 @@
 import type { DictionaryDefinition, DictionaryEntry, DictionaryResult } from '@bookorbit/types'
 
-const HTML_TAG_RE = /<[^>]*>/g
-const HTML_ENTITY_RE = /&(\w+);/g
-const NUMERIC_ENTITY_RE = /&#(\d+);/g
-
-const HTML_ENTITIES: Record<string, string> = {
-  amp: '&',
-  lt: '<',
-  gt: '>',
-  quot: '"',
-  apos: "'",
-  nbsp: ' ',
-  ndash: '\u2013',
-  mdash: '\u2014',
-}
-
 function stripHtml(html: string): string {
-  let text = html.replace(HTML_TAG_RE, '')
-  text = text.replace(HTML_ENTITY_RE, (_, name) => HTML_ENTITIES[name] ?? `&${name};`)
-  text = text.replace(NUMERIC_ENTITY_RE, (_, code) => String.fromCharCode(Number(code)))
-  return text.trim()
+  return (new DOMParser().parseFromString(html, 'text/html').body.textContent ?? '').trim()
 }
 
 function normalizeLang(lang: string): string {

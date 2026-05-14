@@ -81,13 +81,13 @@ export function buildComicInfoXml(existingXml: string | null, payload: BookWrite
 
 function stripHtml(html: string): string {
   return html
-    .replace(/<[^>]*>/g, ' ')
-    .replace(/\s{2,}/g, ' ')
     .replace(/&amp;/g, '&')
     .replace(/&lt;/g, '<')
     .replace(/&gt;/g, '>')
     .replace(/&quot;/g, '"')
     .replace(/&#39;/g, "'")
+    .replace(/<[^>]*>/g, ' ')
+    .replace(/\s{2,}/g, ' ')
     .trim();
 }
 

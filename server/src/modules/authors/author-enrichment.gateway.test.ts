@@ -145,4 +145,20 @@ describe('AuthorEnrichmentGateway', () => {
     expect(client.disconnect).toHaveBeenCalledTimes(1);
     expect(client.emit).not.toHaveBeenCalled();
   });
+
+  it('handleConnection disconnects and does not throw when error message has special characters', async () => {
+    const { gateway, jwtService } = makeGateway();
+    jwtService.verify.mockImplementation(() => {
+      throw new Error('JWT "expired"\nlog injection attempt');
+    });
+    const client = {
+      id: 'sock-4',
+      handshake: { auth: { token: 'bad-token' } },
+      emit: vi.fn(),
+      disconnect: vi.fn(),
+    } as any;
+
+    await expect(gateway.handleConnection(client)).resolves.toBeUndefined();
+    expect(client.disconnect).toHaveBeenCalledTimes(1);
+  });
 });

@@ -43,6 +43,9 @@ jobs:
     name: ${{ inputs.check-name }}
     runs-on: ubuntu-latest
     timeout-minutes: ${{ inputs.job-timeout-minutes }}
+    permissions:
+      contents: read
+      checks: write
     services:
       postgres:
         image: pgvector/pgvector:pg16

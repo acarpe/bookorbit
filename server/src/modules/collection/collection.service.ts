@@ -2,6 +2,7 @@ import { BadRequestException, ConflictException, ForbiddenException, Injectable,
 import { and } from 'drizzle-orm';
 
 import type { BookQuery, BooksPage } from '@bookorbit/types';
+import { sanitizeLogValue } from '../../common/utils/log-sanitize.utils';
 import type { RequestUser } from '../../common/types/request-user';
 import { BookService } from '../book/book.service';
 import { BookQueryBuilder } from '../book/book-query-builder.service';
@@ -76,7 +77,7 @@ export class CollectionService {
 
   private buildErrorLogFields(error: unknown): { errorClass: string; errorMessage: string } {
     const errorClass = error instanceof Error ? error.name : 'Error';
-    const errorMessage = (error instanceof Error ? error.message : String(error)).replace(/"/g, '\\"');
+    const errorMessage = sanitizeLogValue(error instanceof Error ? error.message : String(error));
     return { errorClass, errorMessage };
   }
 

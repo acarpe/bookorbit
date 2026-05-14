@@ -3,6 +3,7 @@ import { eq, sql } from 'drizzle-orm';
 import { NodePgDatabase } from 'drizzle-orm/node-postgres';
 import { MetadataProviderKey, ProviderConfigurations, ProviderStatus } from '@bookorbit/types';
 
+import { sanitizeLogValue } from '../../common/utils/log-sanitize.utils';
 import { DB } from '../../db';
 import * as schema from '../../db/schema';
 
@@ -154,7 +155,7 @@ export class ProviderConfigService {
       const durationMs = Date.now() - startedAt;
       const errorClass = error instanceof Error ? error.name : 'UnknownError';
       const rawMessage = error instanceof Error ? error.message : 'unknown error';
-      const errorMessage = rawMessage.replace(/"/g, '\\"');
+      const errorMessage = sanitizeLogValue(rawMessage);
       this.logger.warn(
         `[metadata_provider_config.parse] [fail] key=${PROVIDER_CONFIG_KEY} source=${source} durationMs=${durationMs} errorClass=${errorClass} error="${errorMessage}" - failed to parse persisted provider config`,
       );

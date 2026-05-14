@@ -338,4 +338,42 @@ describe('AuthorImageStorageService', () => {
     await expect(service.getImageUrlIfExists(22)).resolves.toBe('/api/v1/authors/22/image');
     await expect(service.getThumbnailUrlIfExists(22)).resolves.toBe('/api/v1/authors/22/thumbnail');
   });
+
+  it('deleteAuthorDir removes the author directory when it exists', async () => {
+    const authorDir = join(booksPath, 'authors', '50');
+    await mkdir(authorDir, { recursive: true });
+    await writeFile(join(authorDir, 'photo.jpg'), Buffer.from('img'));
+
+    await expect(service.deleteAuthorDir(50)).resolves.toBeUndefined();
+
+    const { access } = await import('fs/promises');
+    await expect(access(authorDir)).rejects.toThrow();
+  });
+
+  it('deleteAuthorDir resolves without throwing when directory does not exist', async () => {
+    await expect(service.deleteAuthorDir(9999)).resolves.toBeUndefined();
+  });
+
+  it('saveFromUrl logs cleanup failure and continues when an old photo file cannot be deleted', async () => {
+    vi.mocked(lookup).mockResolvedValue([{ address: '93.184.216.34', family: 4 }] as never);
+
+    const authorDir = join(booksPath, 'authors', '60');
+    await mkdir(authorDir, { recursive: true });
+    const existingPhoto = join(authorDir, 'photo.webp');
+    await writeFile(existingPhoto, Buffer.from('old'));
+
+    await rm(existingPhoto);
+
+    global.fetch = vi.fn().mockResolvedValue({
+      status: 200,
+      ok: true,
+      headers: { get: vi.fn().mockReturnValue('image/jpeg') },
+      body: (async function* () {
+        await Promise.resolve();
+        yield Buffer.from('new-image');
+      })(),
+    } as never);
+
+    await expect(service.saveFromUrl(60, 'https://cdn.example.com/image.jpg')).resolves.toBe(true);
+  });
 });

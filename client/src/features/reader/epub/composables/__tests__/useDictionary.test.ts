@@ -325,6 +325,63 @@ describe('useDictionary', () => {
     expect(result!.entries[0]!.definitions[0]!.definition).toBe("Say 'hi'")
   })
 
+  it('Wiktionary: strips script tags and their content from definitions', async () => {
+    fetchMock.mockResolvedValueOnce(
+      mockOk({
+        en: [
+          {
+            partOfSpeech: 'Noun',
+            definitions: [{ definition: 'Normal text.<script>alert(1)</script>', examples: [] }],
+          },
+        ],
+      }),
+    )
+    const { lookup } = await load()
+    const result = await lookup('test', 'fr')
+    const def = result!.entries[0]!.definitions[0]!.definition
+    expect(def).not.toContain('<script>')
+    expect(def).not.toContain('</script>')
+    expect(def).toContain('Normal text.')
+  })
+
+  it('Wiktionary: handles partial/unclosed HTML tags that old regex could not strip', async () => {
+    fetchMock.mockResolvedValueOnce(
+      mockOk({
+        en: [
+          {
+            partOfSpeech: 'Noun',
+            definitions: [{ definition: '<script src="evil.js"', examples: [] }],
+          },
+        ],
+      }),
+    )
+    const { lookup } = await load()
+    const result = await lookup('test', 'fr')
+    // DOMParser parses the partial tag as an HTML element - textContent is empty, so the
+    // definition is skipped and there are no entries.
+    expect(result).toBeNull()
+  })
+
+  it('Wiktionary: trims whitespace-only definitions after stripping', async () => {
+    fetchMock.mockResolvedValueOnce(
+      mockOk({
+        en: [
+          {
+            partOfSpeech: 'Noun',
+            definitions: [
+              { definition: '<span>   </span>', examples: [] },
+              { definition: 'Valid.', examples: [] },
+            ],
+          },
+        ],
+      }),
+    )
+    const { lookup } = await load()
+    const result = await lookup('test', 'fr')
+    expect(result!.entries[0]!.definitions).toHaveLength(1)
+    expect(result!.entries[0]!.definitions[0]!.definition).toBe('Valid.')
+  })
+
   it('Wiktionary: strips HTML from example text', async () => {
     fetchMock.mockResolvedValueOnce(mockOk(makeWiktionaryResponse()))
     const { lookup } = await load()

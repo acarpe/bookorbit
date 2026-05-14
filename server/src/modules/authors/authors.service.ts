@@ -13,6 +13,7 @@ import type {
 } from '@bookorbit/types';
 import { assembleBookCards } from '../book/utils/assemble-book-cards';
 import { MAX_OFFSET_ROWS, isOffsetWithinLimit } from '../../common/constants/pagination.constants';
+import { sanitizeLogValue } from '../../common/utils/log-sanitize.utils';
 import type { RequestUser } from '../../common/types/request-user';
 import { books } from '../../db/schema';
 import { BookReadService } from '../book/book-read.service';
@@ -151,7 +152,7 @@ export class AuthorsService {
       return result;
     } catch (err) {
       const errorClass = err instanceof Error ? err.name : 'Error';
-      const errorMessage = (err instanceof Error ? err.message : String(err)).replace(/"/g, '\\"');
+      const errorMessage = sanitizeLogValue(err instanceof Error ? err.message : String(err));
       this.logger.warn(
         `[${event}] [fail] query=${JSON.stringify(dto.q)} durationMs=${Date.now() - startedAt} errorClass=${errorClass} error="${errorMessage}" - author metadata search failed`,
       );
@@ -173,7 +174,7 @@ export class AuthorsService {
       return result;
     } catch (err) {
       const errorClass = err instanceof Error ? err.name : 'Error';
-      const errorMessage = (err instanceof Error ? err.message : String(err)).replace(/"/g, '\\"');
+      const errorMessage = sanitizeLogValue(err instanceof Error ? err.message : String(err));
       this.logger.warn(
         `[${event}] [fail] provider=${dto.provider} providerId=${JSON.stringify(dto.id)} durationMs=${Date.now() - startedAt} errorClass=${errorClass} error="${errorMessage}" - author metadata lookup failed`,
       );
@@ -236,7 +237,7 @@ export class AuthorsService {
       return detail;
     } catch (err) {
       const errorClass = err instanceof Error ? err.name : 'Error';
-      const errorMessage = (err instanceof Error ? err.message : String(err)).replace(/"/g, '\\"');
+      const errorMessage = sanitizeLogValue(err instanceof Error ? err.message : String(err));
       this.logger.warn(
         `[${event}] [fail] userId=${user.id} authorId=${authorId} durationMs=${Date.now() - startedAt} errorClass=${errorClass} error="${errorMessage}" - author update failed`,
       );
@@ -278,7 +279,7 @@ export class AuthorsService {
       };
     } catch (err) {
       const errorClass = err instanceof Error ? err.name : 'Error';
-      const errorMessage = (err instanceof Error ? err.message : String(err)).replace(/"/g, '\\"');
+      const errorMessage = sanitizeLogValue(err instanceof Error ? err.message : String(err));
       this.logger.warn(
         `[${event}] [fail] userId=${user.id} targetAuthorId=${dto.targetAuthorId} durationMs=${Date.now() - startedAt} errorClass=${errorClass} error="${errorMessage}" - author merge failed`,
       );
@@ -310,7 +311,7 @@ export class AuthorsService {
       };
     } catch (err) {
       const errorClass = err instanceof Error ? err.name : 'Error';
-      const errorMessage = (err instanceof Error ? err.message : String(err)).replace(/"/g, '\\"');
+      const errorMessage = sanitizeLogValue(err instanceof Error ? err.message : String(err));
       this.logger.warn(
         `[${event}] [fail] userId=${user.id} count=${dto.authorIds.length} durationMs=${Date.now() - startedAt} errorClass=${errorClass} error="${errorMessage}" - author delete failed`,
       );
@@ -333,7 +334,7 @@ export class AuthorsService {
       return detail;
     } catch (err) {
       const errorClass = err instanceof Error ? err.name : 'Error';
-      const errorMessage = (err instanceof Error ? err.message : String(err)).replace(/"/g, '\\"');
+      const errorMessage = sanitizeLogValue(err instanceof Error ? err.message : String(err));
       this.logger.warn(
         `[${event}] [fail] userId=${user.id} authorId=${authorId} durationMs=${Date.now() - startedAt} errorClass=${errorClass} error="${errorMessage}" - author enrichment refresh failed`,
       );
@@ -396,7 +397,7 @@ export class AuthorsService {
           failed += 1;
           const itemErrorClass = error instanceof Error ? error.name : 'Error';
           errorMessage = error instanceof Error ? error.message : 'Failed to refresh metadata';
-          const itemError = errorMessage.replace(/"/g, '\\"');
+          const itemError = sanitizeLogValue(errorMessage);
           this.logger.warn(
             `[${event}] [fail] userId=${user.id} authorId=${authorId} durationMs=${Date.now() - startedAt} errorClass=${itemErrorClass} error="${itemError}" - author metadata refresh item failed`,
           );
@@ -422,7 +423,7 @@ export class AuthorsService {
       return { processed, failed, updated };
     } catch (err) {
       const errorClass = err instanceof Error ? err.name : 'Error';
-      const errorMessage = (err instanceof Error ? err.message : String(err)).replace(/"/g, '\\"');
+      const errorMessage = sanitizeLogValue(err instanceof Error ? err.message : String(err));
       this.logger.warn(
         `[${event}] [fail] userId=${user.id} count=${authorIds.length} durationMs=${Date.now() - startedAt} errorClass=${errorClass} error="${errorMessage}" - bulk author metadata refresh failed`,
       );

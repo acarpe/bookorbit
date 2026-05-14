@@ -2,6 +2,7 @@ import { readFile } from 'fs/promises';
 import { PDFDocument } from 'pdf-lib';
 
 import { BOOKORBIT_NS_PREFIX } from '../../../common/bookorbit-ns';
+import { sanitizeLogValue } from '../../../common/utils/log-sanitize.utils';
 import { extractPdfCover } from './pdf-cover';
 import { extractXmpXml, parseXmp, type XmpParsed } from './pdf-xmp-reader';
 
@@ -62,7 +63,7 @@ function splitCommaList(value: string | null): string[] {
 
 function createWarning(code: PdfParseWarning['code'], absolutePath: string, error: unknown): PdfParseWarning {
   const errorClass = error instanceof Error ? error.name : 'Error';
-  const errorMessage = (error instanceof Error ? error.message : String(error)).replace(/"/g, '\\"');
+  const errorMessage = sanitizeLogValue(error instanceof Error ? error.message : String(error));
   return { code, absolutePath, errorClass, errorMessage };
 }
 

@@ -5,6 +5,7 @@ import { FieldPreferenceOverrides, LibraryMetadataPreferences, MetadataFetchPref
 
 import { DB } from '../../db';
 import * as schema from '../../db/schema';
+import { sanitizeLogValue } from '../../common/utils/log-sanitize.utils';
 import { MetadataPreferenceResolver } from './metadata-preference-resolver';
 
 type Db = NodePgDatabase<typeof schema>;
@@ -33,7 +34,7 @@ export class MetadataPreferencesService {
       const durationMs = Date.now() - startedAt;
       const errorClass = error instanceof Error ? error.name : 'UnknownError';
       const rawMessage = error instanceof Error ? error.message : 'unknown error';
-      const errorMessage = rawMessage.replace(/"/g, '\\"');
+      const errorMessage = sanitizeLogValue(rawMessage);
       this.logger.warn(
         `[metadata_preferences.global_parse] [fail] key=${GLOBAL_PREFERENCES_KEY} durationMs=${durationMs} errorClass=${errorClass} error="${errorMessage}" - failed to parse persisted global preferences`,
       );

@@ -15,6 +15,7 @@ import { inArray, type SQL } from 'drizzle-orm';
 
 import { bookCoverDirPath, bookThumbnailPath, findPreferredBookCoverFileName } from '../../common/book-cover-storage';
 import { MAX_OFFSET_ROWS, isOffsetWithinLimit } from '../../common/constants/pagination.constants';
+import { sanitizeLogValue } from '../../common/utils/log-sanitize.utils';
 import { extractEpubMetadata } from '../metadata/lib/epub';
 import { extractCbzMetadata, extractCbrMetadata, extractCb7Metadata } from '../metadata/lib/cbz-metadata';
 import { parseFb2File } from '../metadata/lib/fb2-parser';
@@ -836,7 +837,7 @@ export class BookService {
     } catch (err) {
       if (this.isMissingFilesystemEntry(err)) return null;
       const errorClass = err instanceof Error ? err.name : 'Error';
-      const errorMessage = (err instanceof Error ? err.message : String(err)).replace(/"/g, '\\"');
+      const errorMessage = sanitizeLogValue(err instanceof Error ? err.message : String(err));
       this.logger.warn(
         `[${event}] [fail] bookId=${id} userId=${user.id} path="${dir}" errorClass=${errorClass} error="${errorMessage}" - get cover path failed`,
       );
@@ -854,7 +855,7 @@ export class BookService {
     } catch (err) {
       if (this.isMissingFilesystemEntry(err)) return null;
       const errorClass = err instanceof Error ? err.name : 'Error';
-      const errorMessage = (err instanceof Error ? err.message : String(err)).replace(/"/g, '\\"');
+      const errorMessage = sanitizeLogValue(err instanceof Error ? err.message : String(err));
       this.logger.warn(
         `[${event}] [fail] bookId=${id} userId=${user.id} path="${path}" errorClass=${errorClass} error="${errorMessage}" - get thumbnail path failed`,
       );
@@ -958,7 +959,7 @@ export class BookService {
     } catch (err) {
       const event = 'book.resolve_download_filename';
       const errorClass = err instanceof Error ? err.name : 'Error';
-      const errorMessage = (err instanceof Error ? err.message : String(err)).replace(/"/g, '\\"');
+      const errorMessage = sanitizeLogValue(err instanceof Error ? err.message : String(err));
       this.logger.warn(
         `[${event}] [fail] bookId=${file.bookId} errorClass=${errorClass} error="${errorMessage}" - download filename pattern resolution failed`,
       );
@@ -1023,7 +1024,7 @@ export class BookService {
         const target = deleteTargets[i]!;
         const reason = result.reason;
         const errorClass = reason instanceof Error ? reason.name : 'Error';
-        const errorMessage = (reason instanceof Error ? reason.message : String(reason)).replace(/"/g, '\\"');
+        const errorMessage = sanitizeLogValue(reason instanceof Error ? reason.message : String(reason));
         this.logger.warn(
           `[${event}] [fail] userId=${user.id} path="${target.path}" kind=${target.kind} durationMs=${Date.now() - startedAt} errorClass=${errorClass} error="${errorMessage}" - delete books cleanup target failed`,
         );
@@ -1033,7 +1034,7 @@ export class BookService {
       );
     } catch (err) {
       const errorClass = err instanceof Error ? err.name : 'Error';
-      const errorMessage = (err instanceof Error ? err.message : String(err)).replace(/"/g, '\\"');
+      const errorMessage = sanitizeLogValue(err instanceof Error ? err.message : String(err));
       this.logger.warn(
         `[${event}] [fail] count=${bookIds.length} userId=${user.id} durationMs=${Date.now() - startedAt} errorClass=${errorClass} error="${errorMessage}" - delete books failed`,
       );
@@ -1132,7 +1133,7 @@ export class BookService {
       return detail;
     } catch (err) {
       const errorClass = err instanceof Error ? err.name : 'Error';
-      const errorMessage = (err instanceof Error ? err.message : String(err)).replace(/"/g, '\\"');
+      const errorMessage = sanitizeLogValue(err instanceof Error ? err.message : String(err));
       this.logger.warn(
         `[${event}] [fail] bookId=${id} userId=${user.id} durationMs=${Date.now() - startedAt} errorClass=${errorClass} error="${errorMessage}" - metadata update failed`,
       );
@@ -1154,7 +1155,7 @@ export class BookService {
       return detail;
     } catch (err) {
       const errorClass = err instanceof Error ? err.name : 'Error';
-      const errorMessage = (err instanceof Error ? err.message : String(err)).replace(/"/g, '\\"');
+      const errorMessage = sanitizeLogValue(err instanceof Error ? err.message : String(err));
       this.logger.warn(
         `[${event}] [fail] bookId=${id} userId=${user.id} durationMs=${Date.now() - startedAt} errorClass=${errorClass} error="${errorMessage}" - metadata lock update failed`,
       );
@@ -1200,7 +1201,7 @@ export class BookService {
       return { queued: bookIds.length };
     } catch (err) {
       const errorClass = err instanceof Error ? err.name : 'Error';
-      const errorMessage = (err instanceof Error ? err.message : String(err)).replace(/"/g, '\\"');
+      const errorMessage = sanitizeLogValue(err instanceof Error ? err.message : String(err));
       this.logger.warn(`[${event}] [fail] durationMs=${Date.now() - startedAt} errorClass=${errorClass} error="${errorMessage}" - embed all failed`);
       throw err;
     }
@@ -1232,7 +1233,7 @@ export class BookService {
         failed += 1;
         const reason = result.reason;
         const errorClass = reason instanceof Error ? reason.name : 'Error';
-        const errorMessage = (reason instanceof Error ? reason.message : String(reason)).replace(/"/g, '\\"');
+        const errorMessage = sanitizeLogValue(reason instanceof Error ? reason.message : String(reason));
         this.logger.warn(
           `[${event}] [fail] bookId=${bookId} durationMs=${Date.now() - startedAt} errorClass=${errorClass} error="${errorMessage}" - embedding run item failed`,
         );
@@ -1608,7 +1609,7 @@ export class BookService {
       return result;
     } catch (err) {
       const errorClass = err instanceof Error ? err.name : 'Error';
-      const errorMessage = (err instanceof Error ? err.message : String(err)).replace(/"/g, '\\"');
+      const errorMessage = sanitizeLogValue(err instanceof Error ? err.message : String(err));
       this.logger.warn(
         `[${event}] [fail] bookId=${id} userId=${user.id} preview=${preview} durationMs=${Date.now() - startedAt} errorClass=${errorClass} error="${errorMessage}" - refresh metadata failed`,
       );
@@ -1651,7 +1652,7 @@ export class BookService {
           success = true;
         } catch (err) {
           const itemErrorClass = err instanceof Error ? err.name : 'Error';
-          const itemError = (err instanceof Error ? err.message : String(err)).replace(/"/g, '\\"');
+          const itemError = sanitizeLogValue(err instanceof Error ? err.message : String(err));
           errorMessage = err instanceof Error ? err.message : String(err);
           this.logger.warn(
             `[${event}] [fail] bookId=${id} userId=${user.id} durationMs=${Date.now() - startedAt} errorClass=${itemErrorClass} error="${itemError}" - bulk refresh metadata item failed`,
@@ -1671,7 +1672,7 @@ export class BookService {
       return { processed, failed };
     } catch (err) {
       const errorClass = err instanceof Error ? err.name : 'Error';
-      const errorMessage = (err instanceof Error ? err.message : String(err)).replace(/"/g, '\\"');
+      const errorMessage = sanitizeLogValue(err instanceof Error ? err.message : String(err));
       this.logger.warn(
         `[${event}] [fail] count=${bookIds.length} userId=${user.id} durationMs=${Date.now() - startedAt} errorClass=${errorClass} error="${errorMessage}" - bulk refresh metadata failed`,
       );
@@ -1735,7 +1736,7 @@ export class BookService {
       return { processed, updated };
     } catch (err) {
       const errorClass = err instanceof Error ? err.name : 'Error';
-      const errorMessage = (err instanceof Error ? err.message : String(err)).replace(/"/g, '\\"');
+      const errorMessage = sanitizeLogValue(err instanceof Error ? err.message : String(err));
       this.logger.warn(
         `[${event}] [fail] count=${bookIds.length} userId=${user.id} durationMs=${Date.now() - startedAt} errorClass=${errorClass} error="${errorMessage}" - bulk re-extract cover failed`,
       );
@@ -1839,7 +1840,7 @@ export class BookService {
       };
     } catch (err) {
       const errorClass = err instanceof Error ? err.name : 'Error';
-      const errorMessage = (err instanceof Error ? err.message : String(err)).replace(/"/g, '\\"');
+      const errorMessage = sanitizeLogValue(err instanceof Error ? err.message : String(err));
       this.logger.warn(
         `[${event}] [fail] count=${bookIds.length} userId=${user.id} scope=${scope} durationMs=${Date.now() - startedAt} errorClass=${errorClass} error="${errorMessage}" - get export files failed`,
       );

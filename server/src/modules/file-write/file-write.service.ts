@@ -6,6 +6,7 @@ import { join } from 'path';
 import type { WriteResult } from '@bookorbit/types';
 import { NotificationType } from '@bookorbit/types';
 import { bookCoverDirPath, findPreferredBookCoverFileName } from '../../common/book-cover-storage';
+import { sanitizeLogValue } from '../../common/utils/log-sanitize.utils';
 import { NotificationService } from '../notification/notification.service';
 import { computeFileHash } from '../scanner/lib/hash';
 import { FORMAT_CB7, FORMAT_CBZ, FORMAT_EPUB, FORMAT_PDF, createBookWriteFieldMask } from './file-write.constants';
@@ -354,5 +355,5 @@ function formatUserId(userId: number | undefined): string {
 }
 
 function sanitizeErrorMessage(message: string): string {
-  return message.replace(/"/g, '\\"');
+  return sanitizeLogValue(message);
 }

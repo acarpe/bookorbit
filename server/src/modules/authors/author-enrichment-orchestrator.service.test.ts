@@ -250,4 +250,37 @@ describe('AuthorEnrichmentOrchestratorService', () => {
     expect(session.getSnapshot().sessionTotal).toBe(4);
     expect(gateway.emitStatus).toHaveBeenCalled();
   });
+
+  it('pollOnce catches unexpected errors and does not re-throw', async () => {
+    queueRepo.recoverStuckProcessing.mockRejectedValue(new Error('DB "connection" lost\nnewline'));
+
+    await expect((service as any).pollOnce()).resolves.toBeUndefined();
+    expect((service as any).running).toBe(false);
+  });
+
+  it('pollOnce resets running flag in finally even on error', async () => {
+    queueRepo.fetchDue.mockRejectedValue(new Error('unexpected'));
+
+    (service as any).running = false;
+    await (service as any).pollOnce();
+
+    expect((service as any).running).toBe(false);
+  });
+
+  it('processOne logs retry attempt and marks failed with nextAttemptAt', async () => {
+    executor.execute.mockResolvedValue({
+      kind: 'failed',
+      message: 'rate limited: "429" response\nnewline',
+      provider: 'audnexus',
+      httpStatus: 429,
+      retryAfterMs: 60_000,
+      transient: true,
+      descriptionUpdated: false,
+      imageUpdated: false,
+    });
+
+    await (service as any).processOne(55, 0);
+
+    expect(queueRepo.markFailed).toHaveBeenCalledWith(expect.objectContaining({ authorId: 55, nextAttemptAt: expect.any(Date) }));
+  });
 });

@@ -7,6 +7,7 @@ import { join } from 'path';
 
 import { bookCoverDirPath, bookThumbnailPath, findExtractedBookCoverFileName } from '../../common/book-cover-storage';
 import type { RequestUser } from '../../common/types/request-user';
+import { sanitizeLogValue } from '../../common/utils/log-sanitize.utils';
 import { ensureSafeRemoteHost } from '../../common/utils/ssrf.utils';
 import { DB } from '../../db';
 import * as schema from '../../db/schema';
@@ -424,7 +425,7 @@ function hasErrorCode(error: unknown, code: string): boolean {
 
 function sanitizeErrorMessage(error: unknown): string {
   const message = error instanceof Error ? error.message : String(error);
-  return message.replace(/"/g, '\\"');
+  return sanitizeLogValue(message);
 }
 
 function errorClass(error: unknown): string {
