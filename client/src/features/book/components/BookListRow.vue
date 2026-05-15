@@ -28,6 +28,7 @@ import { COVER_ASPECT_RATIO_KEY, DEFAULT_COVER_ASPECT_RATIO } from '../lib/cover
 import { useRefreshMetadata } from '../composables/useRefreshMetadata'
 import { usePermissions } from '@/features/auth/composables/usePermissions'
 import SendBookDialog from '@/features/email/components/SendBookDialog.vue'
+import { RATING_STARS, getRatingStarClass } from '@/features/book/lib/rating-stars'
 
 const router = useRouter()
 
@@ -197,10 +198,10 @@ function openAuthorBrowse() {
     <div v-if="!selectionMode" class="flex items-center gap-1.5 shrink-0" @click.stop>
       <!-- Star rating -->
       <div class="hidden sm:flex items-center gap-0.5" @mouseleave="hoverRating = null">
-        <Tooltip v-for="star in 5" :key="star">
+        <Tooltip v-for="star in RATING_STARS" :key="star">
           <TooltipTrigger as-child>
             <button class="p-0.5 transition-colors" @mouseenter="hoverRating = star" @click="setRating(star)">
-              <Star class="size-3" :class="(displayRating ?? 0) >= star ? 'fill-amber-400 text-amber-400' : 'text-muted-foreground/60'" />
+              <Star class="size-3" :class="getRatingStarClass(star, displayRating)" />
             </button>
           </TooltipTrigger>
           <TooltipContent>Rate {{ star }}</TooltipContent>

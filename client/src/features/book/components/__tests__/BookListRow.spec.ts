@@ -134,7 +134,7 @@ describe('BookListRow — present state', () => {
   it('syncs the displayed star rating when the book prop changes externally', async () => {
     const wrapper = mount(BookListRow, { props: { book: presentBook }, global: globalStubs })
 
-    expect(wrapper.findAll('.fill-amber-400')).toHaveLength(0)
+    expect(wrapper.findAll('.fill-lime-400')).toHaveLength(0)
 
     await wrapper.setProps({
       book: {
@@ -143,6 +143,6 @@ describe('BookListRow — present state', () => {
       },
     })
 
-    expect(wrapper.findAll('.fill-amber-400')).toHaveLength(4)
+    expect(wrapper.findAll('.fill-lime-400')).toHaveLength(4)
   })
 })

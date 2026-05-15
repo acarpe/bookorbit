@@ -36,8 +36,8 @@ export const themes: Theme[] = [
   {
     name: 'crimson',
     label: 'Crimson',
-    light: { fg: '#212529', bg: '#ffffff', link: '#dd0031' },
-    dark: { fg: '#dee2e6', bg: '#343a40', link: '#ff4081' },
+    light: { fg: '#2f1f25', bg: '#fdf1f4', link: '#dd0031' },
+    dark: { fg: '#f3dbe2', bg: '#3a252d', link: '#ff5a86' },
   },
   {
     name: 'meadow',

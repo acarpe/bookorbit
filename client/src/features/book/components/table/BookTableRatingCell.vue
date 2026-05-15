@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { Star } from 'lucide-vue-next'
+import { RATING_STARS, getRatingStarClass } from '@/features/book/lib/rating-stars'
 
 const props = defineProps<{
   value: number | null
@@ -11,7 +12,7 @@ const emit = defineEmits<{
   save: [value: number | null]
 }>()
 
-const STARS = [1, 2, 3, 4, 5]
+const STARS = RATING_STARS
 const groupRef = ref<HTMLDivElement | null>(null)
 
 function getStarFromEvent(event: Event): number | null {
@@ -73,10 +74,7 @@ function getTabIndex(star: number): number {
       :aria-pressed="star <= (value ?? 0)"
       type="button"
       class="transition-colors"
-      :class="[
-        isReadOnly ? 'cursor-default' : 'cursor-pointer hover:scale-110',
-        star <= (value ?? 0) ? 'text-amber-400' : 'text-muted-foreground/30',
-      ]"
+      :class="[isReadOnly ? 'cursor-default' : 'cursor-pointer hover:scale-110', getRatingStarClass(star, value, 'text-muted-foreground/30')]"
       @click="handleStarClick"
       @keydown="handleStarKeydown"
     >

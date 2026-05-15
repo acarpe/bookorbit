@@ -29,6 +29,7 @@ import MetadataScoreBreakdown from '@/features/metadata-score/components/Metadat
 import { useMetadataScoreWeights } from '@/features/metadata-score/composables/useMetadataScoreWeights'
 import { useSafeHtml } from '@/features/book/composables/useSafeHtml'
 import { useKoreaderBookProgress } from '@/features/koreader/composables/useKoreaderBookProgress'
+import { RATING_STARS, getRatingStarClass } from '@/features/book/lib/rating-stars'
 
 type FileProgress = {
   percentage: number
@@ -323,7 +324,7 @@ async function setRating(star: number) {
   }
 }
 
-const ratingStars = [1, 2, 3, 4, 5]
+const ratingStars = RATING_STARS
 
 const { setStatus } = useBookStatus()
 
@@ -794,19 +795,14 @@ watch(
                     @mouseenter="hoverRating = star"
                     @click="setRating(star)"
                   >
-                    <Star class="size-4" :class="(displayRating ?? 0) >= star ? 'fill-amber-400 text-amber-400' : 'text-muted-foreground/60'" />
+                    <Star class="size-4" :class="getRatingStarClass(star, displayRating)" />
                   </button>
                 </TooltipTrigger>
                 <TooltipContent>{{ isRatingLocked ? 'Rating is locked' : `Rate ${star}` }}</TooltipContent>
               </Tooltip>
             </template>
             <template v-else>
-              <Star
-                v-for="star in ratingStars"
-                :key="star"
-                class="size-4"
-                :class="(localRating ?? 0) >= star ? 'fill-amber-400 text-amber-400' : 'text-muted-foreground/60'"
-              />
+              <Star v-for="star in ratingStars" :key="star" class="size-4" :class="getRatingStarClass(star, localRating)" />
             </template>
           </div>
           <template v-if="isRatingLocked">
@@ -1156,19 +1152,14 @@ watch(
                     @mouseenter="hoverRating = star"
                     @click="setRating(star)"
                   >
-                    <Star class="size-3.5" :class="(displayRating ?? 0) >= star ? 'fill-amber-400 text-amber-400' : 'text-muted-foreground/60'" />
+                    <Star class="size-3.5" :class="getRatingStarClass(star, displayRating)" />
                   </button>
                 </TooltipTrigger>
                 <TooltipContent>{{ isRatingLocked ? 'Rating is locked' : `Rate ${star}` }}</TooltipContent>
               </Tooltip>
             </template>
             <template v-else>
-              <Star
-                v-for="star in ratingStars"
-                :key="star"
-                class="size-3.5"
-                :class="(localRating ?? 0) >= star ? 'fill-amber-400 text-amber-400' : 'text-muted-foreground/60'"
-              />
+              <Star v-for="star in ratingStars" :key="star" class="size-3.5" :class="getRatingStarClass(star, localRating)" />
             </template>
           </div>
 

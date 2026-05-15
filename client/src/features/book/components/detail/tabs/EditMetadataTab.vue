@@ -19,6 +19,7 @@ import { useNarratorSearch } from '../../../composables/useNarratorSearch'
 import { useGenreSearch, useTagSearch } from '../../../composables/useTagSearch'
 import { usePublisherSearch, useSeriesNameSearch, useLanguageSearch } from '../../../composables/useMetadataFieldSearch'
 import InputWithSuggestions from '@/components/ui/InputWithSuggestions.vue'
+import { RATING_STARS, getRatingStarClass } from '@/features/book/lib/rating-stars'
 
 const props = defineProps<{ book: BookDetail }>()
 const emit = defineEmits<{
@@ -581,7 +582,7 @@ function handleCoverChanged(source: 'extracted' | 'custom' | null) {
             :class="isLocked('rating') ? 'opacity-50 cursor-not-allowed' : ''"
             @mouseleave="hoverRating = null"
           >
-            <Tooltip v-for="star in 5" :key="star">
+            <Tooltip v-for="star in RATING_STARS" :key="star">
               <TooltipTrigger as-child>
                 <button
                   type="button"
@@ -590,10 +591,7 @@ function handleCoverChanged(source: 'extracted' | 'custom' | null) {
                   @mouseenter="hoverRating = star"
                   @click="setRating(star)"
                 >
-                  <Star
-                    class="size-5 sm:size-4"
-                    :class="(displayRating ?? 0) >= star ? 'fill-amber-400 text-amber-400' : 'text-muted-foreground/60'"
-                  />
+                  <Star class="size-5 sm:size-4" :class="getRatingStarClass(star, displayRating)" />
                 </button>
               </TooltipTrigger>
               <TooltipContent>Rate {{ star }}</TooltipContent>
