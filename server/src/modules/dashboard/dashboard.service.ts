@@ -22,8 +22,11 @@ export class DashboardService {
 
   private async loadCardsByIds(bookIds: number[], userId: number): Promise<BookCard[]> {
     if (bookIds.length === 0) return [];
-    const { rows, authorRows, fileRows, genreRows, progressRows } = await this.bookReadService.findCardsByBookIds(bookIds, userId);
-    const cards = assembleBookCards(rows, authorRows, fileRows, genreRows, progressRows);
+    const { rows, authorRows, fileRows, genreRows, progressRows, statusRows, narratorRows, tagRows } = await this.bookReadService.findCardsByBookIds(
+      bookIds,
+      userId,
+    );
+    const cards = assembleBookCards(rows, authorRows, fileRows, genreRows, progressRows, statusRows, narratorRows, tagRows);
     const cardsById = new Map(cards.map((card) => [card.id, card]));
     return bookIds.map((id) => cardsById.get(id)).filter((card): card is BookCard => card != null);
   }

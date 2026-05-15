@@ -61,6 +61,8 @@ function makeFindCardsResult(idsInRowOrder: number[]) {
     authorRows: [],
     fileRows: idsInRowOrder.map((id) => ({ bookId: id, id: id * 10, format: 'epub', role: 'primary' })),
     genreRows: [],
+    tagRows: [],
+    narratorRows: [],
     progressRows: [],
     statusRows: [],
     total: idsInRowOrder.length,
@@ -109,13 +111,26 @@ describe('DashboardService', () => {
     const user = makeUser({ id: 5 });
     libraryService.findAccessibleLibraryIds.mockResolvedValue([100, 200]);
     dashboardRepo.findRecentlyAddedBookIds.mockResolvedValue([9, 3]);
-    bookReadService.findCardsByBookIds.mockResolvedValue(makeFindCardsResult([3, 9]));
+    bookReadService.findCardsByBookIds.mockResolvedValue({
+      ...makeFindCardsResult([3, 9]),
+      statusRows: [
+        {
+          bookId: 9,
+          status: 'reading',
+          source: 'manual',
+          startedAt: null,
+          finishedAt: null,
+          updatedAt: new Date('2026-01-03T00:00:00.000Z'),
+        },
+      ],
+    });
 
     const result = await service.getScroller(ScrollerType.RECENTLY_ADDED, user, 0);
 
     expect(dashboardRepo.findRecentlyAddedBookIds).toHaveBeenCalledWith([100, 200], 1);
     expect(bookReadService.findCardsByBookIds).toHaveBeenCalledWith([9, 3], 5);
     expect(result.map((card) => card.id)).toEqual([9, 3]);
+    expect(result[0]?.readStatus?.status).toBe('reading');
   });
 
   it('routes continue reading requests to repository with clamped max limit', async () => {
