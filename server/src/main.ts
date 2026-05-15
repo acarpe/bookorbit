@@ -12,40 +12,12 @@ import fastifyMultipart from '@fastify/multipart';
 import fastifyStatic from '@fastify/static';
 import fastifyHelmet from '@fastify/helmet';
 import fastifyCompress from '@fastify/compress';
+import { parseBooleanEnv, parseTrustProxy, buildCspDirectives } from './common/utils/bootstrap.utils';
 
 const MAX_COVER_BYTES = 20 * 1024 * 1024;
-const DEFAULT_TRUST_PROXY = 'loopback,linklocal,uniquelocal';
-const CLOUDFLARE_INSIGHTS_SCRIPT_SRC = 'https://static.cloudflareinsights.com';
-const CLOUDFLARE_INSIGHTS_CONNECT_SRC = 'https://cloudflareinsights.com';
-
-function parseTrustProxy(value: string | undefined) {
-  const raw = value?.trim();
-  if (!raw) return DEFAULT_TRUST_PROXY;
-
-  const normalized = raw.toLowerCase();
-  if (['false', '0', 'no', 'off'].includes(normalized)) return false;
-  if (['true', '1', 'yes', 'on'].includes(normalized)) return true;
-
-  const hopCount = Number(raw);
-  if (Number.isInteger(hopCount) && hopCount >= 0) return hopCount;
-
-  return raw;
-}
-
-function parseBooleanEnv(value: string | undefined, fallback = false): boolean {
-  const raw = value?.trim();
-  if (!raw) return fallback;
-
-  const normalized = raw.toLowerCase();
-  if (['false', '0', 'no', 'off'].includes(normalized)) return false;
-  if (['true', '1', 'yes', 'on'].includes(normalized)) return true;
-  return fallback;
-}
 
 async function bootstrap() {
   const allowCloudflareInsights = parseBooleanEnv(process.env.CSP_ALLOW_CLOUDFLARE_INSIGHTS, false);
-  const cspScriptSrc = ["'self'", ...(allowCloudflareInsights ? [CLOUDFLARE_INSIGHTS_SCRIPT_SRC] : [])];
-  const cspConnectSrc = ["'self'", 'ws:', 'wss:', ...(allowCloudflareInsights ? [CLOUDFLARE_INSIGHTS_CONNECT_SRC] : [])];
 
   const adapter = new FastifyAdapter({ logger: false, trustProxy: parseTrustProxy(process.env.TRUST_PROXY) });
   const app = await NestFactory.create<NestFastifyApplication>(AppModule, adapter, { bufferLogs: true });
@@ -97,19 +69,7 @@ async function bootstrap() {
   await app.register(fastifyHelmet as never, {
     crossOriginOpenerPolicy: false,
     contentSecurityPolicy: {
-      directives: {
-        defaultSrc: ["'self'"],
-        scriptSrc: cspScriptSrc,
-        styleSrc: ["'self'", "'unsafe-inline'", 'blob:'],
-        imgSrc: ["'self'", 'data:', 'blob:'],
-        connectSrc: cspConnectSrc,
-        mediaSrc: ["'self'", 'data:', 'blob:'],
-        fontSrc: ["'self'", 'data:', 'blob:'],
-        objectSrc: ["'none'"],
-        frameSrc: ["'self'", 'blob:'],
-        frameAncestors: ["'self'"],
-        upgradeInsecureRequests: null,
-      },
+      directives: buildCspDirectives({ allowCloudflareInsights }),
     },
   });
 
