@@ -44,10 +44,7 @@ describe('GoodreadsProvider', () => {
     });
 
     it('should search by title/author and fetch book details', async () => {
-      // Mock search HTML
-      const searchHtml = `
-        <a href="/book/show/123.Some_Book?from_srp=true">Some Book</a>
-      `;
+      const autocomplete = [{ bookId: '123', bookUrl: '/book/show/123.Some_Book', title: 'Some Book' }];
       // Mock book HTML with __NEXT_DATA__
       const mockState = {
         'Book:kca:123': { title: 'Some Book' },
@@ -60,12 +57,15 @@ describe('GoodreadsProvider', () => {
 
       global.fetch = vi
         .fn()
-        .mockResolvedValueOnce({ ok: true, text: () => Promise.resolve(searchHtml) })
+        .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(autocomplete) })
         .mockResolvedValueOnce({ ok: true, text: () => Promise.resolve(bookHtml) });
 
       const result = await provider.search({ title: 'Some Book' });
 
-      expect(global.fetch).toHaveBeenCalledWith(expect.stringContaining('https://www.goodreads.com/search?q=Some%20Book'), expect.any(Object));
+      expect(global.fetch).toHaveBeenCalledWith(
+        expect.stringContaining('https://www.goodreads.com/book/auto_complete?format=json&q=Some%20Book'),
+        expect.any(Object),
+      );
       expect(global.fetch).toHaveBeenCalledWith(expect.stringContaining('https://www.goodreads.com/book/show/123'), expect.any(Object));
       expect(result).toHaveLength(1);
       expect(result[0].title).toBe('Some Book');
@@ -107,10 +107,10 @@ describe('GoodreadsProvider', () => {
     it('should handle sleep between requests', async () => {
       const BETWEEN_REQUESTS_MS = 600;
       vi.useFakeTimers();
-      const searchHtml = `
-        <a href="/book/show/1?from_srp=true">B1</a>
-        <a href="/book/show/2?from_srp=true">B2</a>
-      `;
+      const autocomplete = [
+        { bookId: '1', bookUrl: '/book/show/1.B1', title: 'B1' },
+        { bookId: '2', bookUrl: '/book/show/2.B2', title: 'B2' },
+      ];
       const mockState1 = { 'Book:kca:1': { title: 'B1' } };
       const mockState2 = { 'Book:kca:2': { title: 'B2' } };
       const bookHtml1 = `<script id="__NEXT_DATA__">{"props":{"pageProps":{"apolloState":${JSON.stringify(mockState1)}}}}</script>`;
@@ -118,7 +118,7 @@ describe('GoodreadsProvider', () => {
 
       global.fetch = vi
         .fn()
-        .mockResolvedValueOnce({ ok: true, text: () => Promise.resolve(searchHtml) })
+        .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(autocomplete) })
         .mockResolvedValueOnce({ ok: true, text: () => Promise.resolve(bookHtml1) })
         .mockResolvedValueOnce({ ok: true, text: () => Promise.resolve(bookHtml2) });
 
@@ -152,22 +152,22 @@ describe('GoodreadsProvider', () => {
       await expect(provider.search({ title: 'Test' })).rejects.toBeInstanceOf(ProviderThrottleError);
     });
 
-    it('should use slug-based scoring in extractBookIds', async () => {
+    it('should use title-based scoring in autocomplete results', async () => {
       const BETWEEN_REQUESTS_MS = 600;
       vi.useFakeTimers();
-      const searchHtml = `
-        <a href="/book/show/1.The_Great_Gatsby?from_srp=true">B1</a>
-        <a href="/book/show/2.Something_Else?from_srp=true">B2</a>
-        <a href="/book/show/3.Gatsby_Study_Guide?from_srp=true">B3</a>
-        <a href="/book/show/4.The_Great_Gatsby_Special?from_srp=true">B4</a>
-      `;
+      const autocomplete = [
+        { bookId: '1', bookUrl: '/book/show/1.The_Great_Gatsby', title: 'The Great Gatsby' },
+        { bookId: '2', bookUrl: '/book/show/2.Something_Else', title: 'Something Else' },
+        { bookId: '3', bookUrl: '/book/show/3.Gatsby_Study_Guide', title: 'Gatsby Study Guide' },
+        { bookId: '4', bookUrl: '/book/show/4.The_Great_Gatsby_Special', title: 'The Great Gatsby Special' },
+      ];
       // limit is 3, so B2 should be dropped if it has lower score
       const mockState = { 'Book:kca:1': { title: 'B' } };
       const bookHtml = `<script id="__NEXT_DATA__">{"props":{"pageProps":{"apolloState":${JSON.stringify(mockState)}}}}</script>`;
 
       global.fetch = vi
         .fn()
-        .mockResolvedValueOnce({ ok: true, text: () => Promise.resolve(searchHtml) })
+        .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(autocomplete) })
         .mockResolvedValue({ ok: true, text: () => Promise.resolve(bookHtml) });
 
       const searchPromise = provider.search({ title: 'The Great Gatsby' });
@@ -178,7 +178,7 @@ describe('GoodreadsProvider', () => {
       await vi.advanceTimersByTimeAsync(BETWEEN_REQUESTS_MS);
       await vi.advanceTimersByTimeAsync(0);
       await searchPromise;
-      expect(global.fetch).toHaveBeenCalledTimes(4); // 1 search + 3 book lookups
+      expect(global.fetch).toHaveBeenCalledTimes(4); // 1 autocomplete + 3 book lookups
     });
   });
 
