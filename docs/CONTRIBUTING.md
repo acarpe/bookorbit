@@ -24,7 +24,7 @@ If nothing there catches your eye, browse the open issues or propose something n
 Doc improvements are always welcome and have a lighter process:
 
 - No tests required.
-- Use the `docs/` branch prefix (e.g. `docs/fix-setup-instructions`).
+- Use a branch name that starts with `BO-<issue-number>-` (e.g. `BO-456-docs-fix-setup-instructions`).
 - Focus areas: fixing inaccuracies, improving examples, adding missing guides, clarifying confusing sections.
 
 The rest of this guide still applies (issue first, PR template, etc.), but expect a faster review cycle.
@@ -33,7 +33,7 @@ The rest of this guide still applies (issue first, PR template, etc.), but expec
 
 ## Security Issues
 
-Do **not** open public issues for security vulnerabilities. Use GitHub's [private vulnerability reporting](../../security/advisories/new) instead. See [SECURITY.md](.github/SECURITY.md) for details.
+Do **not** open public issues for security vulnerabilities. Use GitHub's [private vulnerability reporting](../../security/advisories/new) instead. See [SECURITY.md](../.github/SECURITY.md) for details.
 
 ---
 
@@ -54,7 +54,7 @@ This is the end-to-end journey from idea to merged PR. Each phase builds on the 
 Wait for explicit approval before writing code. Approval looks like:
 
 - A :+1: reaction on your issue.
-- A comment such as "go ahead", "approved", or "let's do it".
+- A comment such as "go ahead", "approved", or "approved to proceed".
 
 This step prevents wasted effort on changes that conflict with the project direction. Small bug fixes with clear reproduction are usually approved quickly.
 
@@ -86,18 +86,14 @@ Always branch from the latest `main`:
 
 ```bash
 git fetch upstream
-git checkout -b <prefix>/<short-description> upstream/main
+git checkout -b BO-<issue-number>-<short-description> upstream/main
 ```
 
-Use these branch prefixes:
+Branch name requirements:
 
-| Prefix      | Use for                                | Example                          |
-| ----------- | -------------------------------------- | -------------------------------- |
-| `feat/`     | New features                           | `feat/reading-progress-sync`     |
-| `fix/`      | Bug fixes                              | `fix/pdf-page-count-off-by-one`  |
-| `refactor/` | Code restructuring                     | `refactor/library-scan-pipeline` |
-| `docs/`     | Documentation                          | `docs/opds-setup-guide`          |
-| `chore/`    | Maintenance (deps, tooling, CI, build) | `chore/bump-drizzle-v1`          |
+- Start with `BO-<issue-number>-`
+- Use lowercase kebab-case for the description suffix
+- Example: `BO-123-fix-reader-sync`
 
 ### Phase 6: Implement Your Change
 
@@ -169,13 +165,24 @@ Examples: `feat(kobo): add shelf sync endpoint`, `fix(reader): correct page coun
 Push your branch and open a PR against `main`:
 
 ```bash
-git push origin feat/your-feature-name
+git push origin BO-123-your-feature-name
 ```
 
 When creating the PR:
 
 - **Fill out the PR template.** It asks for a summary, testing evidence, screenshots (if UI changed), and non-obvious decisions.
-- **Link your issue** with `Closes #123` in the description.
+- **Use a Conventional Commit-style PR title** (for example: `fix(reader): correct page count for multi-volume PDFs`).
+- **Link your issue** with a GitHub closing keyword in the description (`close`, `closes`, `closed`, `fix`, `fixes`, `fixed`, `resolve`, `resolves`, `resolved`) and an issue reference (`#123` or `owner/repo#123`).
+  Example:
+
+  ```md
+  ## What does this PR do?
+
+  Correct page count handling for multi-volume PDFs.
+
+  Fixes: #123
+  ```
+
 - **Open as a draft** if you want early direction feedback before the code is complete.
 - **Disclose AI usage** if applicable. See [AI_POLICY.md](AI_POLICY.md) for the format and expectations.
 

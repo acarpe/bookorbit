@@ -38,12 +38,153 @@ jobs:
       - name: Dependency review
         uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5.0.0
 
+  pr-conventions:
+    name: PR Conventions
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      issues: read
+      pull-requests: read
+    steps:
+      - name: Validate PR branch name
+        shell: bash
+        env:
+          PR_BRANCH: ${{ github.head_ref }}
+        run: |
+          set -euo pipefail
+          pattern='^BO-[0-9]+-[a-z0-9]+(-[a-z0-9]+)*$'
+          if [[ ! "$PR_BRANCH" =~ $pattern ]]; then
+            echo "::error::Branch name '$PR_BRANCH' is invalid."
+            echo "::error::Use BO-<issue-number>-<short-description> (example: BO-123-fix-reader-sync)."
+            exit 1
+          fi
+
+      - name: Validate referenced issues exist
+        shell: bash
+        env:
+          GH_REPO: ${{ github.repository }}
+          GH_TOKEN: ${{ github.token }}
+          PR_BRANCH: ${{ github.head_ref }}
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: |
+          set -euo pipefail
+
+          validate_issue_exists() {
+            local issue_repo="$1"
+            local issue_number="$2"
+            local reference_context="$3"
+            local response_file
+            local http_code
+            local api_url
+            local state
+            local reference_label
+
+            response_file="$(mktemp)"
+            api_url="https://api.github.com/repos/${issue_repo}/issues/${issue_number}"
+            http_code="$(curl -sS -o "${response_file}" -w "%{http_code}" \
+              -H "Authorization: Bearer ${GH_TOKEN}" \
+              -H "Accept: application/vnd.github+json" \
+              "${api_url}")"
+
+            if [[ "${issue_repo}" == "${GH_REPO}" ]]; then
+              reference_label="#${issue_number}"
+            else
+              reference_label="${issue_repo}#${issue_number}"
+            fi
+
+            if [[ "${http_code}" != "200" ]]; then
+              echo "::error::${reference_context} references ${reference_label}, but it does not exist or is not accessible."
+              rm -f "${response_file}"
+              return 1
+            fi
+
+            if jq -e '.pull_request != null' "${response_file}" > /dev/null; then
+              echo "::error::${reference_context} references ${reference_label}, but that number is a pull request, not an issue."
+              rm -f "${response_file}"
+              return 1
+            fi
+
+            state="$(jq -r '.state // "unknown"' "${response_file}")"
+            echo "${reference_context}: issue ${reference_label} exists (state=${state})."
+            rm -f "${response_file}"
+          }
+
+          if [[ "${PR_BRANCH}" =~ ^BO-([0-9]+)- ]]; then
+            branch_issue_number="${BASH_REMATCH[1]}"
+          else
+            echo "::error::Unable to extract issue number from branch '${PR_BRANCH}'."
+            exit 1
+          fi
+
+          validate_issue_exists "${GH_REPO}" "${branch_issue_number}" "Branch name"
+
+          closing_keyword_pattern='(close|closes|closed|fix|fixes|fixed|resolve|resolves|resolved)'
+          issue_reference_pattern="(^|[^[:alnum:]_])${closing_keyword_pattern}([[:space:]]*:[[:space:]]*|[[:space:]]+)([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)?#[1-9][0-9]*"
+          issue_matches="$(printf '%s\n' "${PR_BODY}" | grep -Eio "${issue_reference_pattern}" || true)"
+          if [[ -z "${issue_matches}" ]]; then
+            echo "::error::PR description must include at least one GitHub closing-keyword issue reference (for example: 'Closes #123', 'Fixes: #123', or 'RESOLVED owner/repo#123')."
+            exit 1
+          fi
+
+          issue_refs="$(printf '%s\n' "${issue_matches}" \
+            | tr '[:upper:]' '[:lower:]' \
+            | sed -E 's/^[^a-z0-9_]*//' \
+            | sed -E "s/^${closing_keyword_pattern}([[:space:]]*:[[:space:]]*|[[:space:]]+)//" \
+            | sort -u)"
+          while IFS= read -r issue_ref; do
+            [[ -z "${issue_ref}" ]] && continue
+
+            if [[ "${issue_ref}" =~ ^([a-z0-9_.-]+/[a-z0-9_.-]+)#([1-9][0-9]*)$ ]]; then
+              issue_repo="${BASH_REMATCH[1]}"
+              issue_number="${BASH_REMATCH[2]}"
+            elif [[ "${issue_ref}" =~ ^#([1-9][0-9]*)$ ]]; then
+              issue_repo="${GH_REPO}"
+              issue_number="${BASH_REMATCH[1]}"
+            else
+              echo "::error::Unable to parse issue reference '${issue_ref}' in PR description."
+              exit 1
+            fi
+
+            validate_issue_exists "${issue_repo}" "${issue_number}" "PR description"
+          done <<< "${issue_refs}"
+
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          fetch-depth: 0
+
+      - name: Set up Node.js and pnpm
+        uses: ./.github/actions/setup-node-pnpm
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          pnpm-version: ${{ env.PNPM_VERSION }}
+
+      - name: Lint PR title
+        shell: bash
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+        run: printf '%s\n' "$PR_TITLE" | pnpm exec commitlint --config commitlint.config.cjs
+
+      - name: Lint PR commit headers
+        shell: bash
+        env:
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          pnpm exec commitlint --config commitlint.config.cjs --from "$PR_BASE_SHA" --to "$PR_HEAD_SHA" --verbose
+
   detect-changes:
     name: Detect Changed Paths
     runs-on: ubuntu-latest
-    needs: [dependency-review]
+    needs: [dependency-review, pr-conventions]
     timeout-minutes: 10
-    if: always() && (needs.dependency-review.result == 'success' || needs.dependency-review.result == 'skipped')
+    if: >
+      always() &&
+      (needs.dependency-review.result == 'success' || needs.dependency-review.result == 'skipped') &&
+      (needs.pr-conventions.result == 'success' || needs.pr-conventions.result == 'skipped')
     outputs:
       server: ${{ steps.manual.outputs.server || steps.changes.outputs.server }}
       client: ${{ steps.manual.outputs.client || steps.changes.outputs.client }}
@@ -321,7 +462,13 @@ jobs:
   quality-gate:
     name: Quality Gate
     runs-on: ubuntu-latest
-    needs: [dependency-review, detect-changes, lint, typecheck, tests]
+    needs:
+      - dependency-review
+      - pr-conventions
+      - detect-changes
+      - lint
+      - typecheck
+      - tests
     timeout-minutes: 5
     if: always()
     steps:
@@ -334,6 +481,7 @@ jobs:
       - name: Quality checks complete
         run: |
           echo "dependency-review=${{ needs.dependency-review.result }}"
+          echo "pr-conventions=${{ needs.pr-conventions.result }}"
           echo "detect-changes=${{ needs.detect-changes.result }}"
           echo "lint=${{ needs.lint.result }}"
           echo "typecheck=${{ needs.typecheck.result }}"

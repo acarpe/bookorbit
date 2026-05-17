@@ -13,7 +13,13 @@
 
 ## What does this PR do?
 
-<!-- A short summary of the change and why it's needed. Link the issue it addresses if applicable. -->
+<!--
+A short summary of the change and why it's needed.
+Link at least one issue using a GitHub closing keyword, for example:
+- Closes #123
+- Fixes: #123
+- RESOLVED owner/repo#123
+-->
 
 Closes #
 

@@ -292,7 +292,7 @@ pnpm run db:seed
 | `pnpm run e2e:list`              | List available E2E suite IDs     |
 | `pnpm run coverage`              | Unit tests with coverage reports |
 
-Server unit tests use Vitest with `@nestjs/testing`. Client tests use Vitest with `@vue/test-utils` in a jsdom environment. Most E2E suites boot the full app against a dedicated test database; a few smoke-style suites run against the dev database.
+Server unit tests use Vitest with `@nestjs/testing`. Client tests use Vitest with `@vue/test-utils` in a jsdom environment. Most E2E suites boot the full app against a dedicated test database; a few smoke-style suites run against a shared E2E database without a reset.
 
 For test architecture, suite details, coverage thresholds, the E2E harness, and examples, see [TESTING.md](TESTING.md).
 
@@ -353,12 +353,12 @@ These are the rules that most commonly cause PR rejections. Following them from 
 
 The CI workflow (`.github/workflows/ci.yml`) triggers on every PR to `main`:
 
-1. **Dependency review** - Checks for supply chain issues in new dependencies.
-2. **Change detection** - Determines which workspaces (server/client) have changed files.
-3. **Lint** - Runs ESLint and format checks on changed workspaces.
-4. **Type check** - Runs TypeScript checking on changed workspaces.
-5. **Tests** - Runs unit tests on changed workspaces with coverage.
-6. **E2E** - Selects and runs relevant E2E suites based on changed file paths.
+1. **PR conventions** - Enforces `BO-<issue-number>-<short-description>` branch names, PR title format, commit-header rules from [COMMIT_GUIDELINES.md](COMMIT_GUIDELINES.md), and a PR-description issue link using GitHub closing keywords (`close|closes|closed|fix|fixes|fixed|resolve|resolves|resolved`). CI also verifies that referenced issue numbers actually exist.
+2. **Dependency review** - Checks for supply chain issues in new dependencies.
+3. **Change detection** - Determines which workspaces (server/client) have changed files.
+4. **Lint** - Runs ESLint and format checks on changed workspaces.
+5. **Type check** - Runs TypeScript checking on changed workspaces.
+6. **Tests** - Runs unit tests on changed workspaces with coverage.
 
 All jobs are conditional: if you only changed client code, server lint/typecheck/tests are skipped.
 
@@ -377,9 +377,19 @@ Releases are created manually via `workflow_dispatch` on the `release.yml` workf
 3. Creates a Git tag and GitHub Release with auto-generated release notes.
 4. Builds, scans, and publishes a Docker image with version and `latest` tags.
 
-PR titles are validated by commitlint to ensure they follow the [commit guidelines](COMMIT_GUIDELINES.md). Only releasable types (`feat`, `fix`, `perf`, `security`, `db`, `style`) trigger version bumps.
+On pull requests, CI enforces branch naming (`BO-<issue-number>-<short-description>`), validates PR titles with commitlint (for squash-merge release safety), validates PR commit headers against [COMMIT_GUIDELINES.md](COMMIT_GUIDELINES.md), and requires at least one GitHub closing-keyword issue reference in the PR description (for example: `Closes #123`, `Fixes: #123`, or `RESOLVED owner/repo#123`). It also verifies that the branch issue exists in this repository and that PR description issue references resolve to valid GitHub issues. Only releasable types (`feat`, `fix`, `perf`, `security`, `db`, `style`) trigger version bumps.
 
-For the full release runbook, see [`docs/RELEASE_PROCESS.md`](docs/RELEASE_PROCESS.md).
+Example PR description snippet:
+
+```md
+## What does this PR do?
+
+Adds pagination for OPDS search results.
+
+Closes #321
+```
+
+For the full release runbook, see [`RELEASE_PROCESS.md`](RELEASE_PROCESS.md).
 
 ### E2E in CI
 
@@ -445,7 +455,7 @@ Restart the dev server. If you changed `package.json` or installed new dependenc
 
 **Docker volumes corrupted**
 
-Nuclear option. This destroys all local data. Stop the container with `-v` to drop volumes, then rebuild:
+Last resort. This destroys all local data. Stop the container with `-v` to drop volumes, then rebuild:
 
 ```bash
 docker compose -f docker-compose.dev.yml down -v

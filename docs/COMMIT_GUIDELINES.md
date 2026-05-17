@@ -14,7 +14,7 @@ Every commit tells a story. A well-written commit message makes it easy to under
 
 The **header** is required on every commit and must follow the format described below.
 
-The **body** is required on all commits except `docs`. When present, it must be at least 20 characters and written in imperative mood.
+The **body** is required on all commits except `docs`. When present, it must be at least 20 characters and written in the imperative mood.
 
 The **footer** is optional. Use it to reference issues, close PRs, or document breaking changes.
 
@@ -52,12 +52,12 @@ The type signals the intent of the change at a glance.
 | `docs`     | Documentation changes only                                                                               |
 | `test`     | Adds or corrects tests without touching production code                                                  |
 | `build`    | Changes to the build system, tooling config, or external dependencies (Dockerfile, tsconfig, pnpm)       |
-| `ci`       | CI/CD pipeline changes - GitHub Actions workflows and scripts                                            |
-| `chore`    | Routine maintenance that doesn't fit any other category                                                  |
+| `ci`       | CI/CD pipeline changes: GitHub Actions workflows and scripts                                             |
+| `chore`    | Routine maintenance that does not fit any other category                                                 |
 | `security` | Addresses a security vulnerability; preferred over `fix` so security patches are identifiable in history |
-| `revert`   | Reverts a previous commit - the body must reference the reverted SHA and explain why                     |
+| `revert`   | Reverts a previous commit; the body must reference the reverted SHA and explain why                      |
 
-> If a change genuinely spans multiple types (for example, it adds a feature and fixes a bug), split it into two commits. If that isn't practical, use the type that best represents the dominant intent.
+> If a change genuinely spans multiple types (for example, it adds a feature and fixes a bug), split it into two commits. If that is not practical, use the type that best represents the dominant intent.
 
 ### Scope
 
@@ -109,13 +109,13 @@ Rules:
 
 ## Body
 
-Write a body when the **why** behind the change isn't obvious from the header alone.
+Write a body when the **why** behind the change is not obvious from the header alone.
 
 When to write a body:
 
-- The motivation isn't clear from the summary
+- The motivation is not clear from the summary
 - The change has side effects, tradeoffs, or gotchas worth calling out
-- You're reverting a commit - reference the SHA and explain the reason
+- You are reverting a commit; reference the SHA and explain the reason
 - The approach taken deserves a brief explanation
 
 Format:
@@ -134,12 +134,17 @@ Use the footer to link related issues or PRs, or to announce breaking changes.
 ### Linking issues and PRs
 
 ```
-Fixes #123
-Closes #456
-Ref #789
+Closes #123
+Fixes: #456
+RESOLVED owner/repo#789
+Ref #101
 ```
 
-`Fixes` and `Closes` automatically close the linked issue when the PR is merged. Use `Ref` for a related issue that should stay open.
+GitHub-supported closing keywords are: `close`, `closes`, `closed`, `fix`, `fixes`, `fixed`, `resolve`, `resolves`, `resolved` (case-insensitive; optional colon is allowed, for example `Closes: #123`).
+
+Use `Ref #<issue>` for a related issue that should stay open.
+
+`Ref` is valid for commit footers, but it does not satisfy the PR-description requirement in CI (PR descriptions must include a GitHub closing keyword).
 
 ### Breaking changes
 
@@ -168,7 +173,7 @@ feat(kobo): sync reading position on device reconnect
 feat(opds): add pagination to catalog feed endpoints
 
 The OPDS feed now supports ?page= and ?limit= query params.
-Default page size is 20. Clients that don't send pagination params
+Default page size is 20. Clients that do not send pagination params
 get the same behavior as before.
 
 Closes #301

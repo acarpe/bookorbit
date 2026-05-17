@@ -20,15 +20,49 @@ BookOrbit uses [semantic-release](https://github.com/semantic-release/semantic-r
 
 All PRs to `main` must use **squash merge**. The squash commit message becomes the commit that semantic-release analyzes for version bumps.
 
-### PR title format
+### PR title, commit message, and issue link format
 
-PR titles must follow the [commit guidelines](COMMIT_GUIDELINES.md):
+PR titles and all commits in a PR must follow the [commit guidelines](COMMIT_GUIDELINES.md):
 
 ```
 <type>(<scope>): <summary>
 ```
 
-The PR title is validated by commitlint in the release workflow. Invalid titles will fail the `Lint PR Title` check.
+Why PR title is required: with squash merges, the final commit analyzed by semantic-release is based on the PR title.
+
+Validation in CI and release checks:
+
+- PR branch name must follow `BO-123-fix-reader-pagination`
+- PR title must match commitlint rules
+  - Example: `fix(reader): reduce rerendering in chapter list`
+- PR commit headers must match commitlint rules
+- PR description must include at least one GitHub closing-keyword issue reference:
+  - `close`, `closes`, `closed`, `fix`, `fixes`, `fixed`, `resolve`, `resolves`, `resolved`
+  - Examples: `Closes #123`, `Fixes: #123`, `RESOLVED owner/repo#123`
+- Branch issue number must exist in this repository
+- PR description issue references must resolve to valid GitHub issues (same repo or `owner/repo#issue`)
+
+Examples:
+
+- Valid:
+
+```md
+## What does this PR do?
+
+Improve reader performance when opening large EPUB files.
+
+Fixes #145
+```
+
+- Invalid (fails lint):
+
+```md
+## What does this PR do?
+
+Improve reader performance when opening large EPUB files.
+
+fixes issue 145
+```
 
 ### Types that trigger releases
 
@@ -145,7 +179,7 @@ The `release.yml` workflow has four jobs:
 └──────────────┘     └──────────────────┘
 ```
 
-- **commitlint**: Validates PR title format (PR only).
+- **commitlint**: Validates branch naming, PR title, commit headers, and PR description issue-link and issue-existence rules (PR only).
 - **release-dry-run**: Runs semantic-release in dry-run mode to validate config (PR only).
 - **release**: Creates the actual release (manual dispatch only). Outputs `published`, `version`, and `tag`.
 - **docker-publish**: Builds and pushes Docker image (only when a release was published).
@@ -162,6 +196,6 @@ The `release.yml` workflow has four jobs:
 
 | File                            | Purpose                                          |
 | ------------------------------- | ------------------------------------------------ |
-| `.releaserc.json`               | semantic-release config (plugins, release rules) |
+| `release.config.js`             | semantic-release config (plugins, release rules) |
 | `commitlint.config.cjs`         | commitlint config (type/scope validation)        |
 | `.github/workflows/release.yml` | Release and Docker publish workflow              |

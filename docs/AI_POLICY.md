@@ -1,12 +1,12 @@
 # AI Usage Policy
 
-BookOrbit is maintained by real people. Every pull request, issue, and discussion is read and reviewed by humans who give their time to this project. Submitting unreviewed, untested AI output shifts the burden of that review onto maintainers - that is the problem this policy addresses. It is not a problem with AI tools themselves.
+BookOrbit is maintained by real people. Every pull request, issue, and discussion is read and reviewed by humans who give their time to this project. Submitting unreviewed, untested AI output shifts the burden of that review onto maintainers; this is the problem this policy addresses. It is not a problem with AI tools themselves.
 
 ## The Rules
 
 - **All AI use must be disclosed.** If any part of your contribution was written, generated, or significantly shaped by an AI tool, say so in the PR description. There are no exceptions and no minimum threshold. See [Disclosure Format](#disclosure-format) below.
 
-- **You must understand every line you submit.** If you cannot explain what a piece of code does, why it is structured the way it is, and how it fits into the surrounding system - do not submit it. "The AI wrote it" is not an answer during review.
+- **You must understand every line you submit.** If you cannot explain what a piece of code does, why it is structured the way it is, and how it fits into the surrounding system, do not submit it. "The AI wrote it" is not an answer during review.
 
 - **AI-generated tests must validate real behavior.** Tests that mock away the logic under test, assert on implementation details instead of outcomes, or trivially pass regardless of what the code does will be rejected. Read every assertion before submitting.
 
@@ -27,7 +27,7 @@ Be honest. A brief, accurate note is better than a vague one that obscures how m
 
 ## Consequences
 
-PRs that contain undisclosed AI use or that are clearly unreviewed AI output will be closed immediately with a short explanation. There is no detailed feedback given for this - that burden belongs to the contributor, not the reviewer.
+PRs that contain undisclosed AI use or that are clearly unreviewed AI output will be closed immediately with a short explanation. No detailed feedback is provided for these cases; that burden belongs to the contributor, not the reviewer.
 
 You are always welcome to resubmit once the work is genuinely reviewed, tested, and properly disclosed. The door is not closed permanently.
 
@@ -35,7 +35,7 @@ You are always welcome to resubmit once the work is genuinely reviewed, tested, 
 
 AI tools make specific, recurring mistakes on this codebase. Be especially careful here.
 
-**Drizzle ORM hallucinations.** LLMs are trained heavily on Prisma and will generate Prisma-style calls - `.findMany()`, `.findUnique()`, `.create()` - that do not exist in Drizzle. Drizzle uses a query builder. Verify every database call against the [Drizzle documentation](https://orm.drizzle.team/docs/overview) and against how the rest of the codebase does it.
+**Drizzle ORM hallucinations.** LLMs are trained heavily on Prisma and will generate Prisma-style calls such as `.findMany()`, `.findUnique()`, and `.create()` that do not exist in Drizzle. Drizzle uses a query builder. Verify every database call against the [Drizzle documentation](https://orm.drizzle.team/docs/overview) and against how the rest of the codebase does it.
 
 **NestJS decorator and module mistakes.** AI frequently invents decorator options, misuses pipes, omits required module imports, or generates module wiring that looks plausible but is wrong. Check every decorator and every module registration.
 
@@ -64,7 +64,7 @@ These rules apply to outside contributors. Maintainers are exempt. They have dem
 
 To be clear: this policy is not an anti-AI stance. Maintainers use AI tools. Many parts of this codebase were written with AI assistance.
 
-The problem this policy addresses is unqualified, unreviewed output being submitted as a contribution - work that the contributor has not run, does not understand, and cannot stand behind. That is a burden on maintainers regardless of whether it came from a human or a machine.
+The problem this policy addresses is unqualified, unreviewed output being submitted as a contribution: work that the contributor has not run, does not understand, and cannot stand behind. That is a burden on maintainers regardless of whether it came from a human or a machine.
 
 Use the tools. Do the work.
 

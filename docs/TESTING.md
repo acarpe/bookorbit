@@ -6,7 +6,7 @@ BookOrbit has three layers of tests:
 - **Client unit tests:** tests for Vue composables and pure utility functions using a jsdom environment.
 - **End-to-end (E2E) tests:** full-stack tests that boot a real NestJS application and run HTTP requests against a PostgreSQL database.
 
-Each layer has a specific job and its own tooling. Don't cover the same thing at multiple layers.
+Each layer has a specific job and its own tooling. Do not test the same behavior at multiple layers.
 
 For testing expectations by change type, see [CONTRIBUTING.md](CONTRIBUTING.md).
 For the development setup, see [DEVELOPMENT.md](DEVELOPMENT.md).
@@ -82,7 +82,7 @@ Every suite runs in one of two modes:
 
 | Mode         | `prepareDedicatedDatabase` | Database used                                           | When to use                                      |
 | ------------ | -------------------------- | ------------------------------------------------------- | ------------------------------------------------ |
-| default-db   | `false`                    | `E2E_DATABASE_URL` with no reset before run             | Fast smoke tests that don't write data           |
+| default-db   | `false`                    | `E2E_DATABASE_URL` with no reset before run             | Fast smoke tests that do not write data          |
 | dedicated-db | `true`                     | `bookorbit_e2e` dropped and re-migrated before each run | Any test that writes data or needs a clean state |
 
 For dedicated-db suites, `run-suite.mjs` automatically runs `pnpm run e2e:db:prepare` before
@@ -184,7 +184,7 @@ same global pipes and exception filter as production, registers cookie support, 
 | `ctx.adminToken` | `string`                 | A valid JWT for the seeded superuser |
 
 `MetadataService` is replaced with a no-op mock by default so E2E tests never make external
-metadata provider calls. To customise the mock for a specific suite, pass the result of
+metadata provider calls. To customize the mock for a specific suite, pass the result of
 `makeMetadataNoopMock()` and configure its `vi.fn()` methods before calling
 `createE2EContext()`.
 
