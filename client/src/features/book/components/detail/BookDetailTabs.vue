@@ -17,6 +17,7 @@ const tabs = computed<{ label: string; tab: BookDetailTab }[]>(() => {
     result.push({ label: 'Edit Metadata', tab: 'edit' })
   }
   result.push({ label: 'Files', tab: 'files' })
+  result.push({ label: 'Reading Log', tab: 'reading-log' })
   return result
 })
 

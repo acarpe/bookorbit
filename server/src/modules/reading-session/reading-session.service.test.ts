@@ -1,4 +1,4 @@
-import { BadRequestException, ForbiddenException, Logger } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Logger, NotFoundException } from '@nestjs/common';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { RequestUser } from '../../common/types/request-user';
@@ -169,5 +169,127 @@ describe('ReadingSessionService', () => {
         makeUser(),
       ),
     ).resolves.toBeUndefined();
+  });
+});
+
+const mockRepoExtended = {
+  saveSession: vi.fn(),
+  listByBook: vi.fn(),
+  deleteSessionByBook: vi.fn(),
+};
+
+const mockBookServiceExtended = {
+  verifyFileAccess: vi.fn(),
+  verifyBookAccess: vi.fn(),
+};
+
+function makeServiceExtended() {
+  return new ReadingSessionService(
+    mockRepoExtended as unknown as ReadingSessionRepository,
+    mockBookServiceExtended as unknown as BookService,
+    { emit: vi.fn() } as never,
+  );
+}
+
+describe('ReadingSessionService - listByBook', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockBookServiceExtended.verifyBookAccess.mockResolvedValue(undefined);
+    vi.spyOn(Logger.prototype, 'log').mockImplementation(() => undefined);
+    vi.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
+  });
+
+  it('verifies access and returns result', async () => {
+    const mockResult = {
+      items: [],
+      total: 0,
+      page: 1,
+      pageSize: 25,
+      stats: { totalSessions: 0, totalSeconds: 0, avgDurationSeconds: 0, firstSessionAt: null, lastSessionAt: null },
+    };
+    mockRepoExtended.listByBook.mockResolvedValue(mockResult);
+
+    const svc = makeServiceExtended();
+    const result = await svc.listByBook(10, makeUser({ id: 5 }), { page: 1, pageSize: 25, sortBy: 'startedAt', sortDir: 'desc' });
+
+    expect(mockBookServiceExtended.verifyBookAccess).toHaveBeenCalledWith(10, expect.objectContaining({ id: 5 }));
+    expect(result).toBe(mockResult);
+  });
+
+  it('rethrows when access check fails', async () => {
+    mockBookServiceExtended.verifyBookAccess.mockRejectedValueOnce(new ForbiddenException());
+
+    const svc = makeServiceExtended();
+    await expect(svc.listByBook(10, makeUser(), { page: 1, pageSize: 25, sortBy: 'startedAt', sortDir: 'desc' })).rejects.toThrow(ForbiddenException);
+  });
+
+  it('passes all query params to repo including optional dateFrom, dateTo, format', async () => {
+    const emptyStats = { totalSessions: 0, totalSeconds: 0, avgDurationSeconds: 0, firstSessionAt: null, lastSessionAt: null, dailySummary: [] };
+    mockRepoExtended.listByBook.mockResolvedValue({ items: [], total: 0, page: 2, pageSize: 10, stats: emptyStats });
+
+    const svc = makeServiceExtended();
+    await svc.listByBook(10, makeUser({ id: 5 }), {
+      page: 2,
+      pageSize: 10,
+      sortBy: 'durationSeconds',
+      sortDir: 'asc',
+      dateFrom: '2026-01-01',
+      dateTo: '2026-12-31',
+      format: 'EPUB',
+    });
+
+    expect(mockRepoExtended.listByBook).toHaveBeenCalledWith(5, 10, 2, 10, 'durationSeconds', 'asc', '2026-01-01', '2026-12-31', 'EPUB');
+  });
+
+  it('uses defaults when optional params are missing', async () => {
+    const emptyStats = { totalSessions: 0, totalSeconds: 0, avgDurationSeconds: 0, firstSessionAt: null, lastSessionAt: null, dailySummary: [] };
+    mockRepoExtended.listByBook.mockResolvedValue({ items: [], total: 0, page: 1, pageSize: 25, stats: emptyStats });
+
+    const svc = makeServiceExtended();
+    await svc.listByBook(10, makeUser({ id: 5 }), {});
+
+    expect(mockRepoExtended.listByBook).toHaveBeenCalledWith(5, 10, 1, 25, 'startedAt', 'desc', undefined, undefined, undefined);
+  });
+});
+
+describe('ReadingSessionService - deleteSessionByBook', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockBookServiceExtended.verifyBookAccess.mockResolvedValue(undefined);
+    vi.spyOn(Logger.prototype, 'log').mockImplementation(() => undefined);
+    vi.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
+  });
+
+  it('throws NotFoundException when session not found', async () => {
+    mockRepoExtended.deleteSessionByBook.mockResolvedValue({ found: false });
+
+    const svc = makeServiceExtended();
+    await expect(svc.deleteSessionByBook(10, 99, makeUser())).rejects.toThrow(NotFoundException);
+  });
+
+  it('completes without error when session found', async () => {
+    mockRepoExtended.deleteSessionByBook.mockResolvedValue({ found: true });
+
+    const svc = makeServiceExtended();
+    await expect(svc.deleteSessionByBook(10, 5, makeUser())).resolves.toBeUndefined();
+  });
+
+  it('rethrows when access check fails', async () => {
+    mockBookServiceExtended.verifyBookAccess.mockRejectedValueOnce(new ForbiddenException());
+
+    const svc = makeServiceExtended();
+    await expect(svc.deleteSessionByBook(10, 5, makeUser())).rejects.toThrow(ForbiddenException);
+  });
+
+  it('calls verifyBookAccess before calling repo', async () => {
+    mockRepoExtended.deleteSessionByBook.mockResolvedValue({ found: true });
+    const user = makeUser({ id: 5 });
+    const svc = makeServiceExtended();
+
+    await svc.deleteSessionByBook(10, 5, user);
+
+    const bookAccessOrder = mockBookServiceExtended.verifyBookAccess.mock.invocationCallOrder[0];
+    const repoOrder = mockRepoExtended.deleteSessionByBook.mock.invocationCallOrder[0];
+    expect(bookAccessOrder).toBeLessThan(repoOrder);
   });
 });

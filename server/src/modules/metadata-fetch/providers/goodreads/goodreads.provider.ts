@@ -93,13 +93,7 @@ export class GoodreadsProvider implements IdentifiableProvider {
     return mapGoodreadsApolloState(state, bookId);
   }
 
-  private async fetchHtml(
-    url: string,
-    op: GoodreadsFetchOp,
-    query?: string,
-    providerId?: string,
-    signal?: AbortSignal,
-  ): Promise<string | null> {
+  private async fetchHtml(url: string, op: GoodreadsFetchOp, query?: string, providerId?: string, signal?: AbortSignal): Promise<string | null> {
     const safeQuery = query ? sanitizeLogValue(query) : undefined;
     const safeProviderId = providerId ? sanitizeLogValue(providerId) : undefined;
     const startedAt = Date.now();
@@ -133,13 +127,7 @@ export class GoodreadsProvider implements IdentifiableProvider {
     }
   }
 
-  private async fetchJson<T>(
-    url: string,
-    op: GoodreadsFetchOp,
-    query?: string,
-    providerId?: string,
-    signal?: AbortSignal,
-  ): Promise<T | null> {
+  private async fetchJson<T>(url: string, op: GoodreadsFetchOp, query?: string, providerId?: string, signal?: AbortSignal): Promise<T | null> {
     const safeQuery = query ? sanitizeLogValue(query) : undefined;
     const safeProviderId = providerId ? sanitizeLogValue(providerId) : undefined;
     const startedAt = Date.now();
@@ -212,11 +200,7 @@ function extractBookIds(html: string, titleHint: string | undefined, limit: numb
   return rankBookIds(entries, titleHint, limit);
 }
 
-function extractBookIdsFromAutocomplete(
-  payload: GoodreadsAutocompleteItem[] | null,
-  titleHint: string | undefined,
-  limit: number,
-): string[] {
+function extractBookIdsFromAutocomplete(payload: GoodreadsAutocompleteItem[] | null, titleHint: string | undefined, limit: number): string[] {
   if (!Array.isArray(payload) || payload.length === 0) return [];
 
   const seen = new Set<string>();

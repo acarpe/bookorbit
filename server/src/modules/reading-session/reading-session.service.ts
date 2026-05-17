@@ -1,9 +1,11 @@
-import { BadRequestException, Injectable, Logger } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 
-import type { UserSettings } from '@bookorbit/types';
+import type { BookReadingSessionListResponse, UserSettings } from '@bookorbit/types';
 import type { RequestUser } from '../../common/types/request-user';
+import { sanitizeLogValue } from '../../common/utils/log-sanitize.utils';
 import { BookService } from '../book/book.service';
 import { AchievementEventsService, ACHIEVEMENT_EVENT_READING_SESSION_SAVED } from '../achievement/achievement-events.service';
+import type { ListBookReadingSessionsDto } from './dto/list-book-reading-sessions.dto';
 import type { SaveReadingSessionDto } from './dto/save-reading-session.dto';
 import { ReadingSessionRepository } from './reading-session.repository';
 
@@ -71,9 +73,59 @@ export class ReadingSessionService {
       }
     } catch (error) {
       const errorClass = error instanceof Error ? error.constructor.name : 'UnknownError';
-      const errorMessage = (error instanceof Error ? error.message : 'unknown error').replaceAll('"', "'");
+      const errorMessage = sanitizeLogValue(error instanceof Error ? error.message : 'unknown error');
       this.logger.warn(
         `[${event}] [fail] fileId=${fileId} userId=${user.id} sessionId=${dto.sessionId} durationMs=${Date.now() - startedAtMs} errorClass=${errorClass} error="${errorMessage}" - reading session save failed`,
+      );
+      throw error;
+    }
+  }
+
+  async listByBook(bookId: number, user: RequestUser, query: ListBookReadingSessionsDto): Promise<BookReadingSessionListResponse> {
+    const event = 'book.reading_sessions.list';
+    const startedAtMs = Date.now();
+    this.logger.log(`[${event}] [start] bookId=${bookId} userId=${user.id} - list reading sessions started`);
+    try {
+      await this.bookService.verifyBookAccess(bookId, user);
+      const result = await this.repo.listByBook(
+        user.id,
+        bookId,
+        query.page ?? 1,
+        query.pageSize ?? 25,
+        query.sortBy ?? 'startedAt',
+        query.sortDir ?? 'desc',
+        query.dateFrom,
+        query.dateTo,
+        query.format,
+      );
+      this.logger.log(
+        `[${event}] [end] bookId=${bookId} userId=${user.id} durationMs=${Date.now() - startedAtMs} total=${result.total} - list reading sessions completed`,
+      );
+      return result;
+    } catch (error) {
+      const errorClass = error instanceof Error ? error.constructor.name : 'UnknownError';
+      this.logger.warn(
+        `[${event}] [fail] bookId=${bookId} userId=${user.id} durationMs=${Date.now() - startedAtMs} errorClass=${errorClass} error="${sanitizeLogValue(error instanceof Error ? error.message : 'unknown error')}" - list reading sessions failed`,
+      );
+      throw error;
+    }
+  }
+
+  async deleteSessionByBook(bookId: number, sessionId: number, user: RequestUser): Promise<void> {
+    const event = 'book.reading_session.delete';
+    const startedAtMs = Date.now();
+    this.logger.log(`[${event}] [start] bookId=${bookId} sessionId=${sessionId} userId=${user.id} - delete reading session started`);
+    try {
+      await this.bookService.verifyBookAccess(bookId, user);
+      const result = await this.repo.deleteSessionByBook(user.id, bookId, sessionId);
+      if (!result.found) throw new NotFoundException('Reading session not found');
+      this.logger.log(
+        `[${event}] [end] bookId=${bookId} sessionId=${sessionId} userId=${user.id} durationMs=${Date.now() - startedAtMs} - delete reading session completed`,
+      );
+    } catch (error) {
+      const errorClass = error instanceof Error ? error.constructor.name : 'UnknownError';
+      this.logger.warn(
+        `[${event}] [fail] bookId=${bookId} sessionId=${sessionId} userId=${user.id} durationMs=${Date.now() - startedAtMs} errorClass=${errorClass} error="${sanitizeLogValue(error instanceof Error ? error.message : 'unknown error')}" - delete reading session failed`,
       );
       throw error;
     }

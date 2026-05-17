@@ -36,3 +36,4 @@ export * from "./entity-manager";
 export * from "./font";
 export * from "./dictionary";
 export * from "./achievement";
+export * from "./reading-session";
