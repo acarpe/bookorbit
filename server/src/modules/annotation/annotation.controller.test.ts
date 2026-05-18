@@ -1,5 +1,6 @@
 import type { RequestUser } from '../../common/types/request-user';
 import { AnnotationController } from './annotation.controller';
+import type { AnnotationQueryDto } from './dto/annotation-query.dto';
 
 function makeUser(overrides?: Partial<RequestUser>): RequestUser {
   return {
@@ -22,6 +23,7 @@ function makeUser(overrides?: Partial<RequestUser>): RequestUser {
 function makeController() {
   const annotationService = {
     getAnnotations: vi.fn(),
+    getAnnotationsPaginated: vi.fn(),
     createAnnotation: vi.fn(),
     updateAnnotation: vi.fn(),
     deleteAnnotation: vi.fn(),
@@ -34,16 +36,51 @@ function makeController() {
 }
 
 describe('AnnotationController', () => {
-  it('delegates getAnnotations with bookId and current user', async () => {
+  it('delegates getAnnotations with bookId and current user when no page param', async () => {
     const { controller, annotationService } = makeController();
     const expected = [{ id: 1 }];
     annotationService.getAnnotations.mockResolvedValue(expected);
     const user = makeUser();
+    const query: AnnotationQueryDto = {};
 
-    const result = await controller.getAnnotations(15, user);
+    const result = await controller.getAnnotations(15, user, query);
 
     expect(annotationService.getAnnotations).toHaveBeenCalledWith(15, user);
+    expect(annotationService.getAnnotationsPaginated).not.toHaveBeenCalled();
     expect(result).toEqual(expected);
+  });
+
+  it('delegates getAnnotationsPaginated when page param is present', async () => {
+    const { controller, annotationService } = makeController();
+    const expected = { items: [], total: 0, page: 1, pageSize: 25, stats: {} };
+    annotationService.getAnnotationsPaginated.mockResolvedValue(expected);
+    const user = makeUser();
+    const query: AnnotationQueryDto = { page: 1, pageSize: 25 };
+
+    const result = await controller.getAnnotations(15, user, query);
+
+    expect(annotationService.getAnnotationsPaginated).toHaveBeenCalledWith(15, user, query);
+    expect(annotationService.getAnnotations).not.toHaveBeenCalled();
+    expect(result).toEqual(expected);
+  });
+
+  it('passes filter params through to paginated service', async () => {
+    const { controller, annotationService } = makeController();
+    annotationService.getAnnotationsPaginated.mockResolvedValue({ items: [], total: 0 });
+    const user = makeUser();
+    const query: AnnotationQueryDto = {
+      page: 2,
+      pageSize: 10,
+      sortBy: 'createdAt',
+      sortDir: 'desc',
+      colors: '#FACC15,#4ADE80',
+      search: 'freedom',
+      chapter: 'Chapter 1',
+    };
+
+    await controller.getAnnotations(15, user, query);
+
+    expect(annotationService.getAnnotationsPaginated).toHaveBeenCalledWith(15, user, query);
   });
 
   it('delegates createAnnotation with dto payload', async () => {

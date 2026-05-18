@@ -17,6 +17,7 @@ import { COVER_ASPECT_RATIO_KEY, DEFAULT_COVER_ASPECT_RATIO } from '@/features/b
 import EntityNotFound from '@/components/EntityNotFound.vue'
 
 const ReadingLogTab = defineAsyncComponent(() => import('@/features/book/components/detail/tabs/ReadingLogTab.vue'))
+const HighlightsTab = defineAsyncComponent(() => import('@/features/book/components/detail/tabs/HighlightsTab.vue'))
 
 const route = useRoute()
 const { hasPermission } = usePermissions()
@@ -41,6 +42,7 @@ const pageTitle = computed(() => {
   if (tab.value === 'edit') return `Edit Metadata · ${base}`
   if (tab.value === 'files') return `Files · ${base}`
   if (tab.value === 'reading-log') return `Reading Log · ${base}`
+  if (tab.value === 'highlights') return `Highlights · ${base}`
   return `Book · ${base}`
 })
 usePageTitle(pageTitle)
@@ -95,6 +97,7 @@ function onCoverChanged(source: 'extracted' | 'custom' | null) {
         />
         <FilesTab v-else-if="tab === 'files'" :book="detail" />
         <ReadingLogTab v-else-if="tab === 'reading-log'" :book="detail" />
+        <HighlightsTab v-else-if="tab === 'highlights'" :book="detail" />
       </div>
 
       <div v-else-if="loading" key="loading">
@@ -136,6 +139,15 @@ function onCoverChanged(source: 'extracted' | 'custom' | null) {
           <div class="h-16 rounded-md bg-muted animate-shimmer" />
           <div class="space-y-2">
             <div v-for="i in 5" :key="i" class="h-12 rounded-md bg-muted animate-shimmer" />
+          </div>
+        </div>
+        <div v-else-if="tab === 'highlights'" class="space-y-4">
+          <div class="flex gap-2">
+            <div class="h-9 flex-1 rounded-md bg-muted animate-shimmer" />
+            <div v-for="i in 3" :key="i" class="h-9 w-9 rounded-full bg-muted animate-shimmer" />
+          </div>
+          <div class="space-y-3">
+            <div v-for="i in 3" :key="i" class="h-24 rounded-lg bg-muted animate-shimmer" />
           </div>
         </div>
       </div>

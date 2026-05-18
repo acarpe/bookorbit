@@ -1,17 +1,21 @@
-import { Body, Controller, Delete, Get, HttpCode, HttpStatus, Param, ParseIntPipe, Patch, Post } from '@nestjs/common';
+import { Body, Controller, Delete, Get, HttpCode, HttpStatus, Param, ParseIntPipe, Patch, Post, Query } from '@nestjs/common';
 
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import type { RequestUser } from '../../common/types/request-user';
 import { AnnotationService } from './annotation.service';
 import { CreateAnnotationDto } from './dto/create-annotation.dto';
 import { UpdateAnnotationDto } from './dto/update-annotation.dto';
+import { AnnotationQueryDto } from './dto/annotation-query.dto';
 
 @Controller('books/:bookId/annotations')
 export class AnnotationController {
   constructor(private readonly annotationService: AnnotationService) {}
 
   @Get()
-  getAnnotations(@Param('bookId', ParseIntPipe) bookId: number, @CurrentUser() user: RequestUser) {
+  getAnnotations(@Param('bookId', ParseIntPipe) bookId: number, @CurrentUser() user: RequestUser, @Query() query: AnnotationQueryDto) {
+    if (query.page != null) {
+      return this.annotationService.getAnnotationsPaginated(bookId, user, query);
+    }
     return this.annotationService.getAnnotations(bookId, user);
   }
 

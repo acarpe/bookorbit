@@ -6,6 +6,7 @@ import { AnnotationService } from './annotation.service';
 import { AnnotationResponseDto } from './dto/annotation-response.dto';
 import type { CreateAnnotationDto } from './dto/create-annotation.dto';
 import type { UpdateAnnotationDto } from './dto/update-annotation.dto';
+import type { AnnotationQueryDto } from './dto/annotation-query.dto';
 
 function makeUser(overrides?: Partial<RequestUser>): RequestUser {
   return {
@@ -45,6 +46,9 @@ function makeAnnotationRow(overrides?: Record<string, unknown>) {
 function makeService() {
   const annotationRepo = {
     findByBookId: vi.fn(),
+    findPaginated: vi.fn(),
+    getStats: vi.fn(),
+    getDistinctChapters: vi.fn(),
     create: vi.fn(),
     update: vi.fn(),
     delete: vi.fn(),
@@ -366,6 +370,185 @@ describe('AnnotationService', () => {
       const row = makeAnnotationRow({ chapterTitle: undefined });
       const dto = AnnotationResponseDto.from(row as never);
       expect(dto.chapterTitle).toBeNull();
+    });
+  });
+
+  describe('getAnnotationsPaginated', () => {
+    function makeStatsResult(overrides?: Record<string, unknown>) {
+      return {
+        totalHighlights: 3,
+        colorBreakdown: [
+          { color: 'yellow', count: 2 },
+          { color: '#4ADE80', count: 1 },
+        ],
+        chaptersWithHighlights: 2,
+        highlightsWithNotes: 1,
+        ...overrides,
+      };
+    }
+
+    it('returns paginated response with items, total, and stats', async () => {
+      const { service, annotationRepo } = makeService();
+      const rows = [makeAnnotationRow(), makeAnnotationRow({ id: 11 })];
+      annotationRepo.findPaginated.mockResolvedValue({ items: rows, total: 2 });
+      annotationRepo.getStats.mockResolvedValue(makeStatsResult());
+      annotationRepo.getDistinctChapters.mockResolvedValue(['Chapter 1', 'Chapter 2']);
+
+      const query: AnnotationQueryDto = { page: 1, pageSize: 25 };
+      const result = await service.getAnnotationsPaginated(5, makeUser(), query);
+
+      expect(result.items).toHaveLength(2);
+      expect(result.total).toBe(2);
+      expect(result.page).toBe(1);
+      expect(result.pageSize).toBe(25);
+      expect(result.stats.totalHighlights).toBe(3);
+      expect(result.stats.chapters).toEqual(['Chapter 1', 'Chapter 2']);
+    });
+
+    it('verifies book access before querying', async () => {
+      const { service, annotationRepo, bookService } = makeService();
+      annotationRepo.findPaginated.mockResolvedValue({ items: [], total: 0 });
+      annotationRepo.getStats.mockResolvedValue(
+        makeStatsResult({ totalHighlights: 0, colorBreakdown: [], chaptersWithHighlights: 0, highlightsWithNotes: 0 }),
+      );
+      annotationRepo.getDistinctChapters.mockResolvedValue([]);
+
+      await service.getAnnotationsPaginated(5, makeUser(), { page: 1 });
+
+      expect(bookService.verifyBookAccess).toHaveBeenCalledWith(5, expect.objectContaining({ id: 1 }));
+    });
+
+    it('propagates ForbiddenException from book access check', async () => {
+      const { service, bookService } = makeService();
+      bookService.verifyBookAccess.mockRejectedValue(new ForbiddenException());
+
+      await expect(service.getAnnotationsPaginated(5, makeUser(), { page: 1 })).rejects.toThrow(ForbiddenException);
+    });
+
+    it('defaults to page 1 and pageSize 25 when not specified', async () => {
+      const { service, annotationRepo } = makeService();
+      annotationRepo.findPaginated.mockResolvedValue({ items: [], total: 0 });
+      annotationRepo.getStats.mockResolvedValue(
+        makeStatsResult({ totalHighlights: 0, colorBreakdown: [], chaptersWithHighlights: 0, highlightsWithNotes: 0 }),
+      );
+      annotationRepo.getDistinctChapters.mockResolvedValue([]);
+
+      const result = await service.getAnnotationsPaginated(5, makeUser(), {});
+
+      expect(result.page).toBe(1);
+      expect(result.pageSize).toBe(25);
+    });
+
+    it('parses color filter from comma-separated string', async () => {
+      const { service, annotationRepo } = makeService();
+      annotationRepo.findPaginated.mockResolvedValue({ items: [], total: 0 });
+      annotationRepo.getStats.mockResolvedValue(
+        makeStatsResult({ totalHighlights: 0, colorBreakdown: [], chaptersWithHighlights: 0, highlightsWithNotes: 0 }),
+      );
+      annotationRepo.getDistinctChapters.mockResolvedValue([]);
+
+      await service.getAnnotationsPaginated(5, makeUser(), { page: 1, colors: '#FACC15,#4ADE80' });
+
+      const filtersArg = annotationRepo.findPaginated.mock.calls[0][2];
+      expect(filtersArg.colors).toEqual(['#FACC15', '#4ADE80']);
+    });
+
+    it('passes search filter to repository', async () => {
+      const { service, annotationRepo } = makeService();
+      annotationRepo.findPaginated.mockResolvedValue({ items: [], total: 0 });
+      annotationRepo.getStats.mockResolvedValue(
+        makeStatsResult({ totalHighlights: 0, colorBreakdown: [], chaptersWithHighlights: 0, highlightsWithNotes: 0 }),
+      );
+      annotationRepo.getDistinctChapters.mockResolvedValue([]);
+
+      await service.getAnnotationsPaginated(5, makeUser(), { page: 1, search: 'freedom' });
+
+      const filtersArg = annotationRepo.findPaginated.mock.calls[0][2];
+      expect(filtersArg.search).toBe('freedom');
+    });
+
+    it('passes date filters to repository', async () => {
+      const { service, annotationRepo } = makeService();
+      annotationRepo.findPaginated.mockResolvedValue({ items: [], total: 0 });
+      annotationRepo.getStats.mockResolvedValue(
+        makeStatsResult({ totalHighlights: 0, colorBreakdown: [], chaptersWithHighlights: 0, highlightsWithNotes: 0 }),
+      );
+      annotationRepo.getDistinctChapters.mockResolvedValue([]);
+
+      await service.getAnnotationsPaginated(5, makeUser(), { page: 1, dateFrom: '2026-01-01', dateTo: '2026-06-01' });
+
+      const filtersArg = annotationRepo.findPaginated.mock.calls[0][2];
+      expect(filtersArg.dateFrom).toBeInstanceOf(Date);
+      expect(filtersArg.dateTo).toBeInstanceOf(Date);
+    });
+
+    it('defaults sort to position asc', async () => {
+      const { service, annotationRepo } = makeService();
+      annotationRepo.findPaginated.mockResolvedValue({ items: [], total: 0 });
+      annotationRepo.getStats.mockResolvedValue(
+        makeStatsResult({ totalHighlights: 0, colorBreakdown: [], chaptersWithHighlights: 0, highlightsWithNotes: 0 }),
+      );
+      annotationRepo.getDistinctChapters.mockResolvedValue([]);
+
+      await service.getAnnotationsPaginated(5, makeUser(), { page: 1 });
+
+      const sortArg = annotationRepo.findPaginated.mock.calls[0][3];
+      expect(sortArg).toEqual({ by: 'position', dir: 'asc' });
+    });
+
+    it('respects custom sort params', async () => {
+      const { service, annotationRepo } = makeService();
+      annotationRepo.findPaginated.mockResolvedValue({ items: [], total: 0 });
+      annotationRepo.getStats.mockResolvedValue(
+        makeStatsResult({ totalHighlights: 0, colorBreakdown: [], chaptersWithHighlights: 0, highlightsWithNotes: 0 }),
+      );
+      annotationRepo.getDistinctChapters.mockResolvedValue([]);
+
+      await service.getAnnotationsPaginated(5, makeUser(), { page: 1, sortBy: 'createdAt', sortDir: 'desc' });
+
+      const sortArg = annotationRepo.findPaginated.mock.calls[0][3];
+      expect(sortArg).toEqual({ by: 'createdAt', dir: 'desc' });
+    });
+
+    it('serializes createdAt as ISO string in items', async () => {
+      const { service, annotationRepo } = makeService();
+      const row = makeAnnotationRow({ createdAt: new Date('2026-03-15T12:00:00Z') });
+      annotationRepo.findPaginated.mockResolvedValue({ items: [row], total: 1 });
+      annotationRepo.getStats.mockResolvedValue(makeStatsResult());
+      annotationRepo.getDistinctChapters.mockResolvedValue([]);
+
+      const result = await service.getAnnotationsPaginated(5, makeUser(), { page: 1 });
+
+      expect(result.items[0].createdAt).toBe('2026-03-15T12:00:00.000Z');
+    });
+
+    it('returns empty items and zero total when no annotations match', async () => {
+      const { service, annotationRepo } = makeService();
+      annotationRepo.findPaginated.mockResolvedValue({ items: [], total: 0 });
+      annotationRepo.getStats.mockResolvedValue(
+        makeStatsResult({ totalHighlights: 0, colorBreakdown: [], chaptersWithHighlights: 0, highlightsWithNotes: 0 }),
+      );
+      annotationRepo.getDistinctChapters.mockResolvedValue([]);
+
+      const result = await service.getAnnotationsPaginated(5, makeUser(), { page: 1 });
+
+      expect(result.items).toEqual([]);
+      expect(result.total).toBe(0);
+      expect(result.stats.totalHighlights).toBe(0);
+    });
+
+    it('ignores empty color string', async () => {
+      const { service, annotationRepo } = makeService();
+      annotationRepo.findPaginated.mockResolvedValue({ items: [], total: 0 });
+      annotationRepo.getStats.mockResolvedValue(
+        makeStatsResult({ totalHighlights: 0, colorBreakdown: [], chaptersWithHighlights: 0, highlightsWithNotes: 0 }),
+      );
+      annotationRepo.getDistinctChapters.mockResolvedValue([]);
+
+      await service.getAnnotationsPaginated(5, makeUser(), { page: 1, colors: '' });
+
+      const filtersArg = annotationRepo.findPaginated.mock.calls[0][2];
+      expect(filtersArg.colors).toBeUndefined();
     });
   });
 });

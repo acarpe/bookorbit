@@ -68,6 +68,60 @@ function makeRepository() {
   return { repo, db };
 }
 
+function makePaginatedDb(items: ReturnType<typeof makeRow>[], total: number) {
+  const offsetFn = vi.fn().mockResolvedValue(items);
+  const limitFn = vi.fn().mockReturnValue({ offset: offsetFn });
+  const orderByFn = vi.fn().mockReturnValue({ limit: limitFn });
+  const whereFn = vi
+    .fn()
+    .mockReturnValueOnce({ orderBy: orderByFn })
+    .mockReturnValueOnce([{ count: total }]);
+  const fromFn = vi.fn().mockReturnValue({ where: whereFn });
+  const selectFn = vi.fn().mockReturnValue({ from: fromFn });
+
+  return {
+    select: selectFn,
+    _offset: offsetFn,
+  };
+}
+
+function makeStatsDb(
+  aggregate: { totalHighlights: number; chaptersWithHighlights: number; highlightsWithNotes: number },
+  colorBreakdown: { color: string; count: number }[],
+) {
+  let callCount = 0;
+  const selectFn = vi.fn().mockImplementation(() => {
+    callCount++;
+    if (callCount === 1) {
+      return {
+        from: vi.fn().mockReturnValue({
+          where: vi.fn().mockResolvedValue([aggregate]),
+        }),
+      };
+    }
+    return {
+      from: vi.fn().mockReturnValue({
+        where: vi.fn().mockReturnValue({
+          groupBy: vi.fn().mockReturnValue({
+            orderBy: vi.fn().mockResolvedValue(colorBreakdown),
+          }),
+        }),
+      }),
+    };
+  });
+
+  return { select: selectFn };
+}
+
+function makeDistinctChaptersDb(chapters: (string | null)[]) {
+  const orderByFn = vi.fn().mockResolvedValue(chapters.map((c) => ({ chapterTitle: c })));
+  const whereFn = vi.fn().mockReturnValue({ orderBy: orderByFn });
+  const fromFn = vi.fn().mockReturnValue({ where: whereFn });
+  const selectDistinctFn = vi.fn().mockReturnValue({ from: fromFn });
+
+  return { selectDistinct: selectDistinctFn };
+}
+
 describe('AnnotationRepository', () => {
   describe('findByBookId', () => {
     it('queries with bookId and userId filters and applies createdAt ordering', async () => {
@@ -199,6 +253,96 @@ describe('AnnotationRepository', () => {
       const result = await repo.delete(5, 99, 10);
 
       expect(result).toBe(false);
+    });
+  });
+
+  describe('findPaginated', () => {
+    it('returns items and total count', async () => {
+      const db = makePaginatedDb([makeRow()], 1);
+      const repo = new AnnotationRepository(db as never);
+
+      const result = await repo.findPaginated(5, 10, {}, { by: 'position', dir: 'asc' }, 1, 25);
+
+      expect(result.items).toHaveLength(1);
+      expect(result.total).toBe(1);
+    });
+
+    it('returns empty result when no annotations match', async () => {
+      const db = makePaginatedDb([], 0);
+      const repo = new AnnotationRepository(db as never);
+
+      const result = await repo.findPaginated(5, 10, {}, { by: 'position', dir: 'asc' }, 1, 25);
+
+      expect(result.items).toEqual([]);
+      expect(result.total).toBe(0);
+    });
+
+    it('applies offset based on page and pageSize', async () => {
+      const db = makePaginatedDb([], 0);
+      const repo = new AnnotationRepository(db as never);
+
+      await repo.findPaginated(5, 10, {}, { by: 'position', dir: 'asc' }, 3, 10);
+
+      expect(db._offset).toHaveBeenCalledWith(20);
+    });
+  });
+
+  describe('getStats', () => {
+    it('returns aggregated stats', async () => {
+      const db = makeStatsDb({ totalHighlights: 5, chaptersWithHighlights: 2, highlightsWithNotes: 3 }, [
+        { color: 'yellow', count: 3 },
+        { color: '#4ADE80', count: 2 },
+      ]);
+      const repo = new AnnotationRepository(db as never);
+
+      const result = await repo.getStats(5, 10, {});
+
+      expect(result.totalHighlights).toBe(5);
+      expect(result.chaptersWithHighlights).toBe(2);
+      expect(result.highlightsWithNotes).toBe(3);
+      expect(result.colorBreakdown).toEqual([
+        { color: 'yellow', count: 3 },
+        { color: '#4ADE80', count: 2 },
+      ]);
+    });
+
+    it('returns zero stats when no annotations exist', async () => {
+      const db = makeStatsDb({ totalHighlights: 0, chaptersWithHighlights: 0, highlightsWithNotes: 0 }, []);
+      const repo = new AnnotationRepository(db as never);
+
+      const result = await repo.getStats(5, 10, {});
+
+      expect(result.totalHighlights).toBe(0);
+      expect(result.colorBreakdown).toEqual([]);
+    });
+  });
+
+  describe('getDistinctChapters', () => {
+    it('returns distinct chapter titles', async () => {
+      const db = makeDistinctChaptersDb(['Chapter 1', 'Chapter 2']);
+      const repo = new AnnotationRepository(db as never);
+
+      const result = await repo.getDistinctChapters(5, 10);
+
+      expect(result).toEqual(['Chapter 1', 'Chapter 2']);
+    });
+
+    it('returns empty array when no chapters exist', async () => {
+      const db = makeDistinctChaptersDb([]);
+      const repo = new AnnotationRepository(db as never);
+
+      const result = await repo.getDistinctChapters(5, 10);
+
+      expect(result).toEqual([]);
+    });
+
+    it('filters out null chapter titles', async () => {
+      const db = makeDistinctChaptersDb([null, 'Chapter 1']);
+      const repo = new AnnotationRepository(db as never);
+
+      const result = await repo.getDistinctChapters(5, 10);
+
+      expect(result).toEqual(['Chapter 1']);
     });
   });
 });
