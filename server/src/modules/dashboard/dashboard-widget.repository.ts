@@ -34,7 +34,7 @@ import { computeLongestStreak, computeStreakData, formatDay } from './dashboard-
 
 type Db = NodePgDatabase<typeof schema>;
 
-const CURRENTLY_READING_LIMIT = 3;
+const CURRENTLY_READING_LIMIT = 10;
 const DEFAULT_VIRTUAL_PAGE_COUNT = 300;
 
 @Injectable()

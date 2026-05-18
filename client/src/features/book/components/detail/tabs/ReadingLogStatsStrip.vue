@@ -162,7 +162,10 @@ const statCards = computed(() => [
 </script>
 
 <template>
-  <div class="grid grid-cols-2 gap-2 sm:gap-3 transition-opacity md:grid-cols-8" :class="{ 'opacity-50 pointer-events-none': loading && stats !== null }">
+  <div
+    class="grid grid-cols-2 gap-2 sm:gap-3 transition-opacity md:grid-cols-8"
+    :class="{ 'opacity-50 pointer-events-none': loading && stats !== null }"
+  >
     <template v-if="stats === null && loading">
       <div v-for="i in CARD_COUNT" :key="i" :class="CARD_CLASS">
         <div class="h-3 w-16 rounded bg-muted animate-shimmer mb-2" />
