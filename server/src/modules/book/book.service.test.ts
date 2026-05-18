@@ -320,6 +320,34 @@ describe('BookService', () => {
 
       expect(filename).toBe('Dune.pdf');
     });
+
+    it('preserves numeric stem suffix and still appends real extension', async () => {
+      const { service, appSettings, bookRepo } = makeService();
+      appSettings.getDownloadPattern.mockResolvedValue('{originalFilename}');
+      bookRepo.findPatternMetadataByBookIds.mockResolvedValue([metaRow(10, { title: 'Lost in the Cañon' })]);
+
+      const filename = await service.resolveDownloadFilename({
+        bookId: 10,
+        absolutePath: '/books/Lost in the Cañon.37466.epub',
+        format: 'epub',
+      });
+
+      expect(filename).toBe('Lost in the Cañon.37466.epub');
+    });
+
+    it('enforces actual file extension when pattern specifies a different extension', async () => {
+      const { service, appSettings, bookRepo } = makeService();
+      appSettings.getDownloadPattern.mockResolvedValue('{title}.pdf');
+      bookRepo.findPatternMetadataByBookIds.mockResolvedValue([metaRow(10, { title: 'Dune' })]);
+
+      const filename = await service.resolveDownloadFilename({
+        bookId: 10,
+        absolutePath: '/books/dune.epub',
+        format: 'epub',
+      });
+
+      expect(filename).toBe('Dune.pdf.epub');
+    });
   });
 
   describe('export files', () => {

@@ -301,6 +301,16 @@ describe('resolveUploadPath', () => {
       expect(resolveUploadPath('{title}', FULL, 'epub')).toBe('Neuromancer.epub');
       expect(resolveUploadPath('{title}', FULL, '.epub')).toBe('Neuromancer.epub');
     });
+
+    it('appends the real extension when filename stem ends with a numeric suffix', () => {
+      expect(resolveUploadPath('{originalFilename}', { ...FULL, originalFilename: 'Lost in the Cañon.37466' }, 'epub')).toBe(
+        'Lost in the Cañon.37466.epub',
+      );
+    });
+
+    it('enforces the requested extension when pattern includes a different extension', () => {
+      expect(resolveUploadPath('{title}.pdf', FULL, 'epub')).toBe('Neuromancer.pdf.epub');
+    });
   });
 
   describe('folder-only mode (trailing slash)', () => {
@@ -310,6 +320,10 @@ describe('resolveUploadPath', () => {
 
     it('works with a nested folder pattern', () => {
       expect(resolveUploadPath('{authors}/{series}/', FULL, 'epub')).toBe('William Gibson/Sprawl/neuromancer.epub');
+    });
+
+    it('does not double-append when original filename already ends with extension', () => {
+      expect(resolveUploadPath('{authors}/', { ...FULL, originalFilename: 'neuromancer.epub' }, 'epub')).toBe('William Gibson/neuromancer.epub');
     });
   });
 
@@ -357,6 +371,24 @@ describe('resolveDownloadFilename', () => {
 
   it('returns null when pattern resolves to an empty name', () => {
     expect(resolveDownloadFilename('{series}', PARTIAL, 'epub')).toBeNull();
+  });
+
+  it('appends extension when stem ends with a numeric suffix', () => {
+    expect(resolveDownloadFilename('{originalFilename}', { ...FULL, originalFilename: 'Lost in the Cañon.37466' }, 'epub')).toBe(
+      'Lost in the Cañon.37466.epub',
+    );
+  });
+
+  it('enforces extension for folder patterns with numeric-suffix title', () => {
+    expect(resolveDownloadFilename('{authors}/{title}', { ...FULL, title: 'Specimens.32070' }, 'epub')).toBe('Specimens.32070.epub');
+  });
+
+  it('enforces the requested extension when pattern includes a different extension', () => {
+    expect(resolveDownloadFilename('{title}.pdf', FULL, 'epub')).toBe('Neuromancer.pdf.epub');
+  });
+
+  it('does not double-append when resolved stem already ends with extension', () => {
+    expect(resolveDownloadFilename('{originalFilename}', { ...FULL, originalFilename: 'neuromancer.epub' }, 'epub')).toBe('neuromancer.epub');
   });
 });
 
