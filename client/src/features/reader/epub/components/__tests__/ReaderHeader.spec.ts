@@ -27,21 +27,25 @@ describe('ReaderHeader', () => {
         chapterTitle: 'Chapter 4',
         isBookmarked: false,
         settingsOpen: false,
+        footerMode: 0,
       },
       global,
     })
 
-    const buttons = wrapper.findAll('button')
-    await buttons[0]!.trigger('click')
-    await buttons[1]!.trigger('click')
-    await buttons[2]!.trigger('click')
-    await buttons[3]!.trigger('click')
-    await buttons[4]!.trigger('click')
+    await wrapper.get('button[aria-label="Go back"]').trigger('click')
+    await wrapper.get('button[aria-label="Table of contents"]').trigger('click')
+    await wrapper.get('button[aria-label="Toggle bookmark"]').trigger('click')
+    await wrapper.get('button[aria-label="Search"]').trigger('click')
+    await wrapper.get('button[aria-label="Cycle footer info mode"]').trigger('click')
+    await wrapper.get('button[aria-label="Keyboard shortcuts"]').trigger('click')
+    await wrapper.get('button[aria-label="Enter fullscreen"]').trigger('click')
 
     expect(wrapper.emitted('back')?.length).toBe(1)
     expect(wrapper.emitted('toggleSidebar')?.length).toBe(1)
     expect(wrapper.emitted('toggleBookmark')?.length).toBe(1)
     expect(wrapper.emitted('toggleSearch')?.length).toBe(1)
+    expect(wrapper.emitted('cycleFooterMode')?.length).toBe(1)
+    expect(wrapper.emitted('toggleHelp')?.length).toBe(1)
     expect(wrapper.emitted('toggleFullscreen')?.length).toBe(1)
   })
 
@@ -51,6 +55,7 @@ describe('ReaderHeader', () => {
         chapterTitle: 'Chapter 4',
         isBookmarked: true,
         settingsOpen: true,
+        footerMode: 1,
       },
       global,
     })

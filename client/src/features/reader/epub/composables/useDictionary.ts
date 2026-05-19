@@ -1,12 +1,118 @@
 import type { DictionaryDefinition, DictionaryEntry, DictionaryResult } from '@bookorbit/types'
 
+const LANGUAGE_ALIASES: Record<string, string> = {
+  ar: 'ar',
+  ara: 'ar',
+  arabic: 'ar',
+  cs: 'cs',
+  ces: 'cs',
+  cze: 'cs',
+  czech: 'cs',
+  da: 'da',
+  dan: 'da',
+  danish: 'da',
+  de: 'de',
+  deu: 'de',
+  ger: 'de',
+  german: 'de',
+  el: 'el',
+  ell: 'el',
+  gre: 'el',
+  greek: 'el',
+  en: 'en',
+  eng: 'en',
+  english: 'en',
+  es: 'es',
+  spa: 'es',
+  spanish: 'es',
+  fi: 'fi',
+  fin: 'fi',
+  finnish: 'fi',
+  fr: 'fr',
+  fra: 'fr',
+  fre: 'fr',
+  french: 'fr',
+  he: 'he',
+  heb: 'he',
+  hebrew: 'he',
+  hi: 'hi',
+  hin: 'hi',
+  hindi: 'hi',
+  hu: 'hu',
+  hun: 'hu',
+  hungarian: 'hu',
+  id: 'id',
+  ind: 'id',
+  indonesian: 'id',
+  it: 'it',
+  ita: 'it',
+  italian: 'it',
+  ja: 'ja',
+  jpn: 'ja',
+  japanese: 'ja',
+  ko: 'ko',
+  kor: 'ko',
+  korean: 'ko',
+  nl: 'nl',
+  nld: 'nl',
+  dut: 'nl',
+  dutch: 'nl',
+  no: 'no',
+  nor: 'no',
+  norwegian: 'no',
+  pl: 'pl',
+  pol: 'pl',
+  polish: 'pl',
+  pt: 'pt',
+  por: 'pt',
+  portuguese: 'pt',
+  ro: 'ro',
+  ron: 'ro',
+  rum: 'ro',
+  romanian: 'ro',
+  ru: 'ru',
+  rus: 'ru',
+  russian: 'ru',
+  sv: 'sv',
+  swe: 'sv',
+  swedish: 'sv',
+  th: 'th',
+  tha: 'th',
+  thai: 'th',
+  tr: 'tr',
+  tur: 'tr',
+  turkish: 'tr',
+  uk: 'uk',
+  ukr: 'uk',
+  ukrainian: 'uk',
+  vi: 'vi',
+  vie: 'vi',
+  vietnamese: 'vi',
+  zh: 'zh',
+  zho: 'zh',
+  chi: 'zh',
+  chinese: 'zh',
+}
+
 function stripHtml(html: string): string {
   return (new DOMParser().parseFromString(html, 'text/html').body.textContent ?? '').trim()
 }
 
 function normalizeLang(lang: string): string {
   if (!lang) return 'en'
-  return (lang.split('-')[0] ?? 'en').toLowerCase()
+  const normalized = lang.trim().toLowerCase()
+  if (!normalized) return 'en'
+
+  const primary = normalized.split(/[;,/|]/)[0]?.trim() ?? ''
+  if (!primary) return 'en'
+
+  const base = primary.split('-')[0]?.trim() ?? ''
+  const alias = LANGUAGE_ALIASES[base]
+  if (alias) return alias
+
+  if (/^[a-z]{2,3}$/.test(base)) return base
+
+  return 'en'
 }
 
 function extractPhonetics(entry: Record<string, unknown>): { phonetic: string | null; audioUrl: string | null } {

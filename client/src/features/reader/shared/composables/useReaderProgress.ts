@@ -1,8 +1,20 @@
-import { onUnmounted, ref } from 'vue'
+import { onUnmounted, ref, type Ref } from 'vue'
 import { api } from '@/lib/api'
 import type { FoliateRenderer, RelocateDetail } from '../../epub/composables/useFoliate'
 
-export function useReaderProgress(bookId: number, fileId: number) {
+export type FooterDisplayMode = 0 | 1 | 2
+
+export function formatTimeRemaining(minutes: number): string {
+  if (!Number.isFinite(minutes) || minutes < 0) return ''
+  if (minutes < 1) return '< 1 min'
+  if (minutes < 60) return `${Math.round(minutes)} min`
+  const hours = Math.floor(minutes / 60)
+  const remainder = Math.round(minutes % 60)
+  if (remainder === 0) return `${hours} hr`
+  return `${hours} hr ${remainder} min`
+}
+
+export function useReaderProgress(bookId: number, fileId: number, elapsedMinutes: Ref<number>, initialFooterMode: FooterDisplayMode = 0) {
   const cfi = ref<string | null>(null)
   const pageNumber = ref<number | null>(null)
   const percentage = ref(0)
@@ -10,6 +22,15 @@ export function useReaderProgress(bookId: number, fileId: number) {
   const sectionIndex = ref(0)
   const totalSections = ref(0)
   const fraction = ref(0)
+
+  const locationCurrent = ref(0)
+  const locationTotal = ref(0)
+  const sectionCurrent = ref(0)
+  const sectionTotal = ref(0)
+  const timeSection = ref(0)
+  const timeTotal = ref(0)
+
+  const footerMode = ref<FooterDisplayMode>(initialFooterMode)
 
   let saveTimer: ReturnType<typeof setTimeout> | null = null
 
@@ -31,8 +52,15 @@ export function useReaderProgress(bookId: number, fileId: number) {
     fraction.value = detail?.fraction ?? 0
     percentage.value = fraction.value * 100
     chapterTitle.value = detail?.tocItem?.label ?? ''
-    sectionIndex.value = detail?.index ?? 0
-    totalSections.value = detail?.total ?? 0
+    sectionIndex.value = detail?.section?.current ?? detail?.index ?? 0
+    totalSections.value = detail?.section?.total ?? detail?.total ?? 0
+
+    locationCurrent.value = detail?.location?.current ?? 0
+    locationTotal.value = detail?.location?.total ?? 0
+    sectionCurrent.value = detail?.section?.current ?? 0
+    sectionTotal.value = detail?.section?.total ?? 0
+    timeSection.value = detail?.time?.section ?? 0
+    timeTotal.value = detail?.time?.total ?? 0
 
     if (saveTimer) clearTimeout(saveTimer)
     saveTimer = setTimeout(() => save(), 2000)
@@ -48,6 +76,32 @@ export function useReaderProgress(bookId: number, fileId: number) {
         percentage: percentage.value,
       }),
     })
+  }
+
+  function cycleFooterMode() {
+    footerMode.value = ((footerMode.value + 1) % 3) as FooterDisplayMode
+  }
+
+  function buildFooterContent(mode: FooterDisplayMode): { left: string; right: string } {
+    const pct = Math.round(fraction.value * 100)
+
+    switch (mode) {
+      case 0: {
+        const left = locationTotal.value > 0 ? `Page ${locationCurrent.value + 1} of ${locationTotal.value}` : ''
+        return { left, right: `${pct}%` }
+      }
+      case 1: {
+        const elapsed = elapsedMinutes.value
+        const left = elapsed > 0 ? `Reading: ${elapsed}m` : 'Reading: < 1m'
+        const right = timeTotal.value > 0 ? `${formatTimeRemaining(timeTotal.value)} left` : `${pct}%`
+        return { left, right }
+      }
+      case 2: {
+        const left = sectionTotal.value > 0 ? `Ch. ${sectionCurrent.value + 1} of ${sectionTotal.value}` : ''
+        const right = timeSection.value > 0 ? `${formatTimeRemaining(timeSection.value)} left in ch.` : `${pct}%`
+        return { left, right }
+      }
+    }
   }
 
   function updateHeadsFeet(renderer: FoliateRenderer, theme: { fg: string; bg: string }) {
@@ -92,38 +146,46 @@ export function useReaderProgress(bookId: number, fileId: number) {
 
     if (!renderer.feet?.length) return
 
-    const pct = Math.round(fraction.value * 100)
+    const { left, right } = buildFooterContent(footerMode.value)
     const totalCols = renderer.feet.length
 
     renderer.feet.forEach((footEl: HTMLElement, index: number) => {
       if (!footEl) return
       const div = document.createElement('div')
       div.style.cssText = style
+      div.style.cursor = 'pointer'
+      div.addEventListener('click', (e) => {
+        e.stopPropagation()
+        cycleFooterMode()
+        updateHeadsFeet(renderer, theme)
+      })
 
       if (isSingleColumn) {
-        const timeSpan = document.createElement('span')
-        timeSpan.textContent = ''
-        timeSpan.style.textAlign = 'left'
+        const leftSpan = document.createElement('span')
+        leftSpan.textContent = left
+        leftSpan.style.textAlign = 'left'
 
-        const progressSpan = document.createElement('span')
-        progressSpan.textContent = `${pct}%`
-        progressSpan.style.textAlign = 'right'
+        const rightSpan = document.createElement('span')
+        rightSpan.textContent = right
+        rightSpan.style.textAlign = 'right'
 
-        div.appendChild(timeSpan)
-        div.appendChild(progressSpan)
+        div.appendChild(leftSpan)
+        div.appendChild(rightSpan)
       } else {
         if (index === 0) {
-          const spacer = document.createElement('span')
-          div.appendChild(spacer)
+          const leftSpan = document.createElement('span')
+          leftSpan.textContent = left
+          leftSpan.style.textAlign = 'left'
+          div.appendChild(leftSpan)
           div.appendChild(document.createElement('span'))
         } else if (index === totalCols - 1) {
           const spacer = document.createElement('span')
           div.appendChild(spacer)
 
-          const progressSpan = document.createElement('span')
-          progressSpan.textContent = `${pct}%`
-          progressSpan.style.textAlign = 'right'
-          div.appendChild(progressSpan)
+          const rightSpan = document.createElement('span')
+          rightSpan.textContent = right
+          rightSpan.style.textAlign = 'right'
+          div.appendChild(rightSpan)
         }
       }
 
@@ -139,9 +201,17 @@ export function useReaderProgress(bookId: number, fileId: number) {
     sectionIndex,
     totalSections,
     fraction,
+    locationCurrent,
+    locationTotal,
+    sectionCurrent,
+    sectionTotal,
+    timeSection,
+    timeTotal,
+    footerMode,
     load,
     onRelocate,
     save,
+    cycleFooterMode,
     updateHeadsFeet,
   }
 }

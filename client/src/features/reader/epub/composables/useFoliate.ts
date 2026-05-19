@@ -11,6 +11,9 @@ export interface RelocateDetail {
   index?: number
   total?: number
   tocItem?: { label?: string; href?: string }
+  section?: { current: number; total: number }
+  location?: { current: number; next: number; total: number }
+  time?: { section: number; total: number }
 }
 
 export interface FoliateRenderer {

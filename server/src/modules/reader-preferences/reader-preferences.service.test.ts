@@ -180,4 +180,61 @@ describe('ReaderPreferencesService', () => {
 
     expect(mockRepo.deleteDefault).toHaveBeenCalledWith(9, 'audio');
   });
+
+  describe('epub footerDisplayMode validation', () => {
+    const validEpubDefaults = {
+      themeName: 'default',
+      isDark: false,
+      fontFamily: null,
+      fontSize: 16,
+      lineHeight: 1.5,
+      maxColumnCount: 2,
+      gap: 0.05,
+      maxInlineSize: 720,
+      maxBlockSize: 1440,
+      justify: true,
+      hyphenate: true,
+      flow: 'paginated' as const,
+      overrideBookFormatting: true,
+      footerDisplayMode: 0 as const,
+    };
+
+    it('accepts valid footerDisplayMode values (0, 1, 2) in full epub defaults', async () => {
+      for (const mode of [0, 1, 2] as const) {
+        vi.clearAllMocks();
+        mockRepo.upsertDefault.mockResolvedValue(undefined);
+        await service.upsertDefault(1, 'epub', { ...validEpubDefaults, footerDisplayMode: mode });
+        expect(mockRepo.upsertDefault).toHaveBeenCalledWith(1, 'epub', expect.objectContaining({ footerDisplayMode: mode }));
+      }
+    });
+
+    it('rejects invalid footerDisplayMode values in epub defaults', async () => {
+      await expect(service.upsertDefault(1, 'epub', { ...validEpubDefaults, footerDisplayMode: 3 })).rejects.toThrow(BadRequestException);
+      await expect(service.upsertDefault(1, 'epub', { ...validEpubDefaults, footerDisplayMode: -1 })).rejects.toThrow(BadRequestException);
+    });
+
+    it('accepts partial epub per-book settings with footerDisplayMode', async () => {
+      const user = makeUser();
+      mockBookService.verifyFileAccess.mockResolvedValueOnce({ format: 'epub' });
+
+      await service.upsertPreference(user, 20, { footerDisplayMode: 1 });
+
+      expect(mockRepo.upsertPreference).toHaveBeenCalledWith(7, 20, { footerDisplayMode: 1 });
+    });
+
+    it('rejects partial epub per-book settings with invalid footerDisplayMode', async () => {
+      const user = makeUser();
+      mockBookService.verifyFileAccess.mockResolvedValueOnce({ format: 'epub' });
+
+      await expect(service.upsertPreference(user, 21, { footerDisplayMode: 5 })).rejects.toThrow(BadRequestException);
+      expect(mockRepo.upsertPreference).not.toHaveBeenCalled();
+    });
+
+    it('requires footerDisplayMode when saving full epub defaults', async () => {
+      const withoutFooterMode = { ...validEpubDefaults };
+      delete (withoutFooterMode as Record<string, unknown>).footerDisplayMode;
+
+      await expect(service.upsertDefault(1, 'epub', withoutFooterMode)).rejects.toThrow(BadRequestException);
+    });
+  });
 });

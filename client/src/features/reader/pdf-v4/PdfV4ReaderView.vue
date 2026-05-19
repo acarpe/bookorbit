@@ -14,12 +14,12 @@ const props = defineProps<{ bookId: number; fileId: number }>()
 
 const themeStore = useThemeStore()
 
-const progress = useReaderProgress(props.bookId, props.fileId)
 const bookSettings = useReaderSettings(props.fileId, 'pdf')
-const { onActivity } = useReadingSession(props.fileId, () => ({
+const { onActivity, elapsedMinutes } = useReadingSession(props.fileId, () => ({
   percentage: progress.percentage.value,
   pageNumber: progress.pageNumber.value,
 }))
+const progress = useReaderProgress(props.bookId, props.fileId, elapsedMinutes)
 
 let saveTimer: ReturnType<typeof setTimeout> | null = null
 let unsubPageChange: (() => void) | null = null

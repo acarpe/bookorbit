@@ -1,6 +1,19 @@
 <script setup lang="ts">
 import { onMounted, onUnmounted, ref } from 'vue'
-import { ArrowLeft, BookOpen, Bookmark, BookmarkCheck, Maximize, Minimize, Search, Settings } from 'lucide-vue-next'
+import {
+  ArrowLeft,
+  BookOpen,
+  BookText,
+  Bookmark,
+  BookmarkCheck,
+  CircleHelp,
+  Clock3,
+  FileText,
+  Maximize,
+  Minimize,
+  Search,
+  Settings,
+} from 'lucide-vue-next'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 
@@ -8,6 +21,7 @@ const props = defineProps<{
   chapterTitle: string
   isBookmarked: boolean
   settingsOpen: boolean
+  footerMode: 0 | 1 | 2
 }>()
 
 const emit = defineEmits<{
@@ -17,6 +31,8 @@ const emit = defineEmits<{
   toggleBookmark: []
   'update:settingsOpen': [open: boolean]
   toggleFullscreen: []
+  toggleHelp: []
+  cycleFooterMode: []
 }>()
 
 const isFullscreen = ref(false)
@@ -29,19 +45,31 @@ function onSettingsOpenChange(open: boolean) {
   emit('update:settingsOpen', open)
 }
 
+function getFooterModeIcon(mode: 0 | 1 | 2) {
+  if (mode === 0) return FileText
+  if (mode === 1) return Clock3
+  return BookText
+}
+
+function getFooterModeTooltip(mode: 0 | 1 | 2): string {
+  if (mode === 0) return 'Footer info: page + progress'
+  if (mode === 1) return 'Footer info: reading session + time left'
+  return 'Footer info: chapter + chapter time left'
+}
+
 onMounted(() => document.addEventListener('fullscreenchange', onFullscreenChange))
 onUnmounted(() => document.removeEventListener('fullscreenchange', onFullscreenChange))
 </script>
 
 <template>
   <header
-    class="fixed top-0 left-0 right-0 h-11 sm:h-12 z-50 flex items-center px-2 sm:px-3 gap-1 bg-background/90 backdrop-blur-md border-b border-border"
+    class="fixed top-0 left-0 right-0 h-10 sm:h-11 z-50 flex items-center px-2 sm:px-3 gap-1 bg-background/90 backdrop-blur-md border-b border-border"
   >
     <!-- Left button group -->
     <div class="flex items-center gap-1 shrink-0">
       <Tooltip>
         <TooltipTrigger as-child>
-          <button class="viewer-btn" @click="emit('back')">
+          <button class="viewer-btn" aria-label="Go back" @click="emit('back')">
             <ArrowLeft :size="18" />
           </button>
         </TooltipTrigger>
@@ -52,7 +80,7 @@ onUnmounted(() => document.removeEventListener('fullscreenchange', onFullscreenC
 
       <Tooltip>
         <TooltipTrigger as-child>
-          <button class="viewer-btn" @click="emit('toggleSidebar')">
+          <button class="viewer-btn" aria-label="Table of contents" @click="emit('toggleSidebar')">
             <BookOpen :size="18" />
           </button>
         </TooltipTrigger>
@@ -61,7 +89,7 @@ onUnmounted(() => document.removeEventListener('fullscreenchange', onFullscreenC
 
       <Tooltip>
         <TooltipTrigger as-child>
-          <button class="viewer-btn" :class="isBookmarked ? '!text-primary' : ''" @click="emit('toggleBookmark')">
+          <button class="viewer-btn" :class="isBookmarked ? '!text-primary' : ''" aria-label="Toggle bookmark" @click="emit('toggleBookmark')">
             <BookmarkCheck v-if="isBookmarked" :size="18" />
             <Bookmark v-else :size="18" />
           </button>
@@ -70,18 +98,16 @@ onUnmounted(() => document.removeEventListener('fullscreenchange', onFullscreenC
       </Tooltip>
     </div>
 
-    <!-- Title: absolutely centered on mobile, flex-1 on sm+ -->
-    <div
-      class="absolute inset-x-0 top-0 h-11 sm:h-12 flex items-center justify-center pointer-events-none sm:static sm:flex-1 sm:min-w-0 sm:h-auto sm:px-3 sm:pointer-events-auto"
-    >
-      <p class="text-sm font-serif font-medium truncate text-center text-muted-foreground max-w-[40vw] sm:max-w-none">{{ chapterTitle }}</p>
+    <!-- Title: desktop/tablet only to avoid overlap on narrow mobile headers -->
+    <div class="hidden sm:absolute sm:inset-x-0 sm:top-0 sm:h-12 sm:flex sm:items-center sm:justify-center sm:pointer-events-none">
+      <p class="text-sm font-serif font-medium truncate text-center text-muted-foreground max-w-[40vw]">{{ chapterTitle }}</p>
     </div>
 
     <!-- Right button group -->
     <div class="flex items-center gap-1 shrink-0 ml-auto">
       <Tooltip>
         <TooltipTrigger as-child>
-          <button class="viewer-btn" @click="emit('toggleSearch')">
+          <button class="viewer-btn" aria-label="Search" @click="emit('toggleSearch')">
             <Search :size="18" />
           </button>
         </TooltipTrigger>
@@ -90,7 +116,29 @@ onUnmounted(() => document.removeEventListener('fullscreenchange', onFullscreenC
 
       <Tooltip>
         <TooltipTrigger as-child>
-          <button class="viewer-btn" @click="emit('toggleFullscreen')">
+          <button class="viewer-btn hidden sm:flex" aria-label="Cycle footer info mode" @click="emit('cycleFooterMode')">
+            <component :is="getFooterModeIcon(props.footerMode)" :size="16" />
+          </button>
+        </TooltipTrigger>
+        <TooltipContent>{{ getFooterModeTooltip(props.footerMode) }}</TooltipContent>
+      </Tooltip>
+
+      <Tooltip>
+        <TooltipTrigger as-child>
+          <button class="viewer-btn hidden sm:flex" aria-label="Keyboard shortcuts" @click="emit('toggleHelp')">
+            <CircleHelp :size="18" />
+          </button>
+        </TooltipTrigger>
+        <TooltipContent>Keyboard shortcuts (?)</TooltipContent>
+      </Tooltip>
+
+      <Tooltip>
+        <TooltipTrigger as-child>
+          <button
+            class="viewer-btn hidden sm:flex"
+            :aria-label="isFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'"
+            @click="emit('toggleFullscreen')"
+          >
             <Minimize v-if="isFullscreen" :size="18" />
             <Maximize v-else :size="18" />
           </button>

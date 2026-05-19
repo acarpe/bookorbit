@@ -63,6 +63,8 @@ export interface EpubReaderSettings {
   // When false, new books open with the publisher's embedded styles instead of these defaults.
   // Per-book settings always apply regardless of this flag.
   overrideBookFormatting: boolean;
+  // In-page footer display mode: 0 = pages, 1 = time remaining + session, 2 = chapter info
+  footerDisplayMode: 0 | 1 | 2;
 }
 
 export interface PdfReaderSettings {
@@ -114,6 +116,7 @@ export const EPUB_READER_DEFAULTS: EpubReaderSettings = {
   hyphenate: true,
   flow: "paginated",
   overrideBookFormatting: true,
+  footerDisplayMode: 0,
 };
 
 export const PDF_READER_DEFAULTS: PdfReaderSettings = {

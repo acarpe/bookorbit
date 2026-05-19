@@ -40,13 +40,13 @@ const TWO_PAGE_BREAKPOINT = 900
 const props = defineProps<{ bookId: number; fileId: number }>()
 const router = useRouter()
 
-const progress = useReaderProgress(props.bookId, props.fileId)
 const { headerVisible, footerVisible, handleMiddleTap, showHeader, showFooter, setVisibilityLock } = useVisibility()
 
-const { onActivity } = useReadingSession(props.fileId, () => ({
+const { onActivity, elapsedMinutes } = useReadingSession(props.fileId, () => ({
   percentage: progress.percentage.value,
   pageNumber: progress.pageNumber.value,
 }))
+const progress = useReaderProgress(props.bookId, props.fileId, elapsedMinutes)
 const { pageCount, bookTitle, loading, error, pageUrl, load } = useCbz(props.fileId, props.bookId)
 const { fitMode, viewMode, scrollMode, direction, spreadAlignment, forceTwoPage, widePageSingletonMode, bgColor, bgValue, imgFitClass } =
   useCbzSettings()

@@ -8,8 +8,8 @@ export function useVisibility() {
   let isVisibilityLocked = false
   let hideTimer: ReturnType<typeof setTimeout> | null = null
 
-  const HEADER_TRIGGER = 80
-  const FOOTER_TRIGGER = 80
+  const HEADER_TRIGGER = 24
+  const FOOTER_TRIGGER = 24
 
   function scheduleHide() {
     if (hideTimer) clearTimeout(hideTimer)

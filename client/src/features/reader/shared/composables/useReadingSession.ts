@@ -1,4 +1,4 @@
-import { onUnmounted } from 'vue'
+import { onUnmounted, ref } from 'vue'
 import { api } from '@/lib/api'
 
 export interface ProgressSnapshot {
@@ -9,6 +9,7 @@ export interface ProgressSnapshot {
 
 const IDLE_TIMEOUT_MS = 5 * 60 * 1000
 const MIN_SESSION_MS = 10 * 1000
+const ELAPSED_UPDATE_INTERVAL_MS = 30 * 1000
 
 function generateSessionId(): string {
   return typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
@@ -25,6 +26,34 @@ export function useReadingSession(bookFileId: number, getProgress: () => Progres
   let startProgress: number | null = null
   let ended = false
 
+  const elapsedMinutes = ref(0)
+  let elapsedInterval: ReturnType<typeof setInterval> | null = null
+
+  function getActiveMs(): number {
+    if (activeStart === null) return activeMs
+    return activeMs + (Date.now() - activeStart)
+  }
+
+  function updateElapsed() {
+    if (!startedAt || ended) {
+      elapsedMinutes.value = 0
+      return
+    }
+    elapsedMinutes.value = Math.floor(getActiveMs() / 60_000)
+  }
+
+  function startElapsedInterval() {
+    stopElapsedInterval()
+    elapsedInterval = setInterval(updateElapsed, ELAPSED_UPDATE_INTERVAL_MS)
+  }
+
+  function stopElapsedInterval() {
+    if (elapsedInterval !== null) {
+      clearInterval(elapsedInterval)
+      elapsedInterval = null
+    }
+  }
+
   function startSession() {
     startedAt = new Date()
     activeStart = Date.now()
@@ -32,6 +61,8 @@ export function useReadingSession(bookFileId: number, getProgress: () => Progres
     ended = false
     startProgress = getProgress().percentage
     resetIdleTimer()
+    updateElapsed()
+    startElapsedInterval()
   }
 
   function pauseTimer() {
@@ -61,7 +92,7 @@ export function useReadingSession(bookFileId: number, getProgress: () => Progres
   }
 
   function onActivity() {
-    // No active session or previous session ended (e.g. after idle timeout) — start fresh.
+    // No active session or previous session ended (e.g. after idle timeout) - start fresh.
     if (!startedAt || ended) {
       sessionId = generateSessionId()
       startSession()
@@ -75,11 +106,14 @@ export function useReadingSession(bookFileId: number, getProgress: () => Progres
     if (ended || !startedAt) return
     ended = true
     clearIdleTimer()
+    stopElapsedInterval()
 
     if (activeStart !== null) {
       activeMs += Date.now() - activeStart
       activeStart = null
     }
+
+    elapsedMinutes.value = 0
 
     if (activeMs < MIN_SESSION_MS) return
 
@@ -124,9 +158,10 @@ export function useReadingSession(bookFileId: number, getProgress: () => Progres
 
   onUnmounted(() => {
     endSession()
+    stopElapsedInterval()
     document.removeEventListener('visibilitychange', onVisibilityChange)
     window.removeEventListener('beforeunload', onBeforeUnload)
   })
 
-  return { onActivity, endSession }
+  return { onActivity, endSession, elapsedMinutes }
 }

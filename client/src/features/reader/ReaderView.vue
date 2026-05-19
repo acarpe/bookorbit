@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { toast } from 'vue-sonner'
 import { useFoliate, type RelocateDetail } from './epub/composables/useFoliate'
 import { useReaderProgress } from './shared/composables/useReaderProgress'
 import { useReadingSession } from './shared/composables/useReadingSession'
@@ -8,11 +9,13 @@ import { useReaderState } from './epub/composables/useReaderState'
 import { useReaderSettings } from './shared/composables/useReaderSettings'
 import { useCustomFonts } from './epub/composables/useCustomFonts'
 import { useVisibility } from './shared/composables/useVisibility'
+import { useWakeLock } from './shared/composables/useWakeLock'
 import { useBookmarks } from './epub/composables/useBookmarks'
 import { useAnnotations } from './epub/composables/useAnnotations'
 import { useToc } from './epub/composables/useToc'
 import { useSearch, type FoliateView } from './epub/composables/useSearch'
 import { useReaderSelection } from './epub/composables/useReaderSelection'
+import { useReaderKeyboardShortcuts } from './epub/composables/useReaderKeyboardShortcuts'
 import ReaderHeader from './epub/components/ReaderHeader.vue'
 import ReaderFooter from './epub/components/ReaderFooter.vue'
 import ReaderSidebar from './epub/components/ReaderSidebar.vue'
@@ -23,6 +26,7 @@ import NoteDialog from './epub/components/NoteDialog.vue'
 import DictionaryPopover from './epub/components/DictionaryPopover.vue'
 import TranslationPopover from './epub/components/TranslationPopover.vue'
 import TranslationSheet from './epub/components/TranslationSheet.vue'
+import KeyboardShortcutsModal from './epub/components/KeyboardShortcutsModal.vue'
 import PdfV4ReaderView from './pdf-v4/PdfV4ReaderView.vue'
 import CbzReaderView from './cbz/CbzReaderView.vue'
 import AudiobookReaderView from './audiobook/AudiobookReaderView.vue'
@@ -76,17 +80,19 @@ const {
 
 const customFonts = useCustomFonts()
 
-const progress = useReaderProgress(bookId, fileId)
-const { cfi, chapterTitle, sectionIndex, totalSections, fraction, updateHeadsFeet } = progress
-
-const { onActivity } = useReadingSession(fileId, () => ({
+const { onActivity, elapsedMinutes } = useReadingSession(fileId, () => ({
   percentage: progress.percentage.value,
   cfi: progress.cfi.value,
   pageNumber: progress.pageNumber.value,
 }))
 
+const progress = useReaderProgress(bookId, fileId, elapsedMinutes)
+const { cfi, chapterTitle, sectionIndex, totalSections, fraction, locationTotal, footerMode, cycleFooterMode, updateHeadsFeet } = progress
+
 const visibility = useVisibility()
-const { headerVisible, footerVisible, handleMiddleTap, showHeader, showFooter, setVisibilityLock } = visibility
+const { headerVisible, footerVisible, handleMiddleTap, setVisibilityLock } = visibility
+
+useWakeLock()
 
 const bookmarks = useBookmarks()
 const annotations = useAnnotations()
@@ -98,6 +104,51 @@ const search = useSearch()
 const { results: searchResults, isSearching, search: doSearch, clear: clearSearch } = search
 
 const selection = useReaderSelection()
+
+function closeAnyPanel() {
+  if (showSearch.value) {
+    closeSearch()
+  } else if (showSidebar.value) {
+    showSidebar.value = false
+  } else if (showSettings.value) {
+    showSettings.value = false
+  } else {
+    handleMiddleTap()
+  }
+}
+
+const { showHelpModal } = useReaderKeyboardShortcuts({
+  toggleSidebar: () => {
+    showSidebar.value = !showSidebar.value
+  },
+  toggleSearch: () => {
+    showSearch.value = !showSearch.value
+  },
+  toggleBookmark: () => {
+    bookmarks.toggle(bookId, cfi.value ?? '', chapterTitle.value)
+  },
+  toggleFullscreen,
+  cycleFooterMode,
+  closePanel: closeAnyPanel,
+  goToStart: () => goToFraction(0),
+  goToEnd: () => goToFraction(1),
+})
+
+function toggleHelpModal() {
+  showHelpModal.value = !showHelpModal.value
+}
+
+const chapterStartFraction = computed(() => {
+  const fracs = sectionFractions.value
+  const idx = sectionIndex.value
+  return fracs[idx] ?? 0
+})
+
+const chapterEndFraction = computed(() => {
+  const fracs = sectionFractions.value
+  const idx = sectionIndex.value
+  return fracs[idx + 1] ?? 1
+})
 
 const showDictionary = ref(false)
 const dictionaryWord = ref('')
@@ -188,24 +239,33 @@ onMounted(async () => {
 
   await bookSettings.load()
   const effective = bookSettings.effective.value as EpubReaderSettings
+  if (effective.footerDisplayMode !== undefined) {
+    footerMode.value = effective.footerDisplayMode
+  }
   if (effective.overrideBookFormatting) {
     shouldApplyStyles.value = true
     seedState(effective)
   } else if (bookSettings.isCustomized.value) {
-    // Only apply the per-book delta - don't bleed global defaults like dark theme into the book
     shouldApplyStyles.value = true
     seedState(bookSettings.bookDelta.value as Partial<ReaderState>)
   } else {
     shouldApplyStyles.value = false
   }
 
-  await open(bookId, fileId, fileFormat, progress.cfi.value, progress.percentage.value > 0 ? progress.percentage.value / 100 : undefined)
+  const hadProgress = progress.percentage.value > 0
+  await open(bookId, fileId, fileFormat, progress.cfi.value, hadProgress ? progress.percentage.value / 100 : undefined)
   setChapters(getChapters())
   sectionFractions.value = getSectionFractions()
   await bookmarks.load(bookId)
   await annotations.load(bookId)
   if (annotations.annotations.value.length > 0) {
     addAnnotations(annotations.annotations.value.map((a) => ({ cfi: a.cfi, color: a.color, style: a.style })))
+  }
+
+  if (hadProgress) {
+    const pct = Math.round(progress.percentage.value)
+    const label = chapterTitle.value || `Chapter ${sectionIndex.value + 1}`
+    toast.info(`Resumed at ${pct}% - ${label}`, { duration: 2500 })
   }
 })
 
@@ -249,6 +309,17 @@ function toggleFullscreen() {
     document.documentElement.requestFullscreen?.()
   }
 }
+
+watch(
+  () => footerMode.value,
+  (mode) => {
+    bookSettings.updateBookSettings({ footerDisplayMode: mode })
+    const renderer = getRenderer()
+    if (renderer) {
+      updateHeadsFeet(renderer, activeMode.value)
+    }
+  },
+)
 
 function setSettingsOpen(open: boolean) {
   showSettings.value = open
@@ -346,12 +417,11 @@ function closeSearch() {
       shouldApplyStyles ? { background: activeMode.bg, colorScheme: isDark ? 'dark' : 'light' } : { background: '#ffffff', colorScheme: 'light' }
     "
   >
-    <div class="absolute top-0 left-0 right-0 z-40 h-20 pointer-events-auto" @mouseenter="showHeader()" />
-
     <ReaderHeader
       :chapterTitle="chapterTitle"
       :isBookmarked="bookmarks.isCurrentCfiBookmarked.value"
       :settings-open="showSettings"
+      :footerMode="footerMode"
       class="transition-all duration-300"
       :class="headerVisible ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-full pointer-events-none'"
       @back="router.back()"
@@ -360,6 +430,8 @@ function closeSearch() {
       @toggleBookmark="bookmarks.toggle(bookId, cfi ?? '', chapterTitle)"
       @update:settings-open="setSettingsOpen"
       @toggleFullscreen="toggleFullscreen"
+      @toggleHelp="toggleHelpModal"
+      @cycleFooterMode="cycleFooterMode"
     >
       <template #settingsPanel>
         <ReaderSettingsPanel :state="state" :customFonts="customFonts" @update="applyUpdate" />
@@ -395,14 +467,15 @@ function closeSearch() {
       :sectionIndex="sectionIndex"
       :totalSections="totalSections"
       :sectionFractions="sectionFractions"
+      :chapterStartFraction="chapterStartFraction"
+      :chapterEndFraction="chapterEndFraction"
+      :locationTotal="locationTotal"
       class="transition-all duration-300"
       :class="footerVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-full pointer-events-none'"
       @prevSection="goToSection(sectionIndex - 1)"
       @nextSection="goToSection(sectionIndex + 1)"
       @seek="goToFraction($event)"
     />
-
-    <div class="absolute bottom-0 left-0 right-0 z-40 h-20 pointer-events-auto" @mouseenter="showFooter()" />
 
     <ReaderSidebar
       v-if="showSidebar"
@@ -475,6 +548,8 @@ function closeSearch() {
     />
 
     <TranslationSheet v-if="showTranslation && isMobile" :text="translationText" @close="showTranslation = false" />
+
+    <KeyboardShortcutsModal v-if="showHelpModal" @close="showHelpModal = false" />
   </div>
 </template>
 

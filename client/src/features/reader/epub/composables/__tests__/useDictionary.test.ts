@@ -568,6 +568,30 @@ describe('useDictionary', () => {
     expect(result!.provider).toBe('free-dictionary')
   })
 
+  it('lang normalization: English language name maps to en', async () => {
+    fetchMock.mockResolvedValueOnce(mockOk(makeFreeDictResponse()))
+    const { lookup } = await load()
+    const result = await lookup('hello', 'English')
+    expect(result!.provider).toBe('free-dictionary')
+    expect(fetchMock.mock.calls[0]![0]).toContain('api.dictionaryapi.dev')
+  })
+
+  it('lang normalization: ISO-639-2 eng maps to en', async () => {
+    fetchMock.mockResolvedValueOnce(mockOk(makeFreeDictResponse()))
+    const { lookup } = await load()
+    const result = await lookup('hello', 'eng')
+    expect(result!.provider).toBe('free-dictionary')
+    expect(fetchMock.mock.calls[0]![0]).toContain('api.dictionaryapi.dev')
+  })
+
+  it('lang normalization: unknown long language labels fall back to en', async () => {
+    fetchMock.mockResolvedValueOnce(mockStatus(404)).mockResolvedValueOnce(mockOk(makeWiktionaryResponse()))
+    const { lookup } = await load()
+    const result = await lookup('hello', 'some-unknown-language')
+    expect(result!.provider).toBe('wiktionary')
+    expect(fetchMock.mock.calls[1]![0]).toContain('en.wiktionary.org')
+  })
+
   // -------------------------------------------------------------------------
   // Word trimming
   // -------------------------------------------------------------------------

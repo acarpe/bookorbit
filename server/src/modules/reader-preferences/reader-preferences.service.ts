@@ -24,6 +24,7 @@ const EPUB_SETTINGS_SCHEMA = z
     hyphenate: z.boolean(),
     flow: z.enum(['paginated', 'scrolled']),
     overrideBookFormatting: z.boolean(),
+    footerDisplayMode: z.union([z.literal(0), z.literal(1), z.literal(2)]),
   })
   .strict();
 
