@@ -257,7 +257,7 @@ onUnmounted(() => {
       </p>
     </div>
 
-    <div class="md:hidden sticky top-0 z-20 border border-border/60 bg-card/95 backdrop-blur rounded-lg p-3 space-y-3">
+    <div class="md:hidden border border-border/60 bg-card rounded-lg p-3 space-y-3">
       <div class="space-y-1.5 pt-1 pb-4 border-border/60">
         <div class="flex items-center justify-between gap-2">
           <p class="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">File as Book preview</p>
