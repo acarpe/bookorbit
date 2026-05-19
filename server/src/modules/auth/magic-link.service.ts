@@ -11,7 +11,7 @@ import { AuthService } from './auth.service';
 import { CreateMagicLinkDto } from './dto/create-magic-link.dto';
 import { MagicLinkRepository } from './magic-link.repository';
 
-const MAX_TOKENS_PER_USER = 5;
+const MAX_TOKENS_PER_USER = 25;
 
 function sha256(value: string): string {
   return createHash('sha256').update(value).digest('hex');

@@ -51,9 +51,11 @@ describe('MagicLinkService', () => {
 
     it('throws BadRequestException when max tokens reached', async () => {
       const { service, magicLinkRepo } = makeService();
-      magicLinkRepo.countActiveByUserId.mockResolvedValue(5);
+      magicLinkRepo.countActiveByUserId.mockResolvedValue(25);
 
-      await expect(service.createToken(makeActor(), { userId: 2, label: 'Test' } as never)).rejects.toThrow(BadRequestException);
+      await expect(service.createToken(makeActor(), { userId: 2, label: 'Test' } as never)).rejects.toThrow(
+        'Maximum of 25 active magic links per user',
+      );
     });
 
     it('throws BadRequestException when expiry is in the past', async () => {
