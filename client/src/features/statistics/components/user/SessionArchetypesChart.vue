@@ -23,6 +23,25 @@ const option = shallowRef({})
 
 const isEmpty = () => data.value.length === 0
 
+function formatHourLabel(hour: number, includeMinutes = false): string {
+  if (!Number.isFinite(hour)) return ''
+  const totalMinutes = Math.round(hour * 60)
+  const normalizedMinutes = ((totalMinutes % 1440) + 1440) % 1440
+  const hour24 = Math.floor(normalizedMinutes / 60)
+  const minute = normalizedMinutes % 60
+  const hour12 = hour24 % 12 === 0 ? 12 : hour24 % 12
+  const period = hour24 < 12 ? 'am' : 'pm'
+
+  if (!includeMinutes || minute === 0) return `${hour12}${period}`
+  return `${hour12}:${String(minute).padStart(2, '0')}${period}`
+}
+
+function formatDuration(minutes: number): string {
+  if (!Number.isFinite(minutes)) return ''
+  const roundedMinutes = Math.round(minutes)
+  return `${roundedMinutes} ${roundedMinutes === 1 ? 'min' : 'mins'}`
+}
+
 watchEffect(() => {
   option.value = {}
   if (!data.value.length) return
@@ -44,12 +63,7 @@ watchEffect(() => {
       interval: 3,
       axisLabel: {
         fontSize: 11,
-        formatter: (v: number) => {
-          if (v === 0) return '12am'
-          if (v < 12) return `${v}am`
-          if (v === 12) return '12pm'
-          return `${v - 12}pm`
-        },
+        formatter: (v: number) => formatHourLabel(v),
       },
     },
     yAxis: {
@@ -65,8 +79,7 @@ watchEffect(() => {
       formatter: (params: { seriesName: string; data: [number, number] }) => {
         const hour = params.data[0]
         const mins = params.data[1]
-        const label = hour === 0 ? '12am' : hour < 12 ? `${hour}am` : hour === 12 ? '12pm' : `${hour - 12}pm`
-        return `<strong>${params.seriesName} at ${label}</strong><br/>${mins} min`
+        return `<strong>${params.seriesName} at ${formatHourLabel(hour, true)}</strong><br/>${formatDuration(mins)}`
       },
     },
     legend: {
