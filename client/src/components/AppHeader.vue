@@ -62,14 +62,8 @@ const { subscribe: subscribeNotifications } = useNotifications()
 const themeStore = useThemeStore()
 
 const isBookDockActive = computed(() => route.name === 'book-dock')
-const statisticsTab = computed<string | null>(() => {
-  const tab = route.query.tab
-  if (typeof tab === 'string') return tab
-  if (Array.isArray(tab)) return tab[0] ?? null
-  return null
-})
-const isAchievementsActive = computed(() => route.name === 'statistics' && statisticsTab.value === 'achievements')
-const isStatisticsActive = computed(() => route.name === 'statistics' && !isAchievementsActive.value)
+const isAchievementsActive = computed(() => route.name === 'achievements')
+const isStatisticsActive = computed(() => route.name === 'statistics')
 
 const iconRadiusClass = computed(() => (themeStore.radius === 'sharp' ? 'rounded-none' : 'rounded-full'))
 const canChangePassword = computed(
@@ -86,7 +80,7 @@ function navigateToStatistics() {
 }
 
 function navigateToAchievements() {
-  router.push({ name: 'statistics', query: { tab: 'achievements' } })
+  router.push({ name: 'achievements' })
 }
 
 function navigateToAccount() {
