@@ -557,9 +557,8 @@ export class BookController {
   }
 
   @Patch(':id/status')
-  @HttpCode(HttpStatus.NO_CONTENT)
   setReadStatus(@Param('id', ParseIntPipe) id: number, @Body() dto: SetStatusDto, @CurrentUser() user: RequestUser) {
-    return this.bookService.setReadStatus(id, dto.status, user);
+    return this.bookService.setReadStatus(id, dto, user);
   }
 
   @Post('bulk-set-status')
