@@ -81,7 +81,7 @@ describe('AchievementService', () => {
           groupKey: 'books_finished',
           tier: 1,
           category: 'reading',
-          name: 'Fledgling Reader',
+          name: 'Ink Initiate',
           description: 'Finish 1 book',
           iconName: 'book-open',
           rarity: 'common',
@@ -110,7 +110,7 @@ describe('AchievementService', () => {
           groupKey: 'books_finished',
           tier: 1,
           category: 'reading',
-          name: 'Fledgling Reader',
+          name: 'Ink Initiate',
           description: 'Finish 1',
           iconName: 'book-open',
           rarity: 'common',
@@ -524,7 +524,7 @@ describe('AchievementService', () => {
   describe('handleEvent', () => {
     it('evaluates and awards achievements', async () => {
       registry.evaluate.mockResolvedValueOnce([{ key: 'books_finished_1', context: { count: 1 } }]).mockResolvedValueOnce([]);
-      repo.findAchievementByKey.mockResolvedValue({ key: 'books_finished_1', name: 'Fledgling Reader', rarity: 'common', iconName: 'book-open' });
+      repo.findAchievementByKey.mockResolvedValue({ key: 'books_finished_1', name: 'Ink Initiate', rarity: 'common', iconName: 'book-open' });
 
       await service.handleEvent(ACHIEVEMENT_EVENT_BOOK_STATUS_CHANGED, { userId: 1, bookId: 5, newStatus: 'read' });
 
@@ -533,10 +533,10 @@ describe('AchievementService', () => {
       expect(notificationService.notify).toHaveBeenCalledOnce();
       expect(notificationService.notify).toHaveBeenCalledWith(
         expect.objectContaining({
-          message: 'Fledgling Reader',
+          message: 'Ink Initiate',
           meta: expect.objectContaining({
             achievementKey: 'books_finished_1',
-            achievementName: 'Fledgling Reader',
+            achievementName: 'Ink Initiate',
             rarity: 'common',
           }),
         }),

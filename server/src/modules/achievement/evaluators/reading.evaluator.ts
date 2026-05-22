@@ -14,7 +14,7 @@ import type { AchievementAward, EvaluationContext, IAchievementEvaluator } from 
 const BOOKS_FINISHED_TIERS = [
   { key: 'books_finished_1', threshold: 1 },
   { key: 'books_finished_2', threshold: 10 },
-  { key: 'books_finished_3', threshold: 50 },
+  { key: 'books_finished_3', threshold: 35 },
   { key: 'books_finished_4', threshold: 100 },
 ];
 

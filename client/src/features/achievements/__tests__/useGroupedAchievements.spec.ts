@@ -99,6 +99,7 @@ describe('groupAchievements', () => {
       groupKey: 'g',
       tier: 1,
       name: 'Tier 1 Name',
+      description: 'Tier 1 Description',
       earned: false,
     })
     const tierTwo = makeAchievement({
@@ -106,12 +107,14 @@ describe('groupAchievements', () => {
       groupKey: 'g',
       tier: 2,
       name: 'Tier 2 Name',
+      description: 'Tier 2 Description',
       earned: false,
     })
     const result = groupAchievements([tierOne, tierTwo])
 
     const group = expectTiered(result[0])
     expect(group.displayName).toBe('Tier 1 Name')
+    expect(group.displayDescription).toBe('Tier 1 Description')
   })
 
   it('uses highest earned tier name as displayName', () => {
@@ -127,6 +130,7 @@ describe('groupAchievements', () => {
       groupKey: 'g',
       tier: 2,
       name: 'Tier 2 Name',
+      description: 'Tier 2 Description',
       earned: true,
     })
     const tierThree = makeAchievement({
@@ -134,15 +138,17 @@ describe('groupAchievements', () => {
       groupKey: 'g',
       tier: 3,
       name: 'Tier 3 Name',
+      description: 'Tier 3 Description',
       earned: false,
     })
     const result = groupAchievements([tierOne, tierTwo, tierThree])
 
     const group = expectTiered(result[0])
     expect(group.displayName).toBe('Tier 2 Name')
+    expect(group.displayDescription).toBe('Tier 2 Description')
   })
 
-  it('displayDescription is next unearned description', () => {
+  it('displayDescription stays aligned with displayed earned tier', () => {
     const tierOne = makeAchievement({
       key: 'g_1',
       groupKey: 'g',
@@ -160,7 +166,7 @@ describe('groupAchievements', () => {
     const result = groupAchievements([tierOne, tierTwo])
 
     const group = expectTiered(result[0])
-    expect(group.displayDescription).toBe('Desc 2')
+    expect(group.displayDescription).toBe('Desc 1')
   })
 
   it('displayDescription is All tiers complete! when all earned', () => {
