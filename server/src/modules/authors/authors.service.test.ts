@@ -46,10 +46,12 @@ describe('AuthorsService', () => {
 
   const authorImageStorage = {
     saveFromUrl: vi.fn(),
+    saveFromBuffer: vi.fn(),
     getThumbnailPath: vi.fn(),
     getThumbnailUrlIfExists: vi.fn(),
     getImagePath: vi.fn(),
     getImageUrlIfExists: vi.fn(),
+    deleteAuthorDir: vi.fn(),
   };
 
   const enrichmentExecutor = {
@@ -448,6 +450,67 @@ describe('AuthorsService', () => {
 
     await expect(service.getThumbnailPath(reqUser(), 40)).resolves.toBe('/tmp/thumb.jpg');
     await expect(service.getImagePath(reqUser(), 40)).resolves.toBe('/tmp/full.jpg');
+  });
+
+  it('uploadImage validates and stores author image, then marks hasPhoto=true', async () => {
+    const bytes = Buffer.from('fake-image');
+    authorsRepo.findVisibleAuthorIds.mockResolvedValue([41]);
+    authorsRepo.findRelatedLibraryIds.mockResolvedValue([1]);
+    authorImageStorage.saveFromBuffer.mockResolvedValue(undefined);
+    authorsRepo.updateAuthorById.mockResolvedValue({ id: 41 });
+    authorsRepo.findById.mockResolvedValue({
+      id: 41,
+      name: 'Photo Author',
+      sortName: null,
+      description: null,
+      bookCount: 1,
+      lastAddedAt: null,
+    });
+    authorImageStorage.getImageUrlIfExists.mockResolvedValue('/api/v1/authors/41/image?t=1234');
+
+    const result = await service.uploadImage(reqUser(), 41, bytes, 'image/png');
+
+    expect(authorImageStorage.saveFromBuffer).toHaveBeenCalledWith(41, bytes);
+    expect(authorsRepo.updateAuthorById).toHaveBeenCalledWith(41, { hasPhoto: true });
+    expect(result).toEqual(expect.objectContaining({ id: 41, imageUrl: '/api/v1/authors/41/image?t=1234' }));
+  });
+
+  it('uploadImage rejects non-image mime types', async () => {
+    await expect(service.uploadImage(reqUser(), 41, Buffer.from('nope'), 'text/plain')).rejects.toMatchObject({
+      name: BadRequestException.name,
+      message: 'File must be an image',
+    });
+  });
+
+  it('uploadImage rejects files over 20 MB', async () => {
+    const tooLarge = Buffer.alloc(AuthorsService.MAX_AUTHOR_IMAGE_BYTES + 1);
+    await expect(service.uploadImage(reqUser(), 41, tooLarge, 'image/jpeg')).rejects.toMatchObject({
+      name: BadRequestException.name,
+      message: 'Image exceeds 20 MB limit',
+    });
+  });
+
+  it('deleteImage removes author image directory and marks hasPhoto=false', async () => {
+    authorsRepo.findVisibleAuthorIds.mockResolvedValue([42]);
+    authorsRepo.findRelatedLibraryIds.mockResolvedValue([1]);
+    authorImageStorage.deleteAuthorDir.mockResolvedValue(undefined);
+    authorsRepo.updateAuthorById.mockResolvedValue({ id: 42 });
+    authorsRepo.findById.mockResolvedValue({
+      id: 42,
+      name: 'No Photo Author',
+      sortName: null,
+      description: null,
+      bookCount: 2,
+      lastAddedAt: null,
+    });
+    authorImageStorage.getImageUrlIfExists.mockResolvedValue(null);
+    authorImageStorage.getThumbnailUrlIfExists.mockResolvedValue(null);
+
+    const result = await service.deleteImage(reqUser(), 42);
+
+    expect(authorImageStorage.deleteAuthorDir).toHaveBeenCalledWith(42);
+    expect(authorsRepo.updateAuthorById).toHaveBeenCalledWith(42, { hasPhoto: false });
+    expect(result).toEqual(expect.objectContaining({ id: 42, imageUrl: null }));
   });
 
   it('bulkRefreshMetadata returns zero counters for empty input', async () => {

@@ -2,7 +2,7 @@
 import { useWindowSize } from '@vueuse/core'
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { ArrowUpDown, ChevronDown, ChevronLeft, LayoutGrid, List } from 'lucide-vue-next'
+import { ArrowUpDown, ChevronDown, ChevronLeft, ImageMinus, LayoutGrid, List, Upload } from 'lucide-vue-next'
 import { toast } from 'vue-sonner'
 
 import type { AuthorSummary, BookCard } from '@bookorbit/types'
@@ -14,7 +14,16 @@ import { usePermissions } from '@/features/auth/composables/usePermissions'
 import { usePageTitle } from '@/composables/usePageTitle'
 import AuthorHeader from '../components/AuthorHeader.vue'
 import AuthorConfirmDialog from '../components/AuthorConfirmDialog.vue'
-import { deleteAuthors, fetchAuthors, mergeAuthors, refreshAuthorMetadata, updateAuthor } from '../api/author'
+import {
+  deleteAuthorImage,
+  deleteAuthors,
+  fetchAuthors,
+  mergeAuthors,
+  MAX_AUTHOR_IMAGE_BYTES,
+  refreshAuthorMetadata,
+  updateAuthor,
+  uploadAuthorImage,
+} from '../api/author'
 import { useAuthorBooks } from '../composables/useAuthorBooks'
 import { useAuthorDetail } from '../composables/useAuthorDetail'
 import { useAuthorMetadataPreview } from '../composables/useAuthorMetadataPreview'
@@ -59,10 +68,14 @@ const savingEdit = ref(false)
 const merging = ref(false)
 const deleting = ref(false)
 const refreshingMetadata = ref(false)
+const uploadingImage = ref(false)
+const removingImage = ref(false)
+const authorImageInput = ref<HTMLInputElement | null>(null)
 
 const draftName = ref('')
 const draftSortName = ref('')
 const draftDescription = ref('')
+const authorImageBusy = computed(() => uploadingImage.value || removingImage.value)
 
 const mergeQuery = ref('')
 const mergeCandidates = ref<AuthorSummary[]>([])
@@ -165,6 +178,44 @@ async function saveAuthorEdits() {
     toast.error(error instanceof Error ? error.message : 'Failed to update author')
   } finally {
     savingEdit.value = false
+  }
+}
+
+function openAuthorImagePicker() {
+  if (!author.value || authorImageBusy.value) return
+  authorImageInput.value?.click()
+}
+
+async function onAuthorImageSelected(event: Event) {
+  const input = event.target as HTMLInputElement
+  const file = input.files?.[0]
+  input.value = ''
+  if (!file || !author.value || authorImageBusy.value) return
+
+  uploadingImage.value = true
+  try {
+    const updated = await uploadAuthorImage(author.value.id, file)
+    author.value = updated
+    toast.success('Author image updated')
+  } catch (error) {
+    toast.error(error instanceof Error ? error.message : 'Failed to upload author image')
+  } finally {
+    uploadingImage.value = false
+  }
+}
+
+async function removeAuthorImage() {
+  if (!author.value || authorImageBusy.value || !author.value.imageUrl) return
+
+  removingImage.value = true
+  try {
+    const updated = await deleteAuthorImage(author.value.id)
+    author.value = updated
+    toast.success('Author image removed')
+  } catch (error) {
+    toast.error(error instanceof Error ? error.message : 'Failed to remove author image')
+  } finally {
+    removingImage.value = false
   }
 }
 
@@ -421,6 +472,29 @@ watch(authorName, () => {
             Description
             <textarea v-model="draftDescription" rows="3" class="mt-1 w-full rounded-md border border-input bg-background px-2.5 py-2 text-sm" />
           </label>
+          <div class="space-y-1.5">
+            <p class="text-xs text-muted-foreground">Image</p>
+            <input ref="authorImageInput" type="file" accept="image/*" class="hidden" :disabled="authorImageBusy" @change="onAuthorImageSelected" />
+            <div class="flex flex-wrap items-center gap-2">
+              <button
+                :disabled="authorImageBusy"
+                class="inline-flex h-8 items-center gap-1.5 rounded-md border border-input px-3 text-sm text-foreground transition-colors hover:bg-muted disabled:opacity-60"
+                @click="openAuthorImagePicker"
+              >
+                <Upload :size="14" />
+                {{ uploadingImage ? 'Uploading...' : author?.imageUrl ? 'Replace image' : 'Upload image' }}
+              </button>
+              <button
+                :disabled="authorImageBusy || !author?.imageUrl"
+                class="inline-flex h-8 items-center gap-1.5 rounded-md border border-input px-3 text-sm text-muted-foreground transition-colors hover:bg-muted disabled:opacity-60"
+                @click="removeAuthorImage"
+              >
+                <ImageMinus :size="14" />
+                {{ removingImage ? 'Removing...' : 'Remove image' }}
+              </button>
+            </div>
+            <p class="text-[11px] text-muted-foreground">PNG/JPEG/WEBP/GIF/BMP up to {{ Math.floor(MAX_AUTHOR_IMAGE_BYTES / 1024 / 1024) }} MB</p>
+          </div>
           <div class="flex items-center justify-end gap-2">
             <button class="h-8 rounded-md border border-input px-3 text-sm text-muted-foreground hover:bg-muted" @click="editOpen = false">
               Cancel
