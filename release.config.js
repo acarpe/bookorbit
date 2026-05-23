@@ -42,7 +42,7 @@ const commitPartial = `\
     {{~#if this.owner}}
       {{~this.owner}}/
     {{~/if}}
-    {{~this.repository}}{{this.prefix}}{{this.issue}}]({{issueUrlFormat}})
+    {{~this.repository}}{{this.prefix}}{{this.issue}}]({{@root.host}}/{{@root.owner}}/{{@root.repository}}/issues/{{this.issue}})
   {{~else}}
     {{~#if this.owner}}
       {{~this.owner}}/
@@ -94,7 +94,7 @@ const mainTemplate = [
 // for the commitPartial.
 function finalizeContext(ctx) {
   try {
-    const result = spawnSync("git", ["log", "--format=%h %aN", "--max-count=500"], {
+    const result = spawnSync("git", ["log", "--format=%H %aN", "--max-count=500"], {
       encoding: "utf8",
       cwd: process.cwd(),
     });
@@ -103,17 +103,17 @@ function finalizeContext(ctx) {
     if (result.status === 0) {
       for (const line of result.stdout.split("\n").filter(Boolean)) {
         const spaceIdx = line.indexOf(" ");
-        const shortSha = line.substring(0, spaceIdx);
+        const hash = line.substring(0, spaceIdx);
         const authorName = line.substring(spaceIdx + 1).trim();
         if (!authorName || /\[bot\]/i.test(authorName)) continue;
-        shaToGithubUser.set(shortSha, AUTHOR_MAP[authorName] ?? authorName);
+        shaToGithubUser.set(hash, AUTHOR_MAP[authorName] ?? authorName);
       }
     }
 
     for (const group of ctx.commitGroups ?? []) {
       for (const commit of group.commits ?? []) {
-        if (commit.shortHash) {
-          const githubUser = shaToGithubUser.get(commit.shortHash);
+        if (commit.hash) {
+          const githubUser = shaToGithubUser.get(commit.hash);
           if (githubUser) commit.githubUser = githubUser;
         }
         // Pre-compute commit URL — {{commitUrlFormat}} does not resolve inside
