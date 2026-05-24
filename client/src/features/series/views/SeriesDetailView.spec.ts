@@ -7,10 +7,10 @@ import SeriesDetailView from './SeriesDetailView.vue'
 type ViewMode = 'grid' | 'list' | 'table'
 
 class MockIntersectionObserver {
-  observe = vi.fn()
-  unobserve = vi.fn()
-  disconnect = vi.fn()
-  takeRecords = vi.fn(() => [])
+  observe = vi.fn<(target: Element) => void>()
+  unobserve = vi.fn<(target: Element) => void>()
+  disconnect = vi.fn<() => void>()
+  takeRecords = vi.fn<() => IntersectionObserverEntry[]>(() => [])
 }
 
 const mocks = vi.hoisted(() => ({
@@ -30,8 +30,8 @@ const mocks = vi.hoisted(() => ({
   order: null as unknown as { value: 'asc' | 'desc' },
   libraryId: null as unknown as { value: number | null },
   effectiveViewMode: null as unknown as { value: ViewMode },
-  fetchSeriesBooks: vi.fn(),
-  api: vi.fn(),
+  fetchSeriesBooks: vi.fn<(...args: unknown[]) => Promise<unknown>>(),
+  api: vi.fn<(...args: unknown[]) => Promise<unknown>>(),
 }))
 
 vi.mock('vue-router', async (importOriginal) => {
