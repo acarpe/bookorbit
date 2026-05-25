@@ -36,6 +36,7 @@ function makeService() {
     getAutoFinalizeSettings: vi.fn(),
     getUploadPattern: vi.fn().mockResolvedValue(null),
     getUploadPatternBookPerFolder: vi.fn().mockResolvedValue(null),
+    isCrossPlatformPathSanitizationEnabled: vi.fn().mockResolvedValue(false),
   };
   const metadataService = {
     downloadAndSaveCover: vi.fn().mockResolvedValue(false),
@@ -532,6 +533,21 @@ describe('BookDockFinalizeService', () => {
     expect(result[0].newName).toBe('Dune.epub');
   });
 
+  it('previewNames sanitizes generated names when cross-platform mode is enabled', async () => {
+    const { service, repo, appSettings, db } = makeService();
+    appSettings.isCrossPlatformPathSanitizationEnabled.mockResolvedValue(true);
+    appSettings.getUploadPattern.mockResolvedValue('{authors:first}/{title}');
+    repo.findByIds.mockResolvedValue([makeRow({ id: 1, selectedMetadata: { title: 'AUX', authors: ['CON'] } as BookDockMetadata })]);
+    db.select.mockReturnValue({
+      from: vi.fn().mockReturnValue({
+        where: vi.fn().mockResolvedValue([]),
+      }),
+    });
+
+    const result = await service.previewNames([1], false, [], undefined);
+    expect(result[0].newName).toBe('CON_/AUX_.epub');
+  });
+
   it('applyMetadata updates scalar metadata fields and related author/genre rows', async () => {
     const { service, db, metadataService } = makeService();
     const updateChain = {
@@ -753,6 +769,16 @@ describe('BookDockFinalizeService', () => {
     ).resolves.toBe('/library/Dune.epub');
     expect(appSettings.getUploadPatternBookPerFolder).not.toHaveBeenCalled();
     expect(appSettings.getUploadPattern).not.toHaveBeenCalled();
+  });
+
+  it('resolveDestination sanitizes token-derived names when cross-platform mode is enabled', async () => {
+    const { service, appSettings } = makeService();
+    appSettings.isCrossPlatformPathSanitizationEnabled.mockResolvedValue(true);
+    const row = makeRow({ fileName: 'book.epub', selectedMetadata: { title: 'AUX', authors: ['CON'] } as BookDockMetadata });
+
+    await expect((service as any).resolveDestination({ fileNamingPattern: '{authors:first}/{title}' }, '/library', row, 'epub')).resolves.toBe(
+      '/library/CON_/AUX_.epub',
+    );
   });
 
   it('findDuplicate resolves from prebuilt lookup before querying database', async () => {

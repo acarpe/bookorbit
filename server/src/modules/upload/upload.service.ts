@@ -101,12 +101,13 @@ export class UploadService {
       (library.organizationMode === 'book_per_folder'
         ? await this.appSettings.getUploadPatternBookPerFolder()
         : await this.appSettings.getUploadPattern());
+    const sanitizeForCrossPlatform = await this.appSettings.isCrossPlatformPathSanitizationEnabled();
 
     if (pattern) {
       const stem = basename(filename, extname(filename));
       const tokens = await this.buildPatternTokens(tempPath, format, stem);
       if (library.organizationMode === 'book_per_file') {
-        const resolvedFilename = resolveDownloadFilename(pattern, tokens, format);
+        const resolvedFilename = resolveDownloadFilename(pattern, tokens, format, { sanitizeForCrossPlatform });
         if (resolvedFilename) {
           const absolutePath = join(libraryFolderPath, resolvedFilename);
           return {
@@ -116,7 +117,7 @@ export class UploadService {
           };
         }
       } else {
-        const resolved = resolveUploadPath(pattern, tokens, format);
+        const resolved = resolveUploadPath(pattern, tokens, format, { sanitizeForCrossPlatform });
 
         if (resolved) {
           const absolutePath = join(libraryFolderPath, resolved);

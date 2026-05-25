@@ -107,6 +107,15 @@ export class AppSettingsService {
     await this.repo.upsert(APP_SETTING_KEYS.DOWNLOAD_FILE_PATTERN, pattern);
   }
 
+  async isCrossPlatformPathSanitizationEnabled(): Promise<boolean> {
+    const row = await this.repo.findByKey(APP_SETTING_KEYS.CROSS_PLATFORM_PATH_SANITIZATION_ENABLED);
+    return parseBooleanSetting(row?.value, false);
+  }
+
+  async setCrossPlatformPathSanitizationEnabled(enabled: boolean): Promise<void> {
+    await this.repo.upsert(APP_SETTING_KEYS.CROSS_PLATFORM_PATH_SANITIZATION_ENABLED, String(enabled));
+  }
+
   async updateOidcConfig(config: Partial<OidcFullConfig>): Promise<OidcFullConfig> {
     const current = await this.getOidcConfig();
     const merged = mergeOidcConfig(current, config);

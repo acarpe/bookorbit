@@ -13,6 +13,7 @@ import { useMediaQuery } from '@vueuse/core'
 import { useFileNamingPattern } from './composables/useFileNamingPattern'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { Badge } from '@/components/ui/badge'
+import ToggleSwitch from '@/components/ui/ToggleSwitch.vue'
 import SettingsPageHeader from './SettingsPageHeader.vue'
 
 const props = withDefaults(defineProps<{ embedded?: boolean }>(), { embedded: false })
@@ -31,10 +32,14 @@ const {
   savingFolder,
   loadingDownload,
   savingDownload,
+  crossPlatformSanitizationEnabled,
+  loadingCrossPlatformSanitization,
+  savingCrossPlatformSanitization,
   savingLibraryId,
   fetchGlobalPattern,
   fetchFolderPattern,
   fetchDownloadPattern,
+  fetchCrossPlatformSanitization,
   fetchLibraries,
   onGlobalPatternInput,
   onFolderPatternInput,
@@ -42,6 +47,7 @@ const {
   saveGlobalPattern,
   saveFolderPattern,
   saveDownloadPattern,
+  saveCrossPlatformSanitization,
   saveLibraryPattern,
   clearLibraryPattern,
   getEffectivePreview,
@@ -213,7 +219,7 @@ onMounted(async () => {
   modifierHelpOpen.value = !isMobile.value
   conditionalHelpOpen.value = !isMobile.value
   examplesOpen.value = !isMobile.value
-  await Promise.all([fetchGlobalPattern(), fetchFolderPattern(), fetchDownloadPattern(), fetchLibraries()])
+  await Promise.all([fetchGlobalPattern(), fetchFolderPattern(), fetchDownloadPattern(), fetchCrossPlatformSanitization(), fetchLibraries()])
   previewGlobalPattern.value = globalPattern.value
   previewFolderPattern.value = folderPattern.value
   previewDownloadPattern.value = downloadPattern.value
@@ -294,6 +300,30 @@ onUnmounted(() => {
     <section class="space-y-4">
       <p class="settings-group-label">Global Defaults</p>
       <div class="border border-border rounded-lg bg-card overflow-hidden divide-y divide-border shadow-xs">
+        <div class="px-4 py-4 md:px-6 md:py-5">
+          <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+            <div class="w-full lg:max-w-md">
+              <p class="settings-label">Cross-platform path sanitization</p>
+              <p class="settings-hint">Replace filesystem-unsafe characters in generated upload and rename paths.</p>
+            </div>
+            <div class="flex items-center gap-3 w-full lg:w-auto">
+              <ToggleSwitch
+                v-model="crossPlatformSanitizationEnabled"
+                :disabled="loadingCrossPlatformSanitization || savingCrossPlatformSanitization"
+              />
+              <button
+                class="flex items-center justify-center gap-2 h-9 px-3 rounded-md bg-primary text-xs font-medium text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-50 lg:h-8"
+                :disabled="loadingCrossPlatformSanitization || savingCrossPlatformSanitization"
+                @click="saveCrossPlatformSanitization"
+              >
+                <Loader2 v-if="savingCrossPlatformSanitization" :size="14" class="animate-spin" />
+                <Save v-else :size="14" />
+                <span>Save</span>
+              </button>
+            </div>
+          </div>
+        </div>
+
         <!-- File as Book upload pattern -->
         <div class="px-4 py-4 md:px-6 md:py-5 space-y-4">
           <div class="flex flex-col lg:flex-row lg:items-start justify-between gap-4">

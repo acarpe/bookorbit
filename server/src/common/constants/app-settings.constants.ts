@@ -18,6 +18,7 @@ export const APP_SETTING_KEYS = {
   UPLOAD_FILE_PATTERN: 'upload_file_pattern',
   UPLOAD_FILE_PATTERN_BOOK_PER_FOLDER: 'upload_file_pattern_book_per_folder',
   DOWNLOAD_FILE_PATTERN: 'download_file_pattern',
+  CROSS_PLATFORM_PATH_SANITIZATION_ENABLED: 'cross_platform_path_sanitization_enabled',
   METADATA_SCORE_WEIGHTS: 'metadata_score_weights',
   AUDIT_RETENTION_DAYS: 'audit_retention_days',
   INITIAL_SETUP_COMPLETED_AT: 'initial_setup_completed_at',

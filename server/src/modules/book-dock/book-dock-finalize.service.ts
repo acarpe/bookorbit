@@ -285,6 +285,7 @@ export class BookDockFinalizeService implements OnModuleInit {
     const rows = await this.repo.findByIds(ids);
     const appPatternFile = await this.appSettings.getUploadPattern();
     const appPatternFolder = await this.appSettings.getUploadPatternBookPerFolder();
+    const sanitizeForCrossPlatform = await this.appSettings.isCrossPlatformPathSanitizationEnabled();
     const libraryIds = [...new Set(rows.map((row) => row.targetLibraryId ?? defaultLibraryId).filter((id): id is number => id != null))];
     const libraryMap = libraryIds.length
       ? new Map((await this.db.select().from(libraries).where(inArray(libraries.id, libraryIds))).map((lib) => [lib.id, lib]))
@@ -302,7 +303,7 @@ export class BookDockFinalizeService implements OnModuleInit {
 
       if (pattern) {
         const tokens = this.buildPatternTokens(meta, row.fileName, format);
-        const resolved = resolveUploadPath(pattern, tokens, format);
+        const resolved = resolveUploadPath(pattern, tokens, format, { sanitizeForCrossPlatform });
         if (resolved) newName = resolved;
       }
 
@@ -454,11 +455,12 @@ export class BookDockFinalizeService implements OnModuleInit {
       (library.organizationMode === 'book_per_folder'
         ? await this.appSettings.getUploadPatternBookPerFolder()
         : await this.appSettings.getUploadPattern());
+    const sanitizeForCrossPlatform = await this.appSettings.isCrossPlatformPathSanitizationEnabled();
     const meta = row.selectedMetadata ?? row.embeddedMetadata ?? {};
 
     if (pattern) {
       const tokens = this.buildPatternTokens(meta, row.fileName, format);
-      const resolved = resolveUploadPath(pattern, tokens, format);
+      const resolved = resolveUploadPath(pattern, tokens, format, { sanitizeForCrossPlatform });
       if (resolved) return join(folderPath, resolved);
     }
 

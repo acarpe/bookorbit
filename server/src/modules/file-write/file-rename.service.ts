@@ -93,7 +93,8 @@ export class FileRenameService implements OnModuleDestroy {
     const format = (data.file.format ?? extname(data.file.absolutePath).slice(1)).toLowerCase();
     const originalStem = basename(data.file.absolutePath, extname(data.file.absolutePath));
     const tokens = buildTokens(data.metadata, data.authors, originalStem, format);
-    const resolvedRelPath = resolveUploadPath(pattern, tokens, format);
+    const sanitizeForCrossPlatform = await this.appSettings.isCrossPlatformPathSanitizationEnabled();
+    const resolvedRelPath = resolveUploadPath(pattern, tokens, format, { sanitizeForCrossPlatform });
 
     if (!resolvedRelPath) {
       return this.logAndReturn(bookId, startedAt, { status: 'skipped', reason: 'pattern resolved to empty' });

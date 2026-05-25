@@ -41,7 +41,7 @@ describe('UploadService', () => {
     select: vi.fn(),
   };
 
-  const appSettings = { getUploadPattern: vi.fn(), getUploadPatternBookPerFolder: vi.fn() };
+  const appSettings = { getUploadPattern: vi.fn(), getUploadPatternBookPerFolder: vi.fn(), isCrossPlatformPathSanitizationEnabled: vi.fn() };
   const libraryService = { verifyUserAccess: vi.fn() };
   const validator = {
     sanitizeFilename: vi.fn(),
@@ -78,6 +78,7 @@ describe('UploadService', () => {
     libraryService.verifyUserAccess.mockResolvedValue(undefined);
     appSettings.getUploadPattern.mockResolvedValue(null);
     appSettings.getUploadPatternBookPerFolder.mockResolvedValue(null);
+    appSettings.isCrossPlatformPathSanitizationEnabled.mockResolvedValue(false);
     mockFsAccess.mockRejectedValue(Object.assign(new Error('not found'), { code: 'ENOENT' }));
     mockExtractEpubMetadata.mockResolvedValue(null);
   });
@@ -116,6 +117,33 @@ describe('UploadService', () => {
       456,
     );
     expect(processor.extractMetadataAsync).toHaveBeenCalledWith(99, '/library/Frank Herbert/Dune.epub', 'epub');
+  });
+
+  it('sanitizes generated destination path tokens when cross-platform mode is enabled', async () => {
+    appSettings.isCrossPlatformPathSanitizationEnabled.mockResolvedValue(true);
+    db.select
+      .mockReturnValueOnce(selectChain([{ id: 1, allowedFormats: ['epub'], fileNamingPattern: '{authors:first}/{title}.{extension}' }]))
+      .mockReturnValueOnce(selectChain([{ id: 2, libraryId: 1, path: '/library' }]));
+
+    mockExtractEpubMetadata.mockResolvedValue({
+      title: 'AUX',
+      subtitle: null,
+      publisher: null,
+      publishedYear: null,
+      language: null,
+      seriesName: null,
+      seriesIndex: null,
+      isbn13: null,
+      authors: [{ name: 'CON' }],
+      tags: [],
+      description: null,
+      isbn10: null,
+    });
+
+    const result = await service.upload(1, 2, 'raw.epub', {} as any, user);
+
+    expect(result).toEqual({ bookId: 99, filename: 'AUX_.epub', format: 'epub', sizeBytes: 456 });
+    expect(storage.moveToPath).toHaveBeenCalledWith('/tmp/upload.bin', '/library/CON_/AUX_.epub');
   });
 
   it('falls back to stem folder when no naming pattern is configured', async () => {

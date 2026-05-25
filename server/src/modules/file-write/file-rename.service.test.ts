@@ -82,6 +82,7 @@ describe('FileRenameService', () => {
     const appSettings = {
       getUploadPattern: vi.fn().mockResolvedValue('{authors}/{title}'),
       getUploadPatternBookPerFolder: vi.fn().mockResolvedValue('{authors}/{title}/{title}'),
+      isCrossPlatformPathSanitizationEnabled: vi.fn().mockResolvedValue(false),
     };
     const notificationService = {
       notify: vi.fn().mockResolvedValue(undefined),
@@ -219,6 +220,33 @@ describe('FileRenameService', () => {
         },
       }),
     );
+  });
+
+  it('sanitizes token-derived rename destinations when cross-platform mode is enabled', async () => {
+    const { service, renameRepo, appSettings } = makeService();
+    appSettings.isCrossPlatformPathSanitizationEnabled.mockResolvedValue(true);
+    renameRepo.findBookRenameData.mockResolvedValue(
+      makeRenameData({
+        file: {
+          absolutePath: '/library/Old Title.epub',
+          relPath: 'Old Title.epub',
+        },
+        metadata: { title: 'AUX' },
+        authors: ['CON'],
+        bookFolderPath: '/library/Old Title.epub',
+      }),
+    );
+
+    const result = await service.performRename(5, 12);
+
+    expect(result).toEqual(
+      expect.objectContaining({
+        status: 'success',
+        oldPath: '/library/Old Title.epub',
+        newPath: '/library/CON_/AUX_.epub',
+      }),
+    );
+    expect(mockRename).toHaveBeenCalledWith('/library/Old Title.epub', '/library/CON_/AUX_.epub');
   });
 
   it('renames the folder, primary file, and companion files in book-per-folder mode', async () => {

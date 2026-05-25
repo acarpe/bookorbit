@@ -392,6 +392,31 @@ describe('resolveDownloadFilename', () => {
   });
 });
 
+describe('cross-platform sanitization option', () => {
+  it('keeps legacy output unchanged when sanitization is disabled', () => {
+    expect(resolveUploadPath('{authors}/{title}', { ...FULL, authors: 'CON', title: 'Book: Volume 1?' }, 'epub')).toBe('CON/Book: Volume 1?.epub');
+  });
+
+  it('sanitizes invalid characters and reserved names in upload path tokens when enabled', () => {
+    expect(
+      resolveUploadPath('{authors}/{title}', { ...FULL, authors: 'CON', title: 'Book: Volume 1?' }, 'epub', { sanitizeForCrossPlatform: true }),
+    ).toBe('CON_/Book_ Volume 1_.epub');
+  });
+
+  it('supports dash replacement character when sanitization is enabled', () => {
+    expect(
+      resolveDownloadFilename('{title}', { ...FULL, title: 'Book: Volume 1?' }, 'epub', {
+        sanitizeForCrossPlatform: true,
+        replacementCharacter: '-',
+      }),
+    ).toBe('Book- Volume 1-.epub');
+  });
+
+  it('trims unsafe trailing dot/space and guards reserved names with extensions', () => {
+    expect(resolveDownloadFilename('{title}', { ...FULL, title: 'NUL.txt ' }, 'epub', { sanitizeForCrossPlatform: true })).toBe('NUL.txt_.epub');
+  });
+});
+
 // ── validatePattern ───────────────────────────────────────────────────────────
 
 describe('validatePattern', () => {

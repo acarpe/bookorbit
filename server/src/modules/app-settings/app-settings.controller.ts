@@ -8,6 +8,7 @@ import { AppSettingsService } from './app-settings.service';
 import { OidcProviderService } from './oidc-provider.service';
 import { UpdateAppSettingDto } from './dto/update-app-setting.dto';
 import { UpdateFilePatternDto } from './dto/update-file-pattern.dto';
+import { UpdateBooleanSettingDto } from './dto/update-boolean-setting.dto';
 import { CreateOidcProviderDto } from './dto/create-oidc-provider.dto';
 import { UpdateOidcProviderDto } from './dto/update-oidc-provider.dto';
 import { CreateGroupMappingDto } from './dto/create-group-mapping.dto';
@@ -78,6 +79,23 @@ export class AppSettingsController {
   async setDownloadPattern(@Body() dto: UpdateFilePatternDto) {
     await this.appSettingsService.setDownloadPattern(dto.pattern);
     return { pattern: dto.pattern };
+  }
+
+  @Get('cross-platform-path-sanitization')
+  async getCrossPlatformPathSanitization() {
+    return { enabled: await this.appSettingsService.isCrossPlatformPathSanitizationEnabled() };
+  }
+
+  @Put('cross-platform-path-sanitization')
+  @HttpCode(HttpStatus.OK)
+  @Auditable({
+    action: AuditAction.AppSettingsUpdate,
+    resource: AuditResource.AppSettings,
+    description: 'Updated cross-platform path sanitization setting',
+  })
+  async setCrossPlatformPathSanitization(@Body() dto: UpdateBooleanSettingDto) {
+    await this.appSettingsService.setCrossPlatformPathSanitizationEnabled(dto.enabled);
+    return { enabled: dto.enabled };
   }
 
   // --- OIDC Provider CRUD ---

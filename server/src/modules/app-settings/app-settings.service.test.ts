@@ -399,6 +399,21 @@ describe('AppSettingsService', () => {
       await service.setUploadPatternBookPerFolder('{title}/');
       expect(repo.upsert).toHaveBeenCalledWith('upload_file_pattern_book_per_folder', '{title}/');
     });
+
+    it('cross-platform path sanitization defaults to false when not set', async () => {
+      repo.findByKey.mockResolvedValue(undefined);
+      expect(await service.isCrossPlatformPathSanitizationEnabled()).toBe(false);
+    });
+
+    it('cross-platform path sanitization returns true when enabled', async () => {
+      repo.findByKey.mockResolvedValue({ key: 'cross_platform_path_sanitization_enabled', value: 'true' } as never);
+      expect(await service.isCrossPlatformPathSanitizationEnabled()).toBe(true);
+    });
+
+    it('upserts cross-platform path sanitization setting', async () => {
+      await service.setCrossPlatformPathSanitizationEnabled(true);
+      expect(repo.upsert).toHaveBeenCalledWith('cross_platform_path_sanitization_enabled', 'true');
+    });
   });
 
   describe('getMetadataScoreWeights', () => {

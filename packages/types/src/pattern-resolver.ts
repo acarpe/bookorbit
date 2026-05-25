@@ -32,8 +32,37 @@ export const PATTERN_TOKENS = [
 ] as const;
 
 export type PatternToken = (typeof PATTERN_TOKENS)[number]["token"];
+export type PathResolverOptions = {
+  sanitizeForCrossPlatform?: boolean;
+  replacementCharacter?: "_" | "-";
+};
 
 const MODIFIER_PLACEHOLDER_REGEX = /\{([^}:]+)(?::([^}]+))?}/g;
+const WINDOWS_RESERVED_NAMES = new Set([
+  "CON",
+  "PRN",
+  "AUX",
+  "NUL",
+  "COM1",
+  "COM2",
+  "COM3",
+  "COM4",
+  "COM5",
+  "COM6",
+  "COM7",
+  "COM8",
+  "COM9",
+  "LPT1",
+  "LPT2",
+  "LPT3",
+  "LPT4",
+  "LPT5",
+  "LPT6",
+  "LPT7",
+  "LPT8",
+  "LPT9",
+]);
+const INVALID_SEGMENT_CHARS_REGEX = /[<>:"/\\|?*\u0000-\u001F]/g;
 
 export function applyModifier(value: string, modifier: string, fieldName: string): string {
   if (!value) return value;
@@ -97,6 +126,38 @@ export function validatePattern(pattern: string): boolean {
   return validPatternRegex.test(pattern);
 }
 
+function normalizeResolverOptions(options?: PathResolverOptions): Required<PathResolverOptions> {
+  return {
+    sanitizeForCrossPlatform: options?.sanitizeForCrossPlatform ?? false,
+    replacementCharacter: options?.replacementCharacter === "-" ? "-" : "_",
+  };
+}
+
+function sanitizePathSegmentValue(value: string, replacementCharacter: "_" | "-"): string {
+  let sanitized = value.replace(INVALID_SEGMENT_CHARS_REGEX, replacementCharacter).trim().replace(/[. ]+$/g, "");
+  if (!sanitized || sanitized === "." || sanitized === "..") {
+    sanitized = replacementCharacter;
+  }
+
+  const leadingStem = sanitized.split(".")[0]?.toUpperCase() ?? "";
+  if (WINDOWS_RESERVED_NAMES.has(leadingStem)) {
+    sanitized = `${sanitized}${replacementCharacter}`;
+  }
+
+  return sanitized;
+}
+
+function sanitizeResolutionValues(values: Record<string, string>, options: Required<PathResolverOptions>): Record<string, string> {
+  if (!options.sanitizeForCrossPlatform) return values;
+
+  const sanitized: Record<string, string> = {};
+  for (const [key, value] of Object.entries(values)) {
+    sanitized[key] = sanitizePathSegmentValue(value, options.replacementCharacter);
+  }
+
+  return sanitized;
+}
+
 function normalizeDotExt(ext: string): string {
   const trimmed = ext.trim();
   if (!trimmed) return "";
@@ -126,14 +187,16 @@ function ensurePathLastSegmentExtension(path: string, dotExt: string): string {
  *
  * Returns null if the pattern resolves to an empty string.
  */
-export function resolveUploadPath(pattern: string, values: Record<string, string>, ext: string): string | null {
-  const resolved = replacePlaceholders(pattern, values);
+export function resolveUploadPath(pattern: string, values: Record<string, string>, ext: string, options?: PathResolverOptions): string | null {
+  const normalizedOptions = normalizeResolverOptions(options);
+  const resolvedValues = sanitizeResolutionValues(values, normalizedOptions);
+  const resolved = replacePlaceholders(pattern, resolvedValues);
   if (!resolved) return null;
 
   const dotExt = normalizeDotExt(ext);
 
   if (resolved.endsWith("/")) {
-    const filename = ensureTrailingExtension(values["originalFilename"] ?? "upload", dotExt);
+    const filename = ensureTrailingExtension(resolvedValues["originalFilename"] ?? "upload", dotExt);
     return resolved + filename;
   }
 
@@ -148,12 +211,14 @@ export function resolveUploadPath(pattern: string, values: Record<string, string
  *
  * Returns null if the pattern resolves to an empty filename.
  */
-export function resolveDownloadFilename(pattern: string, values: Record<string, string>, ext: string): string | null {
-  const resolved = replacePlaceholders(pattern, values);
+export function resolveDownloadFilename(pattern: string, values: Record<string, string>, ext: string, options?: PathResolverOptions): string | null {
+  const normalizedOptions = normalizeResolverOptions(options);
+  const resolvedValues = sanitizeResolutionValues(values, normalizedOptions);
+  const resolved = replacePlaceholders(pattern, resolvedValues);
   if (!resolved) return null;
 
   const dotExt = normalizeDotExt(ext);
-  let stem = resolved.endsWith("/") ? (values["originalFilename"] ?? "") : (resolved.split("/").filter(Boolean).pop() ?? "");
+  let stem = resolved.endsWith("/") ? (resolvedValues["originalFilename"] ?? "") : (resolved.split("/").filter(Boolean).pop() ?? "");
   stem = stem.trim();
   if (!stem) return null;
 
