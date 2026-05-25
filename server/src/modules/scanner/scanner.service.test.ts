@@ -21,13 +21,14 @@ import { ScannerService } from './scanner.service';
 import { ScanJobStore } from './scan-job-store.service';
 import { DEFAULT_FORMAT_PRIORITY } from './lib/classify';
 import type { BookCandidate, FileStat } from './lib/walk';
-import { findBookCandidates, findLooseFileCandidates, buildSingleBookCandidate } from './lib/walk';
+import { findBookCandidates, findLooseFileCandidates, buildSingleBookCandidate, clampIno } from './lib/walk';
 import { computeFileHash } from './lib/hash';
 import * as assembleBookCardsModule from '../book/utils/assemble-book-cards';
 
 const mockFindCandidates = findBookCandidates as MockedFunction<typeof findBookCandidates>;
 const mockFindLooseCandidates = findLooseFileCandidates as MockedFunction<typeof findLooseFileCandidates>;
 const mockBuildSingleCandidate = buildSingleBookCandidate as MockedFunction<typeof buildSingleBookCandidate>;
+const mockClampIno = clampIno as MockedFunction<typeof clampIno>;
 const mockFingerprint = computeFileHash as MockedFunction<typeof computeFileHash>;
 const mockReaddir = readdir as MockedFunction<typeof readdir>;
 const mockStat = stat as MockedFunction<typeof stat>;
@@ -182,6 +183,9 @@ beforeEach(() => {
   mockFindCandidates.mockResolvedValue({ candidates: [], skippedDirs: new Set(), unchangedDirs: new Set(), dirMtimes: new Map() });
   mockFindLooseCandidates.mockResolvedValue({ candidates: [], skippedDirs: new Set(), unchangedDirs: new Set(), dirMtimes: new Map() });
   mockBuildSingleCandidate.mockResolvedValue(null);
+  mockClampIno.mockImplementation((ino: bigint) => {
+    return ino > BigInt(Number.MAX_SAFE_INTEGER) ? 0 : Number(ino);
+  });
   mockFingerprint.mockResolvedValue('hash-abc');
   mockReaddir.mockResolvedValue([]);
   mockStat.mockResolvedValue({ isFile: () => true, ino: 2001n, size: 1024, mtime: new Date('2024-01-01') } as any);
@@ -573,6 +577,100 @@ describe('file identity resolution', () => {
 
     expect(repo.updateBookFile).toHaveBeenCalledWith(1, expect.objectContaining({ absolutePath: '/library/Author/Book/renamed.epub' }));
     expect(repo.createBookFile).not.toHaveBeenCalled();
+  });
+
+  it('reuses existing book id when an entire book folder is renamed via inode match', async () => {
+    const renamedFile = makeFileStat({
+      absolutePath: '/library/Author/NewName/book.epub',
+      relPath: 'Author/NewName/book.epub',
+      ino: 9090,
+    });
+    const existingFile = makeBookFile({
+      id: 21,
+      bookId: 10,
+      absolutePath: '/library/Author/OldName/book.epub',
+      relPath: 'Author/OldName/book.epub',
+      ino: 9090,
+      fileHash: 'rename-hash',
+    });
+
+    const repo = makeRepo({
+      findBooksByLibraryFolder: vi
+        .fn()
+        .mockResolvedValue([{ id: 10, libraryId: 1, libraryFolderId: 1, folderPath: '/library/Author/OldName', status: 'present' }]),
+      findBookFilesByLibraryFolder: vi.fn().mockResolvedValue([existingFile]),
+    });
+    mockFindCandidates.mockResolvedValue({
+      candidates: [makeCandidate('/library/Author/NewName', [renamedFile])],
+      skippedDirs: new Set(),
+      unchangedDirs: new Set(),
+      dirMtimes: new Map(),
+    });
+
+    const done = awaitScan(repo);
+    const { service } = makeService(repo);
+    await service.startScan(1, 'manual');
+    await done;
+
+    expect(repo.updateBookFolderPath).toHaveBeenCalledWith(10, '/library/Author/NewName');
+    expect(repo.updateBookFile).toHaveBeenCalledWith(
+      21,
+      expect.objectContaining({
+        bookId: 10,
+        absolutePath: '/library/Author/NewName/book.epub',
+        relPath: 'Author/NewName/book.epub',
+      }),
+    );
+    expect(repo.createBook).not.toHaveBeenCalled();
+    expect(repo.markBooksAsMissing).not.toHaveBeenCalled();
+  });
+
+  it('reuses existing book id for renamed folders when inode is 0 using hash fallback', async () => {
+    const renamedFile = makeFileStat({
+      absolutePath: '/library/Author/NewName/book.epub',
+      relPath: 'Author/NewName/book.epub',
+      ino: 0,
+    });
+    const existingFile = makeBookFile({
+      id: 31,
+      bookId: 11,
+      absolutePath: '/library/Author/OldName/book.epub',
+      relPath: 'Author/OldName/book.epub',
+      ino: 0,
+      fileHash: 'rename-hash',
+    });
+
+    const repo = makeRepo({
+      findBooksByLibraryFolder: vi
+        .fn()
+        .mockResolvedValue([{ id: 11, libraryId: 1, libraryFolderId: 1, folderPath: '/library/Author/OldName', status: 'present' }]),
+      findBookFilesByLibraryFolder: vi.fn().mockResolvedValue([existingFile]),
+      findBookFileByHash: vi.fn().mockResolvedValue(existingFile),
+    });
+    mockFindCandidates.mockResolvedValue({
+      candidates: [makeCandidate('/library/Author/NewName', [renamedFile])],
+      skippedDirs: new Set(),
+      unchangedDirs: new Set(),
+      dirMtimes: new Map(),
+    });
+    mockFingerprint.mockResolvedValue('rename-hash');
+
+    const done = awaitScan(repo);
+    const { service } = makeService(repo);
+    await service.startScan(1, 'manual');
+    await done;
+
+    expect(repo.updateBookFolderPath).toHaveBeenCalledWith(11, '/library/Author/NewName');
+    expect(repo.updateBookFile).toHaveBeenCalledWith(
+      31,
+      expect.objectContaining({
+        bookId: 11,
+        absolutePath: '/library/Author/NewName/book.epub',
+        relPath: 'Author/NewName/book.epub',
+      }),
+    );
+    expect(repo.createBook).not.toHaveBeenCalled();
+    expect(repo.markBooksAsMissing).not.toHaveBeenCalled();
   });
 
   it('gracefully skips a file that disappears during fingerprinting (ENOENT) — scan still completes', async () => {
@@ -1592,6 +1690,23 @@ describe('targeted book scan', () => {
 
     expect(repo.createBook).toHaveBeenCalled();
     expect(mockBuildSingleCandidate).not.toHaveBeenCalled();
+  });
+
+  it('clamps precision-unsafe root-level inode values to 0 before creating book files', async () => {
+    const repo = makeRepo({
+      findLibraryFolders: vi.fn().mockResolvedValue([{ id: 1, path: '/library', libraryId: 1 }]),
+    });
+    mockStat.mockResolvedValue({ isFile: () => true, ino: 651896050678335552n, size: 2048, mtime: new Date('2024-01-01') } as any);
+    const { service } = makeService(repo);
+
+    await (service as any).scanBookFolder('/library/book.epub', 1);
+
+    expect(repo.createBookFile).toHaveBeenCalledWith(
+      expect.objectContaining({
+        absolutePath: '/library/book.epub',
+        ino: 0,
+      }),
+    );
   });
 
   it('creates a new book and extracts metadata for a genuinely new epub file', async () => {
