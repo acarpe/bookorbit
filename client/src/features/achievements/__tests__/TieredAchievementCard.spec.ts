@@ -158,17 +158,16 @@ describe('TieredAchievementCard', () => {
     expect(wrapper.text()).toContain('264 / 50 to Shelf Seed')
   })
 
-  it('shows All tiers complete! when all earned', () => {
+  it('shows green checkmark when all earned', () => {
     const allEarned = makeGroup({
-      displayDescription: 'All tiers complete!',
+      displayDescription: 'Finish a book with 1,000 or more pages',
       earnedCount: 4,
       totalTiers: 4,
       nextUnearned: null,
       currentProgress: null,
     })
     const wrapper = mount(TieredAchievementCard, { props: { group: allEarned } })
-    const allTiersMatches = wrapper.text().match(/All tiers complete!/g) ?? []
-    expect(allTiersMatches).toHaveLength(1)
+    expect(wrapper.text()).toContain('Finish a book with 1,000 or more pages')
     expect(wrapper.find('[class*="bg-green-500"]').exists()).toBe(true)
     expect(wrapper.find('[class*="text-green-400"]').exists()).toBe(true)
   })

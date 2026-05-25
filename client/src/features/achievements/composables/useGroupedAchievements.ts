@@ -31,7 +31,7 @@ export function groupAchievements(achievements: AchievementItem[]): DisplayItem[
     const displayTier = highestEarnedTier ?? firstTier
 
     const displayName = displayTier.name
-    const displayDescription = nextUnearned ? displayTier.description : 'All tiers complete!'
+    const displayDescription = displayTier.description
     const rarity = highestEarnedTier?.rarity ?? firstTier.rarity
     const iconName = highestEarnedTier?.iconName ?? firstTier.iconName
 

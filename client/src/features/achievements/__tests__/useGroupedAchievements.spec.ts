@@ -169,13 +169,13 @@ describe('groupAchievements', () => {
     expect(group.displayDescription).toBe('Desc 1')
   })
 
-  it('displayDescription is All tiers complete! when all earned', () => {
-    const tierOne = makeAchievement({ key: 'g_1', groupKey: 'g', tier: 1, earned: true })
-    const tierTwo = makeAchievement({ key: 'g_2', groupKey: 'g', tier: 2, earned: true })
+  it('displayDescription shows highest earned tier description when all earned', () => {
+    const tierOne = makeAchievement({ key: 'g_1', groupKey: 'g', tier: 1, earned: true, description: 'Tier 1' })
+    const tierTwo = makeAchievement({ key: 'g_2', groupKey: 'g', tier: 2, earned: true, description: 'Tier 2' })
     const result = groupAchievements([tierOne, tierTwo])
 
     const group = expectTiered(result[0])
-    expect(group.displayDescription).toBe('All tiers complete!')
+    expect(group.displayDescription).toBe('Tier 2')
   })
 
   it('uses tier 1 rarity when nothing is earned', () => {
