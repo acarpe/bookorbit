@@ -127,7 +127,7 @@ watch(
       </div>
       <div class="flex items-center gap-2 self-start">
         <span class="text-xs text-muted-foreground">Inherit from global</span>
-        <ToggleSwitch :model-value="inheriting" @update:model-value.stop="handleInheritToggle" @click.stop />
+        <ToggleSwitch :model-value="inheriting" @update:model-value="handleInheritToggle" @click.stop />
         <ChevronUp v-if="cardOpen" :size="15" class="text-muted-foreground md:hidden ml-1" />
         <ChevronDown v-else :size="15" class="text-muted-foreground md:hidden ml-1" />
       </div>
