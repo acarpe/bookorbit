@@ -127,3 +127,12 @@ export interface ProviderStatus {
   enabled: boolean;
   hint?: string;
 }
+
+export type ProviderConnectionTestStatus = "success" | "warning" | "fail";
+
+export interface ProviderConnectionTestResult {
+  key: MetadataProviderKey;
+  ok: boolean;
+  status: ProviderConnectionTestStatus;
+  message: string;
+}

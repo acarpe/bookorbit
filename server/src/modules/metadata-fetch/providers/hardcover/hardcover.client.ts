@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 
+import { toBearerAuthorization } from '../../../../common/utils/bearer-token.utils';
 import { fetchWithThrottle } from '../../fetch-with-throttle';
 import { ProviderThrottleError } from '../../provider-throttle.error';
 import { PROVIDER_DELAYS_MS, PROVIDER_LIMITS, PROVIDER_TIMEOUT_MS } from '../provider-constants';
@@ -125,7 +126,7 @@ export class HardcoverClient {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: apiKey,
+          Authorization: toBearerAuthorization(apiKey),
         },
         body: JSON.stringify({ query, variables }),
         signal: buildRequestSignal(PROVIDER_TIMEOUT_MS.DEFAULT, signal),
