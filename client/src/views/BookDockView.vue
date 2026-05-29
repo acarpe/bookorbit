@@ -84,6 +84,10 @@ function openSheet(file: BookDockFile) {
   selectedFile.value = file
 }
 
+function handleSelect(id: number, shiftKey: boolean) {
+  toggleSelect(id, { range: shiftKey })
+}
+
 function closeSheet() {
   selectedFile.value = null
 }
@@ -469,7 +473,7 @@ onUnmounted(() => {
         :select-all="selectAll"
         :name-preview-by-file-id="namePreviewByFileId"
         :empty-message="emptyMessage"
-        @select="toggleSelect"
+        @select="handleSelect"
         @select-all="toggleSelectAll"
         @open="openSheet"
         @apply-fetched="handleInlineApplyFetched"

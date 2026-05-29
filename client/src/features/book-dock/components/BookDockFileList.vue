@@ -37,12 +37,16 @@ const props = withDefaults(
   },
 )
 
-defineEmits<{
-  select: [number]
+const emit = defineEmits<{
+  select: [number, boolean]
   selectAll: []
   open: [BookDockFile]
   applyFetched: [number]
 }>()
+
+function onCheckboxClick(event: MouseEvent, id: number) {
+  emit('select', id, event.shiftKey)
+}
 
 function backendCoverUrl(file: BookDockFile): string {
   return `/api/v1/book-dock/files/${file.id}/cover?v=${new Date(file.updatedAt).getTime()}`
@@ -234,8 +238,7 @@ function targetSummary(file: BookDockFile): string {
           type="checkbox"
           :checked="isSelected(file.id)"
           class="size-3.5 rounded border-input accent-primary shrink-0 self-center"
-          @click.stop
-          @change.stop="$emit('select', file.id)"
+          @click.stop="onCheckboxClick($event, file.id)"
         />
 
         <HoverCardRoot :open-delay="250" :close-delay="100">
