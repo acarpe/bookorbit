@@ -32,7 +32,7 @@ export function useFileNamingPattern() {
   const downloadError = ref('')
   const loadingDownload = ref(false)
   const savingDownload = ref(false)
-  const crossPlatformSanitizationEnabled = ref(false)
+  const crossPlatformSanitizationEnabled = ref(true)
   const loadingCrossPlatformSanitization = ref(false)
   const savingCrossPlatformSanitization = ref(false)
   const savingLibraryId = ref<number | null>(null)

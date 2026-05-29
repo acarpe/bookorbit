@@ -109,7 +109,7 @@ export class AppSettingsService {
 
   async isCrossPlatformPathSanitizationEnabled(): Promise<boolean> {
     const row = await this.repo.findByKey(APP_SETTING_KEYS.CROSS_PLATFORM_PATH_SANITIZATION_ENABLED);
-    return parseBooleanSetting(row?.value, false);
+    return parseBooleanSetting(row?.value, true);
   }
 
   async setCrossPlatformPathSanitizationEnabled(enabled: boolean): Promise<void> {

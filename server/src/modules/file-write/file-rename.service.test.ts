@@ -249,6 +249,28 @@ describe('FileRenameService', () => {
     expect(mockRename).toHaveBeenCalledWith('/library/Old Title.epub', '/library/CON_/AUX_.epub');
   });
 
+  it('strips colon from title in newPath when cross-platform mode is enabled', async () => {
+    const { service, renameRepo, appSettings } = makeService();
+    appSettings.isCrossPlatformPathSanitizationEnabled.mockResolvedValue(true);
+    renameRepo.findBookRenameData.mockResolvedValue(
+      makeRenameData({
+        file: {
+          absolutePath: '/library/Old Title.epub',
+          relPath: 'Old Title.epub',
+        },
+        metadata: { title: 'Bad Love: A Novel' },
+        authors: ['Jonathan Kellerman'],
+        bookFolderPath: '/library/Old Title.epub',
+      }),
+    );
+
+    const result = await service.performRename(5, 12);
+
+    expect(result.status).toBe('success');
+    expect(result.newPath).not.toContain(':');
+    expect(result.newPath).toContain('Bad Love_ A Novel');
+  });
+
   it('renames the folder, primary file, and companion files in book-per-folder mode', async () => {
     const { service, renameRepo, lockService } = makeService();
     renameRepo.findBookRenameData.mockResolvedValue(

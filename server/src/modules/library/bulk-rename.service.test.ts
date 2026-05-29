@@ -343,6 +343,64 @@ describe('BulkRenameService', () => {
       expect(result.total).toBe(0);
       expect(result.totalByStatus.will_rename).toBe(0);
     });
+
+    it('sanitizes colon in title when cross-platform sanitization is enabled', async () => {
+      bulkRenameRepo.findLibrarySettings.mockResolvedValue({
+        fileRenameEnabled: true,
+        fileNamingPattern: '{authors}/{title}',
+        organizationMode: 'book_per_file',
+        watch: false,
+      });
+      appSettings.isCrossPlatformPathSanitizationEnabled.mockResolvedValue(true);
+
+      const book = makeBookData({ bookId: 1 });
+      book.metadata.title = 'Bad Love: A Novel';
+      book.authors = ['Jonathan Kellerman'];
+      bulkRenameRepo.findAllBooksForLibrary.mockResolvedValue([book]);
+
+      const result = await service.getPreview(1, 1, 50);
+
+      expect(result.items[0].newPath).not.toContain(':');
+      expect(result.items[0].newPath).toContain('Bad Love_ A Novel');
+    });
+
+    it('preserves colon in title when cross-platform sanitization is disabled', async () => {
+      bulkRenameRepo.findLibrarySettings.mockResolvedValue({
+        fileRenameEnabled: true,
+        fileNamingPattern: '{authors}/{title}',
+        organizationMode: 'book_per_file',
+        watch: false,
+      });
+      appSettings.isCrossPlatformPathSanitizationEnabled.mockResolvedValue(false);
+
+      const book = makeBookData({ bookId: 1 });
+      book.metadata.title = 'Bad Love: A Novel';
+      book.authors = ['Jonathan Kellerman'];
+      bulkRenameRepo.findAllBooksForLibrary.mockResolvedValue([book]);
+
+      const result = await service.getPreview(1, 1, 50);
+
+      expect(result.items[0].newPath).toContain('Bad Love: A Novel');
+    });
+
+    it('sanitizes double-quote in author name when cross-platform sanitization is enabled', async () => {
+      bulkRenameRepo.findLibrarySettings.mockResolvedValue({
+        fileRenameEnabled: true,
+        fileNamingPattern: '{authors}/{title}',
+        organizationMode: 'book_per_file',
+        watch: false,
+      });
+      appSettings.isCrossPlatformPathSanitizationEnabled.mockResolvedValue(true);
+
+      const book = makeBookData({ bookId: 1 });
+      book.metadata.title = 'A Book';
+      book.authors = ['John "The Author" Smith'];
+      bulkRenameRepo.findAllBooksForLibrary.mockResolvedValue([book]);
+
+      const result = await service.getPreview(1, 1, 50);
+
+      expect(result.items[0].newPath).not.toContain('"');
+    });
   });
 
   describe('execute', () => {

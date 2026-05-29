@@ -415,6 +415,69 @@ describe('cross-platform sanitization option', () => {
   it('trims unsafe trailing dot/space and guards reserved names with extensions', () => {
     expect(resolveDownloadFilename('{title}', { ...FULL, title: 'NUL.txt ' }, 'epub', { sanitizeForCrossPlatform: true })).toBe('NUL.txt_.epub');
   });
+
+  it('replaces double-quote characters in token values', () => {
+    expect(resolveUploadPath('{title}', { ...FULL, title: 'He said "hello"' }, 'epub', { sanitizeForCrossPlatform: true })).toBe(
+      'He said _hello_.epub',
+    );
+  });
+
+  it('sanitizes disabled preserves double-quote in output', () => {
+    expect(resolveUploadPath('{title}', { ...FULL, title: '"Quotes"' }, 'epub')).toBe('"Quotes".epub');
+  });
+
+  it('sanitizes disabled preserves colon in output', () => {
+    expect(resolveUploadPath('{title}', { ...FULL, title: 'Bad Love: A Novel' }, 'epub')).toBe('Bad Love: A Novel.epub');
+  });
+
+  it('replaces all Windows-reserved chars in a single token value', () => {
+    const messy = 'A<B>C:D"E/F\\G|H?I*J';
+    const result = resolveDownloadFilename('{title}', { ...FULL, title: messy }, 'epub', { sanitizeForCrossPlatform: true });
+    expect(result).not.toMatch(/[<>:"/\\|?*]/);
+  });
+
+  it('replaces control characters (U+0001) in token values', () => {
+    const result = resolveDownloadFilename('{title}', { ...FULL, title: 'Evil\u0001Title' }, 'epub', { sanitizeForCrossPlatform: true });
+    expect(result).toBe('Evil_Title.epub');
+  });
+
+  it('uses replacement char when token value consists entirely of dots and spaces', () => {
+    const result = resolveDownloadFilename('{title}', { ...FULL, title: '.' }, 'epub', { sanitizeForCrossPlatform: true });
+    expect(result).toBe('_.epub');
+  });
+
+  it('strips trailing dots from token values', () => {
+    const result = resolveDownloadFilename('{title}', { ...FULL, title: 'Book Title...' }, 'epub', { sanitizeForCrossPlatform: true });
+    expect(result).toBe('Book Title.epub');
+  });
+
+  it('replaces forward slash within a token value (not treated as path separator)', () => {
+    const result = resolveUploadPath('{title}', { ...FULL, title: '24/7 Life' }, 'epub', { sanitizeForCrossPlatform: true });
+    expect(result).toBe('24_7 Life.epub');
+  });
+
+  it('sanitizes originalFilename token when used in a folder-only pattern', () => {
+    const result = resolveUploadPath('{authors}/', { ...FULL, authors: 'Author A', originalFilename: 'bad:file' }, 'epub', {
+      sanitizeForCrossPlatform: true,
+    });
+    expect(result).not.toContain(':');
+    expect(result).toContain('bad_file.epub');
+  });
+
+  it('extension token is unaffected by sanitization (no special chars in normal formats)', () => {
+    const result = resolveUploadPath('{title}.{extension}', { ...FULL, title: 'Normal Title', extension: 'epub' }, 'epub', {
+      sanitizeForCrossPlatform: true,
+    });
+    expect(result).toBe('Normal Title.epub');
+  });
+
+  it('multi-segment path preserves pattern slashes while sanitizing token values', () => {
+    const result = resolveUploadPath('{authors}/{title}', { ...FULL, authors: 'Author: A', title: 'Book "B"' }, 'epub', {
+      sanitizeForCrossPlatform: true,
+    });
+    expect(result).toContain('/');
+    expect(result).not.toMatch(/[:"]/);
+  });
 });
 
 // ── validatePattern ───────────────────────────────────────────────────────────

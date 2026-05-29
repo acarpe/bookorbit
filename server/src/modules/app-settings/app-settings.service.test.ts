@@ -414,9 +414,9 @@ describe('AppSettingsService', () => {
       expect(repo.upsert).toHaveBeenCalledWith('upload_file_pattern_book_per_folder', '{title}/');
     });
 
-    it('cross-platform path sanitization defaults to false when not set', async () => {
+    it('cross-platform path sanitization defaults to true when not set', async () => {
       repo.findByKey.mockResolvedValue(undefined);
-      expect(await service.isCrossPlatformPathSanitizationEnabled()).toBe(false);
+      expect(await service.isCrossPlatformPathSanitizationEnabled()).toBe(true);
     });
 
     it('cross-platform path sanitization returns true when enabled', async () => {
@@ -427,6 +427,16 @@ describe('AppSettingsService', () => {
     it('upserts cross-platform path sanitization setting', async () => {
       await service.setCrossPlatformPathSanitizationEnabled(true);
       expect(repo.upsert).toHaveBeenCalledWith('cross_platform_path_sanitization_enabled', 'true');
+    });
+
+    it('cross-platform path sanitization returns false when explicitly set to false', async () => {
+      repo.findByKey.mockResolvedValue({ key: 'cross_platform_path_sanitization_enabled', value: 'false' } as never);
+      expect(await service.isCrossPlatformPathSanitizationEnabled()).toBe(false);
+    });
+
+    it('upserts false when setCrossPlatformPathSanitizationEnabled is called with false', async () => {
+      await service.setCrossPlatformPathSanitizationEnabled(false);
+      expect(repo.upsert).toHaveBeenCalledWith('cross_platform_path_sanitization_enabled', 'false');
     });
   });
 

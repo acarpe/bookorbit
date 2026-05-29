@@ -304,7 +304,10 @@ onUnmounted(() => {
           <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
             <div class="w-full lg:max-w-md">
               <p class="settings-label">Cross-platform path sanitization</p>
-              <p class="settings-hint">Replace filesystem-unsafe characters in generated upload and rename paths.</p>
+              <p class="settings-hint">
+                Make generated file and folder names safe on Windows by replacing invalid characters and reserved names, and removing trailing dots
+                and spaces. Disable only for Linux-only setups that intentionally keep those characters.
+              </p>
             </div>
             <div class="flex items-center gap-3 w-full lg:w-auto">
               <ToggleSwitch
