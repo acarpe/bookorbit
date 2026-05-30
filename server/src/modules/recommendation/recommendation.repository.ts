@@ -3,9 +3,10 @@ import { eq, inArray, ne, and, isNotNull, sql, asc, desc } from 'drizzle-orm';
 import { NodePgDatabase } from 'drizzle-orm/node-postgres';
 
 import type { ContentFilterRules } from '@bookorbit/types';
+import { isAudioFormat } from '@bookorbit/types';
 import { DB } from '../../db';
 import * as schema from '../../db/schema';
-import { authors, bookAuthors, bookGenres, bookMetadata, bookTags, books, genres, tags } from '../../db/schema';
+import { authors, bookAuthors, bookFiles, bookGenres, bookMetadata, bookTags, books, genres, tags } from '../../db/schema';
 import { buildContentFilterClauses } from '../../common/utils/content-filter-sql.utils';
 
 type Db = NodePgDatabase<typeof schema>;
@@ -19,6 +20,7 @@ export interface SeriesBookRow {
   seriesIndex: number | null;
   coverSource: string | null;
   authorNames: string[];
+  isAudiobook: boolean;
 }
 
 export interface AuthorBookRow {
@@ -26,6 +28,7 @@ export interface AuthorBookRow {
   title: string | null;
   coverSource: string | null;
   authorNames: string[];
+  isAudiobook: boolean;
 }
 
 export interface AnnCandidate {
@@ -151,9 +154,11 @@ export class RecommendationRepository {
         title: bookMetadata.title,
         seriesIndex: bookMetadata.seriesIndex,
         coverSource: bookMetadata.coverSource,
+        primaryFormat: bookFiles.format,
       })
       .from(books)
       .leftJoin(bookMetadata, eq(bookMetadata.bookId, books.id))
+      .leftJoin(bookFiles, eq(bookFiles.id, books.primaryFileId))
       .where(and(inArray(books.libraryId, libraryIds), sql`lower(trim(${bookMetadata.seriesName})) = ${normalized}`, ...filterClauses))
       .orderBy(sql`${bookMetadata.seriesIndex} ASC NULLS LAST`, asc(bookMetadata.title), asc(books.id))
       .limit(SERIES_BOOKS_LIMIT);
@@ -170,7 +175,14 @@ export class RecommendationRepository {
 
     const authorsByBook = this.groupNamesByBook(authorRows);
 
-    return rows.map((r) => ({ ...r, authorNames: authorsByBook.get(r.bookId) ?? [] }));
+    return rows.map((r) => ({
+      bookId: r.bookId,
+      title: r.title,
+      seriesIndex: r.seriesIndex,
+      coverSource: r.coverSource,
+      authorNames: authorsByBook.get(r.bookId) ?? [],
+      isAudiobook: r.primaryFormat != null ? isAudioFormat(r.primaryFormat) : false,
+    }));
   }
 
   async findAuthorBooks(bookId: number, libraryIds: number[], contentFilters?: ContentFilterRules): Promise<AuthorBookRow[]> {
@@ -185,12 +197,14 @@ export class RecommendationRepository {
         title: bookMetadata.title,
         coverSource: bookMetadata.coverSource,
         sharedAuthors: sql<number>`count(*)::int`.as('shared_authors'),
+        primaryFormat: bookFiles.format,
       })
       .from(bookAuthors)
       .innerJoin(books, eq(books.id, bookAuthors.bookId))
       .leftJoin(bookMetadata, eq(bookMetadata.bookId, books.id))
+      .leftJoin(bookFiles, eq(bookFiles.id, books.primaryFileId))
       .where(and(inArray(bookAuthors.authorId, authorIds), inArray(books.libraryId, libraryIds), ne(books.id, bookId), ...filterClauses))
-      .groupBy(books.id, bookMetadata.title, bookMetadata.coverSource)
+      .groupBy(books.id, bookMetadata.title, bookMetadata.coverSource, bookFiles.format)
       .orderBy(desc(sql`shared_authors`), asc(bookMetadata.title), asc(books.id))
       .limit(AUTHOR_BOOKS_LIMIT);
 
@@ -206,7 +220,13 @@ export class RecommendationRepository {
 
     const authorsByBook = this.groupNamesByBook(authorRows);
 
-    return rows.map((r) => ({ bookId: r.bookId, title: r.title, coverSource: r.coverSource, authorNames: authorsByBook.get(r.bookId) ?? [] }));
+    return rows.map((r) => ({
+      bookId: r.bookId,
+      title: r.title,
+      coverSource: r.coverSource,
+      authorNames: authorsByBook.get(r.bookId) ?? [],
+      isAudiobook: r.primaryFormat != null ? isAudioFormat(r.primaryFormat) : false,
+    }));
   }
 
   private groupNamesByBook(rows: Array<{ bookId: number; name: string }>): Map<number, string[]> {

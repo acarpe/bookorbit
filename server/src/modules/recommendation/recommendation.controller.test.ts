@@ -37,7 +37,7 @@ describe('RecommendationController', () => {
   });
 
   it('delegates recommendation lookup to the service', async () => {
-    const recommendation = [{ id: 10, title: 'Book 10' }];
+    const recommendation = [{ id: 10, title: 'Book 10', hasCover: true, authors: [], isAudiobook: false }];
     const recommendationService = {
       getRecommendations: vi.fn().mockResolvedValue(recommendation),
     };
@@ -65,7 +65,7 @@ describe('RecommendationController', () => {
   });
 
   it('delegates series books lookup to the service', async () => {
-    const seriesBooks = [{ id: 1, title: 'Book 1', seriesIndex: 1 }];
+    const seriesBooks = [{ id: 1, title: 'Book 1', seriesIndex: 1, hasCover: true, authors: [], isAudiobook: false }];
     const recommendationService = {
       getSeriesBooks: vi.fn().mockResolvedValue(seriesBooks),
     };
@@ -93,7 +93,7 @@ describe('RecommendationController', () => {
   });
 
   it('delegates author books lookup to the service', async () => {
-    const authorBooks = [{ id: 2, title: 'Book 2' }];
+    const authorBooks = [{ id: 2, title: 'Book 2', hasCover: false, authors: [], isAudiobook: true }];
     const recommendationService = {
       getAuthorBooks: vi.fn().mockResolvedValue(authorBooks),
     };

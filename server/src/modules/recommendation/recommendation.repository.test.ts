@@ -229,8 +229,8 @@ describe('RecommendationRepository', () => {
 
   it('queries series books with expected shape when input is valid', async () => {
     const rows = [
-      { bookId: 1, title: 'Book 1', seriesIndex: 1, coverSource: 'extracted' },
-      { bookId: 2, title: 'Book 2', seriesIndex: 2, coverSource: null },
+      { bookId: 1, title: 'Book 1', seriesIndex: 1, coverSource: 'extracted', primaryFormat: 'm4b' },
+      { bookId: 2, title: 'Book 2', seriesIndex: 2, coverSource: null, primaryFormat: 'epub' },
     ];
     const authorRows = [{ bookId: 1, name: 'Frank Herbert' }];
     const { db, select, chains } = makeDb([
@@ -242,19 +242,19 @@ describe('RecommendationRepository', () => {
     const result = await repo.findSeriesBooks('Dune', [3, 4]);
 
     expect(result).toEqual([
-      { bookId: 1, title: 'Book 1', seriesIndex: 1, coverSource: 'extracted', authorNames: ['Frank Herbert'] },
-      { bookId: 2, title: 'Book 2', seriesIndex: 2, coverSource: null, authorNames: [] },
+      { bookId: 1, title: 'Book 1', seriesIndex: 1, coverSource: 'extracted', authorNames: ['Frank Herbert'], isAudiobook: true },
+      { bookId: 2, title: 'Book 2', seriesIndex: 2, coverSource: null, authorNames: [], isAudiobook: false },
     ]);
     expect(select).toHaveBeenCalledTimes(2);
     expect(chains[0].from).toHaveBeenCalledTimes(1);
-    expect(chains[0].leftJoin).toHaveBeenCalledTimes(1);
+    expect(chains[0].leftJoin).toHaveBeenCalledTimes(2);
     expect(chains[0].where).toHaveBeenCalledTimes(1);
     expect(chains[0].orderBy).toHaveBeenCalledTimes(1);
     expect(chains[0].limit).toHaveBeenCalledWith(50);
   });
 
   it('returns series books with empty authorNames when no authors exist', async () => {
-    const rows = [{ bookId: 5, title: 'Solo Book', seriesIndex: null, coverSource: null }];
+    const rows = [{ bookId: 5, title: 'Solo Book', seriesIndex: null, coverSource: null, primaryFormat: null }];
     const { db } = makeDb([
       { terminal: 'limit', result: rows },
       { terminal: 'where', result: [] },
@@ -263,7 +263,7 @@ describe('RecommendationRepository', () => {
 
     const result = await repo.findSeriesBooks('Lone Series', [1]);
 
-    expect(result).toEqual([{ bookId: 5, title: 'Solo Book', seriesIndex: null, coverSource: null, authorNames: [] }]);
+    expect(result).toEqual([{ bookId: 5, title: 'Solo Book', seriesIndex: null, coverSource: null, authorNames: [], isAudiobook: false }]);
   });
 
   it('returns empty author books when libraryIds is empty', async () => {
@@ -277,7 +277,7 @@ describe('RecommendationRepository', () => {
   });
 
   it('queries author books with expected shape when input is valid', async () => {
-    const rows = [{ bookId: 10, title: 'Other Book', sharedAuthors: 2, coverSource: 'extracted' }];
+    const rows = [{ bookId: 10, title: 'Other Book', sharedAuthors: 2, coverSource: 'extracted', primaryFormat: 'MP3' }];
     const authorRows = [{ bookId: 10, name: 'Terry Pratchett' }];
     const { db, select, chains } = makeDb([
       { terminal: 'where', result: undefined },
@@ -288,15 +288,15 @@ describe('RecommendationRepository', () => {
 
     const result = await repo.findAuthorBooks(1, [3]);
 
-    expect(result).toEqual([{ bookId: 10, title: 'Other Book', coverSource: 'extracted', authorNames: ['Terry Pratchett'] }]);
+    expect(result).toEqual([{ bookId: 10, title: 'Other Book', coverSource: 'extracted', authorNames: ['Terry Pratchett'], isAudiobook: true }]);
     expect(select).toHaveBeenCalledTimes(3);
     expect(chains[1].innerJoin).toHaveBeenCalledTimes(1);
-    expect(chains[1].leftJoin).toHaveBeenCalledTimes(1);
+    expect(chains[1].leftJoin).toHaveBeenCalledTimes(2);
     expect(chains[1].limit).toHaveBeenCalledWith(25);
   });
 
   it('returns author books with empty authorNames when no authors exist', async () => {
-    const rows = [{ bookId: 7, title: 'Anonymous Work', sharedAuthors: 1, coverSource: null }];
+    const rows = [{ bookId: 7, title: 'Anonymous Work', sharedAuthors: 1, coverSource: null, primaryFormat: null }];
     const { db } = makeDb([
       { terminal: 'where', result: undefined },
       { terminal: 'limit', result: rows },
@@ -306,6 +306,6 @@ describe('RecommendationRepository', () => {
 
     const result = await repo.findAuthorBooks(1, [1]);
 
-    expect(result).toEqual([{ bookId: 7, title: 'Anonymous Work', coverSource: null, authorNames: [] }]);
+    expect(result).toEqual([{ bookId: 7, title: 'Anonymous Work', coverSource: null, authorNames: [], isAudiobook: false }]);
   });
 });

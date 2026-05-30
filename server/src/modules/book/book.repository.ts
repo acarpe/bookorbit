@@ -4,6 +4,7 @@ import { SUPPORTED_BOOK_FORMATS } from '../upload/upload-validator.service';
 import { NodePgDatabase } from 'drizzle-orm/node-postgres';
 
 import type { ContentFilterRules, SortSpec } from '@bookorbit/types';
+import { isAudioFormat } from '@bookorbit/types';
 import { buildContentFilterClauses } from '../../common/utils/content-filter-sql.utils';
 import { BookQueryBuilder } from './book-query-builder.service';
 import { DB } from '../../db';
@@ -714,14 +715,17 @@ export class BookRepository {
     return this.db.select({ id: books.id, libraryId: books.libraryId }).from(books).where(inArray(books.id, bookIds));
   }
 
-  async findRecommendationTitlesByBookIds(bookIds: number[]): Promise<{ id: number; title: string | null; hasCover: boolean; authors: string[] }[]> {
+  async findRecommendationTitlesByBookIds(
+    bookIds: number[],
+  ): Promise<{ id: number; title: string | null; hasCover: boolean; authors: string[]; isAudiobook: boolean }[]> {
     if (bookIds.length === 0) return [];
 
     const [rows, authorRows] = await Promise.all([
       this.db
-        .select({ id: books.id, title: bookMetadata.title, coverSource: bookMetadata.coverSource })
+        .select({ id: books.id, title: bookMetadata.title, coverSource: bookMetadata.coverSource, primaryFormat: bookFiles.format })
         .from(books)
         .leftJoin(bookMetadata, eq(bookMetadata.bookId, books.id))
+        .leftJoin(bookFiles, eq(bookFiles.id, books.primaryFileId))
         .where(inArray(books.id, bookIds)),
       this.db
         .select({ bookId: bookAuthors.bookId, name: authors.name })
@@ -742,6 +746,7 @@ export class BookRepository {
       title: r.title,
       hasCover: r.coverSource !== null,
       authors: authorsByBook.get(r.id) ?? [],
+      isAudiobook: r.primaryFormat != null ? isAudioFormat(r.primaryFormat) : false,
     }));
   }
 

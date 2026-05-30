@@ -154,6 +154,7 @@ export type BookRecommendation = {
   title: string | null;
   hasCover: boolean;
   authors: string[];
+  isAudiobook?: boolean;
 };
 
 export type SeriesBookRecommendation = {
@@ -162,6 +163,7 @@ export type SeriesBookRecommendation = {
   seriesIndex: number | null;
   hasCover: boolean;
   authors: string[];
+  isAudiobook?: boolean;
 };
 
 export type CoverSearchResult = {
