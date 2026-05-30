@@ -22,7 +22,12 @@ import { getFormatColor } from '@/features/book/lib/format-colors'
 import { providerIconPath } from '@/features/book/lib/provider-icons'
 import { getProviderColor } from '@/lib/provider-colors'
 import { useCoverVersions } from '@/features/book/composables/useCoverVersions'
-import { COVER_ASPECT_RATIO_KEY, DEFAULT_COVER_ASPECT_RATIO } from '@/features/book/lib/cover-aspect-ratio'
+import {
+  coverAspectRatioValue,
+  COVER_ASPECT_RATIO_KEY,
+  DEFAULT_COVER_ASPECT_RATIO,
+  fittedCoverFrameStyle,
+} from '@/features/book/lib/cover-aspect-ratio'
 import { FORMAT_TO_GROUP, READER_OPENABLE_FORMATS } from '@bookorbit/types'
 import type { BookDetail, BookKoboState, ReadStatus, UserBookStatus } from '@bookorbit/types'
 import { STATUS_OPTIONS, STATUS_ICONS, STATUS_COLORS, useBookStatus } from '@/features/book/composables/useBookStatus'
@@ -44,6 +49,7 @@ import { useMetadataScoreWeights } from '@/features/metadata-score/composables/u
 import { useSafeHtml } from '@/features/book/composables/useSafeHtml'
 import { useKoreaderBookProgress } from '@/features/koreader/composables/useKoreaderBookProgress'
 import { RATING_STARS, getRatingStarClass } from '@/features/book/lib/rating-stars'
+import BookCoverSurface from '@/features/book/components/BookCoverSurface.vue'
 
 type FileProgress = {
   percentage: number
@@ -262,8 +268,17 @@ const coverPlaceholderTitle = computed(() => props.book.title ?? props.book.fold
 const hasCover = computed(() => props.book.coverSource !== null)
 const { coverUrl } = useCoverVersions()
 const coverSrc = computed(() => coverUrl(props.book.id, 'cover'))
+const coverImageRatio = ref<number | null>(null)
+
+watch(coverSrc, () => {
+  coverLoaded.value = false
+  coverFailed.value = false
+  coverImageRatio.value = null
+})
 
 const coverAspectRatio = inject(COVER_ASPECT_RATIO_KEY, ref(DEFAULT_COVER_ASPECT_RATIO))
+const slotAspectRatio = computed(() => coverAspectRatioValue(String(coverAspectRatio.value)))
+const fittedCoverSpineStyle = computed(() => fittedCoverFrameStyle(coverImageRatio.value, slotAspectRatio.value))
 const primaryFile = computed(() => props.book.files.find((f) => f.role === 'primary') ?? props.book.files[0] ?? null)
 const isPrimaryAudio = computed(() => primaryFile.value?.format != null && FORMAT_TO_GROUP[primaryFile.value.format] === 'audio')
 const readableFiles = computed(() => props.book.files.filter((f) => f.format && READER_OPENABLE_FORMATS.has(f.format)))
@@ -712,7 +727,11 @@ function handleDeleteFromMenu() {
   promptDelete(props.book.id)
 }
 
-function handleCoverLoad() {
+function handleCoverLoad(event: Event) {
+  const target = event.target as HTMLImageElement | null
+  if (target && target.naturalWidth > 0 && target.naturalHeight > 0) {
+    coverImageRatio.value = target.naturalWidth / target.naturalHeight
+  }
   coverLoaded.value = true
 }
 
@@ -889,8 +908,9 @@ watch(
     <div class="flex gap-4 mb-4 items-start">
       <!-- Cover thumbnail -->
       <div class="w-28 shrink-0">
-        <div
-          class="relative w-full rounded-sm overflow-hidden shadow-md"
+        <BookCoverSurface
+          class="book-cover-surface--spine-fitted relative w-full rounded-sm overflow-hidden"
+          :disable-spine="isPrimaryAudio"
           :class="hasCover && coverLoaded && !coverFailed ? 'cursor-zoom-in' : ''"
           :style="[{ aspectRatio: coverAspectRatio }, !hasCover || !coverLoaded || coverFailed ? coverStyle : {}]"
           @click="handleCoverClick"
@@ -911,6 +931,11 @@ watch(
             @load="handleCoverLoad"
             @error="coverFailed = true"
           />
+          <div
+            v-if="!isPrimaryAudio && hasCover && coverLoaded && !coverFailed"
+            class="book-cover-spine-layer absolute z-[3]"
+            :style="fittedCoverSpineStyle"
+          />
           <div v-if="hasCover && !coverLoaded && !coverFailed" class="absolute inset-0 animate-pulse bg-white/10" />
           <BookCoverPlaceholder
             v-if="!hasCover || coverFailed"
@@ -919,7 +944,7 @@ watch(
             :is-audio="isPrimaryAudio"
             :seed="coverSeed"
           />
-        </div>
+        </BookCoverSurface>
       </div>
       <!-- Identity info -->
       <div class="flex-1 min-w-0">
@@ -1092,8 +1117,9 @@ watch(
     <!-- Left column: cover + actions (desktop only) -->
     <div class="hidden md:block md:w-56 shrink-0 md:sticky md:top-0 md:self-start">
       <div class="max-w-48 mx-auto md:max-w-none">
-        <div
-          class="group relative w-full rounded-sm overflow-hidden shadow-md"
+        <BookCoverSurface
+          class="book-cover-surface--spine-fitted group relative w-full rounded-sm overflow-hidden"
+          :disable-spine="isPrimaryAudio"
           :class="hasCover && coverLoaded && !coverFailed ? 'cursor-zoom-in' : ''"
           :style="[{ aspectRatio: coverAspectRatio }, !hasCover || !coverLoaded || coverFailed ? coverStyle : {}]"
           @click="handleCoverClick"
@@ -1126,6 +1152,11 @@ watch(
             @load="handleCoverLoad"
             @error="coverFailed = true"
           />
+          <div
+            v-if="!isPrimaryAudio && hasCover && coverLoaded && !coverFailed"
+            class="book-cover-spine-layer absolute z-[3]"
+            :style="fittedCoverSpineStyle"
+          />
           <div v-if="hasCover && !coverLoaded && !coverFailed" class="absolute inset-0 animate-pulse bg-white/10" />
           <BookCoverPlaceholder
             v-if="!hasCover || coverFailed"
@@ -1134,7 +1165,7 @@ watch(
             :is-audio="isPrimaryAudio"
             :seed="coverSeed"
           />
-        </div>
+        </BookCoverSurface>
 
         <div class="mt-4 space-y-2">
           <!-- Read/Play button: split when multiple files, plain when single -->
