@@ -123,6 +123,8 @@ function makeController() {
     bulkRefreshMetadata: vi.fn(),
     bulkReExtractCover: vi.fn(),
     bulkSetMetadata: vi.fn(),
+    bulkEditMetadata: vi.fn(),
+    bulkUpdateTags: vi.fn(),
     getExportFiles: vi.fn(),
     getMetadataExportPreflight: vi.fn(),
     buildMetadataExport: vi.fn(),
@@ -845,6 +847,7 @@ describe('BookController', () => {
       BookController.prototype.bulkSetMetadata,
       BookController.prototype.bulkUpdateTags,
       BookController.prototype.bulkSetMetadataLock,
+      BookController.prototype.bulkEditMetadata,
     ];
 
     for (const method of bulkMethods) {
@@ -886,10 +889,45 @@ describe('BookController', () => {
     expect(headers['Content-Disposition']).toBe(`attachment; filename="ok-__-_.epub"; filename*=UTF-8''ok-%F0%9F%98%80-.epub`);
   });
 
+  describe('bulkEditMetadata', () => {
+    it('resolves selection and delegates to service', async () => {
+      const { controller, bookService } = makeController();
+      const user = makeUser();
+      const fields = { publisher: { value: 'Penguin' } };
+      const expectedResult = {
+        updatedBooks: 2,
+        fields: { publisher: { updated: 2, skippedLocked: 0 } },
+      };
+      bookService.resolveSelectionToIds.mockResolvedValue([7, 9]);
+      bookService.bulkEditMetadata.mockResolvedValue(expectedResult);
+
+      const result = await controller.bulkEditMetadata({ bookIds: [7, 9], fields } as never, user);
+
+      expect(bookService.resolveSelectionToIds).toHaveBeenCalledWith({ bookIds: [7, 9], fields }, user);
+      expect(bookService.bulkEditMetadata).toHaveBeenCalledWith([7, 9], fields, user);
+      expect(result).toEqual(expectedResult);
+    });
+
+    it('has the correct permission and audit decorators', () => {
+      const permission = Reflect.getMetadata('permission', BookController.prototype.bulkEditMetadata);
+      expect(permission).toBe(Permission.LibraryEditMetadata);
+
+      const forbidden = Reflect.getMetadata(FORBIDDEN_PERMISSION_KEY, BookController.prototype.bulkEditMetadata);
+      expect(forbidden).toEqual({
+        permission: Permission.DemoRestricted,
+        message: 'Demo-restricted account cannot perform bulk edits',
+      });
+
+      const audit = Reflect.getMetadata(AUDITABLE_KEY, BookController.prototype.bulkEditMetadata);
+      expect(audit).toBeDefined();
+      expect(audit.action).toBe('book.bulk.edit_metadata');
+    });
+  });
+
   describe('writeAndRename', () => {
     it('calls bookService.writeAndRename with user and book id', async () => {
       const { controller, bookService } = makeController();
-      const user = makeUser({ id: 5 });
+      const user = { ...makeUser(), id: 5 };
       const expected = {
         write: { status: 'success', fieldsWritten: ['title'], durationMs: 10 },
         rename: { status: 'skipped', durationMs: 0, reason: 'path unchanged' },
