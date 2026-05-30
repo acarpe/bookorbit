@@ -141,6 +141,7 @@ function makeController() {
     updateMetadataLocks: vi.fn(),
     refreshMetadata: vi.fn(),
     getMetadataFromFile: vi.fn(),
+    writeAndRename: vi.fn(),
     verifyBookAccess: vi.fn(),
     getKoboState: vi.fn(),
     setReadStatus: vi.fn(),
@@ -883,5 +884,31 @@ describe('BookController', () => {
     await controller.downloadFile(1, makeUser(), reply);
 
     expect(headers['Content-Disposition']).toBe(`attachment; filename="ok-__-_.epub"; filename*=UTF-8''ok-%F0%9F%98%80-.epub`);
+  });
+
+  describe('writeAndRename', () => {
+    it('calls bookService.writeAndRename with user and book id', async () => {
+      const { controller, bookService } = makeController();
+      const user = makeUser({ id: 5 });
+      const expected = {
+        write: { status: 'success', fieldsWritten: ['title'], durationMs: 10 },
+        rename: { status: 'skipped', durationMs: 0, reason: 'path unchanged' },
+        libraryAutoWriteEnabled: false,
+        libraryAutoRenameEnabled: false,
+      };
+      bookService.writeAndRename.mockResolvedValue(expected);
+
+      const result = await controller.writeAndRename(42, user);
+
+      expect(bookService.writeAndRename).toHaveBeenCalledWith(42, user);
+      expect(result).toEqual(expected);
+    });
+
+    it('propagates NotFoundException from bookService.writeAndRename', async () => {
+      const { controller, bookService } = makeController();
+      bookService.writeAndRename.mockRejectedValue(new NotFoundException('Book 999 not found'));
+
+      await expect(controller.writeAndRename(999, makeUser())).rejects.toThrow(NotFoundException);
+    });
   });
 });
