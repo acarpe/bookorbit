@@ -24,6 +24,11 @@ import type { BookDockFileRow } from '../../db/schema';
 type Db = NodePgDatabase<typeof schema>;
 
 const BATCH_SIZE = 100;
+const MIN_PUBLISHED_YEAR = 1000;
+const MAX_PUBLISHED_YEAR = 2200;
+const PUBLISHED_YEAR_RANGE_CONSTRAINT = 'book_metadata_published_year_range_chk';
+const INVALID_PUBLISHED_YEAR_MESSAGE = `Invalid metadata: published year must be between ${MIN_PUBLISHED_YEAR} and ${MAX_PUBLISHED_YEAR}.`;
+const INVALID_METADATA_MESSAGE = 'Invalid metadata values for this file. Review metadata fields and try again.';
 
 type NormalizedFinalizeMetadata = {
   title: string | null;
@@ -230,7 +235,7 @@ export class BookDockFinalizeService implements OnModuleInit {
       const newName = destPath.substring(folder.path.length + 1);
       return { fileId: row.id, fileName: row.fileName, newName, success: true, bookId };
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Finalization failed';
+      const message = resolveFinalizeErrorMessage(err);
       this.logger.warn(`Finalize failed for Book Dock file ${row.id}: ${message}`);
       return { fileId: row.id, fileName: row.fileName, success: false, message };
     }
@@ -588,6 +593,13 @@ function normalizeInteger(value: unknown): number | null {
   return Math.floor(parsed);
 }
 
+function normalizePublishedYear(value: unknown): number | null {
+  const parsed = normalizeInteger(value);
+  if (parsed === null) return null;
+  if (parsed < MIN_PUBLISHED_YEAR || parsed > MAX_PUBLISHED_YEAR) return null;
+  return parsed;
+}
+
 function normalizeReal(value: unknown): number | null {
   const parsed = typeof value === 'number' ? value : typeof value === 'string' ? Number.parseFloat(value.trim()) : NaN;
   if (!Number.isFinite(parsed) || parsed <= 0) return null;
@@ -634,7 +646,7 @@ function normalizeFinalizeMetadata(meta: BookDockMetadata | null | undefined): N
     isbn10: normalizeIsbn(meta?.isbn10, 10),
     isbn13: normalizeIsbn(meta?.isbn13, 13),
     publisher: normalizeText(meta?.publisher, 500),
-    publishedYear: normalizeInteger(meta?.publishedYear),
+    publishedYear: normalizePublishedYear(meta?.publishedYear),
     language: normalizeLanguage(meta?.language),
     pageCount: normalizeInteger(meta?.pageCount),
     seriesName: normalizeText(meta?.seriesName, 500),
@@ -643,6 +655,56 @@ function normalizeFinalizeMetadata(meta: BookDockMetadata | null | undefined): N
     genres: normalizeStringArray(meta?.genres, 200),
     coverUrl: normalizeText(meta?.coverUrl),
   };
+}
+
+function resolveFinalizeErrorMessage(error: unknown): string {
+  if (isPublishedYearConstraintViolation(error)) {
+    return INVALID_PUBLISHED_YEAR_MESSAGE;
+  }
+  if (isBookMetadataConstraintViolation(error)) {
+    return INVALID_METADATA_MESSAGE;
+  }
+  if (error instanceof Error && error.message) {
+    return error.message;
+  }
+  return 'Finalization failed';
+}
+
+function isPublishedYearConstraintViolation(error: unknown): boolean {
+  for (const entry of iterateErrorChain(error)) {
+    if (entry.code === '23514') {
+      const constraint = asString(entry.constraint);
+      if (constraint === PUBLISHED_YEAR_RANGE_CONSTRAINT) return true;
+      const message = asString(entry.message);
+      if (message.includes(PUBLISHED_YEAR_RANGE_CONSTRAINT)) return true;
+    }
+  }
+  return false;
+}
+
+function isBookMetadataConstraintViolation(error: unknown): boolean {
+  for (const entry of iterateErrorChain(error)) {
+    if (entry.code !== '23514') continue;
+    const constraint = asString(entry.constraint);
+    if (constraint.startsWith('book_metadata_')) return true;
+    const message = asString(entry.message);
+    if (message.includes('book_metadata')) return true;
+  }
+  return false;
+}
+
+function* iterateErrorChain(error: unknown): Generator<Record<string, unknown>> {
+  let current: unknown = error;
+  const seen = new Set<unknown>();
+  while (current && typeof current === 'object' && !seen.has(current)) {
+    seen.add(current);
+    yield current as Record<string, unknown>;
+    current = (current as { cause?: unknown }).cause;
+  }
+}
+
+function asString(value: unknown): string {
+  return typeof value === 'string' ? value : '';
 }
 
 function mergeBookDockMetadata(

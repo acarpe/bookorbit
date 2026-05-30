@@ -421,6 +421,42 @@ describe('BookDockFinalizeService', () => {
       expect(storage.moveToPath).toHaveBeenNthCalledWith(2, '/library/new/book.epub', '/tmp/book.epub');
     });
 
+    it('returns a friendly metadata validation message when book metadata constraints fail', async () => {
+      const { service, storage, processor } = makeService();
+      vi.spyOn(service as never, 'findLibraryOrFail').mockResolvedValue({ id: 5, allowedFormats: ['epub'], fileNamingPattern: null } as never);
+      vi.spyOn(service as never, 'findFolderOrFail').mockResolvedValue({ id: 9, libraryId: 5, path: '/library' } as never);
+      vi.spyOn(service as never, 'resolveDestination').mockResolvedValue('/library/new/book.epub' as never);
+      vi.spyOn(service as never, 'findDuplicate').mockResolvedValue(null as never);
+      mockAccess.mockRejectedValueOnce(new Error('missing'));
+      mockStat.mockResolvedValueOnce({ size: 321 } as never);
+      processor.createBookRecord.mockResolvedValueOnce({ bookId: 808 });
+      const constraintError = new Error('Failed query: update "book_metadata" set ...');
+      (constraintError as Error & { cause?: unknown }).cause = {
+        code: '23514',
+        constraint: 'book_metadata_published_year_range_chk',
+      };
+      vi.spyOn(service as never, 'applyMetadata').mockRejectedValueOnce(constraintError as never);
+
+      const result = await (service as any).finalizeFile(
+        makeRow({ targetLibraryId: 5, targetFolderId: 9 }),
+        undefined,
+        undefined,
+        new Map(),
+        1,
+        true,
+      );
+
+      expect(result).toEqual(
+        expect.objectContaining({
+          success: false,
+          message: 'Invalid metadata: published year must be between 1000 and 2200.',
+        }),
+      );
+      expect(result.message).not.toContain('Failed query');
+      expect(storage.moveToPath).toHaveBeenNthCalledWith(1, '/tmp/book.epub', '/library/new/book.epub');
+      expect(storage.moveToPath).toHaveBeenNthCalledWith(2, '/library/new/book.epub', '/tmp/book.epub');
+    });
+
     it('returns success with relative newName when finalize flow completes', async () => {
       const { service, processor } = makeService();
       vi.spyOn(service as never, 'findLibraryOrFail').mockResolvedValue({ id: 5, allowedFormats: ['epub'], fileNamingPattern: null } as never);
@@ -592,6 +628,33 @@ describe('BookDockFinalizeService', () => {
     );
     expect(metadataService.replaceAuthors).toHaveBeenCalledWith(15, [{ name: 'Author A', sortName: null }]);
     expect(metadataService.replaceGenres).toHaveBeenCalledWith(15, ['Fantasy']);
+  });
+
+  it('applyMetadata nulls publishedYear when it is outside database bounds', async () => {
+    const { service, db } = makeService();
+    const updateChain = {
+      set: vi.fn(),
+      where: vi.fn().mockResolvedValue(undefined),
+    };
+    updateChain.set.mockReturnValue(updateChain);
+    db.update.mockReturnValue(updateChain);
+
+    await (service as any).applyMetadata(
+      16,
+      makeRow({
+        selectedMetadata: {
+          title: 'The Black Company',
+          publishedYear: 101,
+        } as BookDockMetadata,
+        coverPath: null,
+      }),
+    );
+
+    expect(updateChain.set).toHaveBeenCalledWith(
+      expect.objectContaining({
+        publishedYear: null,
+      }),
+    );
   });
 
   it('applyMetadata prefers selected coverUrl and skips extracted cover copy when download succeeds', async () => {

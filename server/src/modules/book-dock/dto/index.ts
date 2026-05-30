@@ -6,6 +6,8 @@ import {
   IsObject,
   IsOptional,
   IsString,
+  Max,
+  Min,
   ValidateIf,
   ValidateNested,
   type ValidationArguments,
@@ -15,7 +17,6 @@ import {
   ValidatorConstraint,
 } from 'class-validator';
 import { Type } from 'class-transformer';
-import type { BookDockMetadata } from '@bookorbit/types';
 
 @ValidatorConstraint({ name: 'hasCompleteDefaultDestination', async: false })
 class HasCompleteDefaultDestinationConstraint implements ValidatorConstraintInterface {
@@ -43,10 +44,28 @@ function HasCompleteDefaultDestination(options?: ValidationOptions) {
   };
 }
 
+export class BookDockMetadataFieldsDto {
+  @IsOptional() @IsString() title?: string;
+  @IsOptional() @IsString() subtitle?: string;
+  @IsOptional() @IsString() description?: string;
+  @IsOptional() @IsString() publisher?: string;
+  @IsOptional() @IsString() language?: string;
+  @IsOptional() @IsString() isbn10?: string;
+  @IsOptional() @IsString() isbn13?: string;
+  @IsOptional() @IsString() seriesName?: string;
+  @IsOptional() @IsString() coverUrl?: string;
+  @IsOptional() @IsInt() @Min(1000) @Max(2200) publishedYear?: number;
+  @IsOptional() @IsNumber() pageCount?: number;
+  @IsOptional() @IsNumber() seriesIndex?: number;
+  @IsOptional() @IsArray() @IsString({ each: true }) authors?: string[];
+  @IsOptional() @IsArray() @IsString({ each: true }) genres?: string[];
+}
+
 export class UpdateBookDockFileDto {
   @IsOptional()
-  @IsObject()
-  selectedMetadata?: Partial<BookDockMetadata>;
+  @ValidateNested()
+  @Type(() => BookDockMetadataFieldsDto)
+  selectedMetadata?: BookDockMetadataFieldsDto;
 
   @IsOptional()
   @ValidateIf((_, value) => value !== null)
@@ -270,23 +289,6 @@ export class SelectionSummaryDto {
   @IsOptional()
   @IsString()
   search?: string;
-}
-
-export class BookDockMetadataFieldsDto {
-  @IsOptional() @IsString() title?: string;
-  @IsOptional() @IsString() subtitle?: string;
-  @IsOptional() @IsString() description?: string;
-  @IsOptional() @IsString() publisher?: string;
-  @IsOptional() @IsString() language?: string;
-  @IsOptional() @IsString() isbn10?: string;
-  @IsOptional() @IsString() isbn13?: string;
-  @IsOptional() @IsString() seriesName?: string;
-  @IsOptional() @IsString() coverUrl?: string;
-  @IsOptional() @IsNumber() publishedYear?: number;
-  @IsOptional() @IsNumber() pageCount?: number;
-  @IsOptional() @IsNumber() seriesIndex?: number;
-  @IsOptional() @IsArray() @IsString({ each: true }) authors?: string[];
-  @IsOptional() @IsArray() @IsString({ each: true }) genres?: string[];
 }
 
 export class BulkEditBookDockDto {
