@@ -1,66 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref, watch } from 'vue'
+import { BACKGROUND_IDS, type Background, ACCENT_IDS, type Accent, RADIUS_IDS, type Radius, THEME_IDS, type Theme } from '@bookorbit/types'
 import { storage } from '@/services/storage'
-
-type Theme = 'light' | 'dark'
-export type Accent =
-  | 'grey'
-  // Vivid — rainbow order
-  | 'rose'
-  | 'orange'
-  | 'amber'
-  | 'yellow'
-  | 'lime'
-  | 'green'
-  | 'emerald'
-  | 'teal'
-  | 'cyan'
-  | 'sky'
-  | 'blue'
-  | 'indigo'
-  | 'violet'
-  | 'fuchsia'
-  | 'pink'
-  // Pastel — rainbow order
-  | 'white'
-  | 'coral'
-  | 'peach'
-  | 'butter'
-  | 'lemon'
-  | 'celadon'
-  | 'sage'
-  | 'mint'
-  | 'seafoam'
-  | 'powder'
-  | 'mist'
-  | 'periwinkle'
-  | 'wisteria'
-  | 'lavender'
-  | 'orchid'
-  | 'blush'
-export type Radius = 'sharp' | 'default' | 'rounded' | 'pill'
-export type Background =
-  | 'none'
-  | 'dots'
-  | 'cross'
-  | 'terminal'
-  | 'millimeter'
-  | 'blueprint'
-  | 'brushed'
-  | 'scanlines'
-  | 'carbon'
-  | 'vinyl'
-  | 'perforated'
-  | 'aurora'
-  | 'horizon'
-  | 'glow'
-  | 'mesh'
-  | 'elevation'
-  | 'prism'
-  | 'spectrum'
-  | 'spectrum-x'
-  | 'spectrum-plus'
-  | 'eclipse'
 
 export const ACCENT_VIVID: { id: Accent; label: string; color: string }[] = [
   { id: 'white', label: 'White', color: '#fafafa' },
@@ -140,13 +81,11 @@ export const BACKGROUND_OPTIONS: { id: Background; label: string; cssClass: stri
   { id: 'eclipse', label: 'Eclipse', cssClass: 'pattern-eclipse' },
 ]
 
-const ACCENT_IDS = ACCENT_OPTIONS.map((a) => a.id)
-const RADIUS_IDS = RADIUS_OPTIONS.map((r) => r.id)
-const BACKGROUND_IDS = BACKGROUND_OPTIONS.map((b) => b.id)
 const DEFAULT_SURFACE_BRIGHTNESS = 35
 
 export const useThemeStore = defineStore('theme', () => {
-  const theme = ref<Theme>(storage.get<Theme>('theme', 'dark'))
+  const storedTheme = storage.get<Theme>('theme', 'dark')
+  const theme = ref<Theme>(THEME_IDS.includes(storedTheme) ? storedTheme : 'dark')
 
   const storedAccent = storage.get<Accent>('accent', 'blue')
   const accent = ref<Accent>(ACCENT_IDS.includes(storedAccent) ? storedAccent : 'blue')
@@ -178,8 +117,12 @@ export const useThemeStore = defineStore('theme', () => {
     document.documentElement.style.setProperty('--bg-lift', lift.toFixed(4))
   }
 
+  function setTheme(nextTheme: Theme) {
+    theme.value = nextTheme
+  }
+
   function toggleTheme() {
-    theme.value = theme.value === 'dark' ? 'light' : 'dark'
+    setTheme(theme.value === 'dark' ? 'light' : 'dark')
   }
 
   function setAccent(a: Accent) {
@@ -248,5 +191,5 @@ export const useThemeStore = defineStore('theme', () => {
     { immediate: true },
   )
 
-  return { theme, accent, radius, background, brightness, toggleTheme, setAccent, setRadius, setBackground, setBrightness }
+  return { theme, accent, radius, background, brightness, setTheme, toggleTheme, setAccent, setRadius, setBackground, setBrightness }
 })

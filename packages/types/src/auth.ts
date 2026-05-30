@@ -17,6 +17,7 @@ export type ProvisioningMethod = (typeof ProvisioningMethod)[keyof typeof Provis
 
 export interface UserSettings {
   syncReaderPreferences?: boolean;
+  syncThemePreferences?: boolean;
   statisticsConfig?: import("./statistics").StatisticsSettings;
   onboarding?: {
     tourCompleted?: boolean;

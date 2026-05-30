@@ -73,7 +73,7 @@ export interface DuplicateScanResponse {
   pageSize: number;
 }
 
-export type DuplicateScanState = 'idle' | 'computing' | 'done' | 'error';
+export type DuplicateScanState = "idle" | "computing" | "done" | "error";
 
 export interface DuplicateScanStatus {
   entityType: EntityType;

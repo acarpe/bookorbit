@@ -273,6 +273,23 @@ describe('UserService', () => {
     await expect(service.updateReaderStorageMode(99, true)).rejects.toBeInstanceOf(NotFoundException);
   });
 
+  it('updateThemeStorageMode updates syncThemePreferences when enabling sync', async () => {
+    userRepo.update.mockResolvedValue({ id: 3, settings: { syncThemePreferences: true } });
+
+    const result = await service.updateThemeStorageMode(3, true);
+
+    expect(userRepo.update).toHaveBeenCalledWith(3, { settings: { syncThemePreferences: true } });
+    expect(result).toMatchObject({ id: 3 });
+  });
+
+  it('updateThemeStorageMode updates syncThemePreferences when disabling sync', async () => {
+    userRepo.update.mockResolvedValue({ id: 3, settings: { syncThemePreferences: false } });
+
+    await service.updateThemeStorageMode(3, false);
+
+    expect(userRepo.update).toHaveBeenCalledWith(3, { settings: { syncThemePreferences: false } });
+  });
+
   it('deleteUser blocks deleting your own account', async () => {
     await expect(service.deleteUser(1, reqUser({ id: 1, isSuperuser: true }))).rejects.toBeInstanceOf(ConflictException);
   });

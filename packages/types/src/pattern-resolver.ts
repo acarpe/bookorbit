@@ -134,7 +134,10 @@ function normalizeResolverOptions(options?: PathResolverOptions): Required<PathR
 }
 
 function sanitizePathSegmentValue(value: string, replacementCharacter: "_" | "-"): string {
-  let sanitized = value.replace(INVALID_SEGMENT_CHARS_REGEX, replacementCharacter).trim().replace(/[. ]+$/g, "");
+  let sanitized = value
+    .replace(INVALID_SEGMENT_CHARS_REGEX, replacementCharacter)
+    .trim()
+    .replace(/[. ]+$/g, "");
   if (!sanitized || sanitized === "." || sanitized === "..") {
     sanitized = replacementCharacter;
   }

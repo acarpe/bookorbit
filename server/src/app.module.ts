@@ -36,6 +36,7 @@ import { MetadataModule } from './modules/metadata/metadata.module';
 import { NarratorModule } from './modules/narrator/narrator.module';
 import { ReaderPreferencesModule } from './modules/reader-preferences/reader-preferences.module';
 import { RecommendationModule } from './modules/recommendation/recommendation.module';
+import { UserPreferencesModule } from './modules/user-preferences/user-preferences.module';
 import { ScannerModule } from './modules/scanner/scanner.module';
 import { SeedModule } from './modules/seed/seed.module';
 import { EmailModule } from './modules/email/email.module';
@@ -110,6 +111,7 @@ import { HardcoverModule } from './modules/hardcover/hardcover.module';
     HealthModule,
     CbzModule,
     ReaderPreferencesModule,
+    UserPreferencesModule,
     EpubModule,
     BookDockModule,
     EmailModule,

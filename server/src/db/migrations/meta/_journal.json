@@ -64,6 +64,13 @@
       "when": 1779941161092,
       "tag": "0008_auth_refresh_rotation_metadata",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1780159365997,
+      "tag": "0009_user-preferences-theme-sync",
+      "breakpoints": true
     }
   ]
 }

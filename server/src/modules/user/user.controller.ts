@@ -37,6 +37,7 @@ import { SetContentFiltersDto } from './dto/set-content-filters.dto';
 import { UpdateMeDto } from './dto/update-me.dto';
 import { UpdateMeSettingsDto } from './dto/update-me-settings.dto';
 import { UpdateReaderStorageModeDto } from './dto/update-reader-storage-mode.dto';
+import { UpdateThemeStorageModeDto } from './dto/update-theme-storage-mode.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { UpdateSeriesCollapsePreferencesDto } from './dto/update-series-collapse-preferences.dto';
 import { MAX_USER_AVATAR_BYTES } from './user-avatar.service';
@@ -89,6 +90,13 @@ export class UserController {
   @ForbidPermission(Permission.DemoRestricted, 'Demo-restricted account cannot change reader storage mode')
   updateReaderStorageMode(@CurrentUser() user: RequestUser, @Body() dto: UpdateReaderStorageModeDto) {
     return this.userService.updateReaderStorageMode(user.id, dto.sync);
+  }
+
+  @Patch('me/theme-storage-mode')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @ForbidPermission(Permission.DemoRestricted, 'Demo-restricted account cannot change theme storage mode')
+  updateThemeStorageMode(@CurrentUser() user: RequestUser, @Body() dto: UpdateThemeStorageModeDto) {
+    return this.userService.updateThemeStorageMode(user.id, dto.sync);
   }
 
   @Patch('me/series-collapse-preferences')

@@ -26,6 +26,7 @@ describe('UserController', () => {
     updateMe: vi.fn(),
     updateMySettings: vi.fn(),
     updateReaderStorageMode: vi.fn(),
+    updateThemeStorageMode: vi.fn(),
     findById: vi.fn(),
     createUser: vi.fn(),
     updateUser: vi.fn(),
@@ -291,6 +292,25 @@ describe('UserController', () => {
     expect(meta).toEqual({
       permission: Permission.DemoRestricted,
       message: 'Demo-restricted account cannot change reader storage mode',
+    });
+  });
+
+  it('delegates theme storage mode update to updateThemeStorageMode service method', async () => {
+    userService.updateThemeStorageMode.mockResolvedValue({ id: 7, settings: { syncThemePreferences: true } });
+
+    await controller.updateThemeStorageMode({ id: 7 } as any, { sync: true } as any);
+
+    expect(userService.updateThemeStorageMode).toHaveBeenCalledWith(7, true);
+  });
+
+  it('updateThemeStorageMode has ForbidPermission DemoRestricted metadata', () => {
+    const meta = Reflect.getMetadata(FORBIDDEN_PERMISSION_KEY, UserController.prototype.updateThemeStorageMode) as {
+      permission: Permission;
+      message?: string;
+    };
+    expect(meta).toEqual({
+      permission: Permission.DemoRestricted,
+      message: 'Demo-restricted account cannot change theme storage mode',
     });
   });
 });
