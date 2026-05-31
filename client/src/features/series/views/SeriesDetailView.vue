@@ -577,6 +577,7 @@ watch(
           :books="books"
           :cover-size="seriesBooksCoverSize"
           :grid-gap="gridGap"
+          :virtualized="false"
           @action="handleBookAction"
           @update:book="handleTableBookUpdate"
         />

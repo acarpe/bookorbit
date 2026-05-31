@@ -17,11 +17,13 @@ const props = withDefaults(
     selectionMode?: boolean
     isSelected?: (bookId: number) => boolean
     newBookIds?: Set<number>
+    virtualized?: boolean
   }>(),
   {
     selectionMode: false,
     isSelected: undefined,
     newBookIds: () => new Set<number>(),
+    virtualized: true,
   },
 )
 
@@ -80,11 +82,32 @@ const scrollerStyle = computed(() => ({
   '--book-grid-gap': `${gapPx.value}px`,
   '--book-grid-height': `${cardHeight.value}px`,
 }))
+
+const staticGridStyle = computed(() => ({
+  gap: `${gapPx.value}px`,
+  gridTemplateColumns: `repeat(auto-fill, minmax(min(100%, ${coverPx.value}px), 1fr))`,
+}))
 </script>
 
 <template>
   <div ref="containerRef" class="w-full">
+    <div v-if="!virtualized" class="grid w-full max-w-full items-start" :style="staticGridStyle" data-testid="book-grid-static">
+      <div v-for="book in books" :key="book.id" class="min-w-0" :class="{ 'book-grid-cell--new': props.newBookIds.has(book.id) }">
+        <CollapsedSeriesCard v-if="book.collapsedSeries" :book="book" />
+        <BookCoverCard
+          v-else
+          :book="book"
+          :selection-mode="selectionMode"
+          :selected="isSelected?.(book.id) ?? false"
+          @action="emit('action', book, $event)"
+          @select="emit('select', book.id, $event)"
+          @update:book="emit('update:book', $event)"
+        />
+      </div>
+    </div>
+
     <RecycleScroller
+      v-else
       :items="books"
       key-field="id"
       page-mode
