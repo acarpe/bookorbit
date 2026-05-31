@@ -3,45 +3,7 @@ import { ref, watch } from 'vue'
 import { BACKGROUND_IDS, type Background, ACCENT_IDS, type Accent, RADIUS_IDS, type Radius, THEME_IDS, type Theme } from '@bookorbit/types'
 import { storage } from '@/services/storage'
 
-export const ACCENT_VIVID: { id: Accent; label: string; color: string }[] = [
-  { id: 'white', label: 'White', color: '#fafafa' },
-  { id: 'rose', label: 'Rose', color: '#e11d48' },
-  { id: 'orange', label: 'Orange', color: '#ea580c' },
-  { id: 'amber', label: 'Amber', color: '#d97706' },
-  { id: 'yellow', label: 'Yellow', color: '#ca8a04' },
-  { id: 'lime', label: 'Lime', color: '#65a30d' },
-  { id: 'green', label: 'Green', color: '#16a34a' },
-  { id: 'emerald', label: 'Emerald', color: '#059669' },
-  { id: 'teal', label: 'Teal', color: '#0d9488' },
-  { id: 'cyan', label: 'Cyan', color: '#0891b2' },
-  { id: 'sky', label: 'Sky', color: '#0284c7' },
-  { id: 'blue', label: 'Blue', color: '#2563eb' },
-  { id: 'indigo', label: 'Indigo', color: '#4338ca' },
-  { id: 'violet', label: 'Violet', color: '#7c3aed' },
-  { id: 'fuchsia', label: 'Fuchsia', color: '#c026d3' },
-  { id: 'pink', label: 'Pink', color: '#db2777' },
-]
-
-export const ACCENT_PASTEL: { id: Accent; label: string; color: string }[] = [
-  { id: 'grey', label: 'Grey', color: '#737373' },
-  { id: 'coral', label: 'Coral', color: '#e8968a' },
-  { id: 'peach', label: 'Peach', color: '#e8b08a' },
-  { id: 'butter', label: 'Butter', color: '#d4be7a' },
-  { id: 'lemon', label: 'Lemon', color: '#d4d07a' },
-  { id: 'celadon', label: 'Celadon', color: '#a0c8a0' },
-  { id: 'sage', label: 'Sage', color: '#92ad91' },
-  { id: 'mint', label: 'Mint', color: '#96c8b8' },
-  { id: 'seafoam', label: 'Seafoam', color: '#96c4bc' },
-  { id: 'powder', label: 'Powder', color: '#90b8d0' },
-  { id: 'mist', label: 'Mist', color: '#8aacc8' },
-  { id: 'periwinkle', label: 'Periwinkle', color: '#9fa8d8' },
-  { id: 'wisteria', label: 'Wisteria', color: '#b0a0d0' },
-  { id: 'lavender', label: 'Lavender', color: '#b8a8d4' },
-  { id: 'orchid', label: 'Orchid', color: '#c8a8c8' },
-  { id: 'blush', label: 'Blush', color: '#c8a0b4' },
-]
-
-export const ACCENT_OPTIONS = [...ACCENT_VIVID, ...ACCENT_PASTEL]
+export { ACCENT_VIVID, ACCENT_PASTEL, ACCENT_OPTIONS } from '@/lib/theme-accent-meta'
 
 export const RADIUS_OPTIONS: { id: Radius; label: string }[] = [
   { id: 'sharp', label: 'Sharp' },

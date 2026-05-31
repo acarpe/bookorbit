@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { computed } from 'vue'
+import { getActivePinia, storeToRefs } from 'pinia'
 import { bookCoverPalette } from '../lib/book-cover'
+import { useThemeStore } from '@/stores/theme'
 
 const props = defineProps<{
   title: string | null
@@ -9,7 +11,15 @@ const props = defineProps<{
   seed: string
 }>()
 
-const p = computed(() => bookCoverPalette(props.seed))
+const activePinia = getActivePinia()
+const themeRefs = activePinia ? storeToRefs(useThemeStore(activePinia)) : null
+
+const p = computed(() =>
+  bookCoverPalette(props.seed, {
+    accent: themeRefs?.accent.value,
+    isDark: themeRefs?.theme.value === 'dark',
+  }),
+)
 
 // Portrait for ebook (200×300), square for audiobook (300×300).
 // The container background uses the same palette, so any letterboxing from
