@@ -38,6 +38,35 @@ describe('BookMetadataLockService', () => {
     await expect(service.assertManualUpdateAllowed(12, dto)).resolves.toBeUndefined();
   });
 
+  it('allows metadata changes when the same request newly locks the targeted field', async () => {
+    const { service } = makeService([]);
+
+    await expect(service.assertManualUpdateAllowedForLockTransition(12, { goodreadsId: 'manual-id' }, ['goodreadsId'])).resolves.toBeUndefined();
+  });
+
+  it('allows metadata changes when the same request unlocks the targeted field', async () => {
+    const { service } = makeService(['publisher']);
+
+    await expect(service.assertManualUpdateAllowedForLockTransition(12, { publisher: 'Unlocked Publisher' }, [])).resolves.toBeUndefined();
+  });
+
+  it('rejects metadata changes for fields that stay locked across the request', async () => {
+    const { service } = makeService(['title', 'publisher']);
+
+    await expect(service.assertManualUpdateAllowedForLockTransition(12, { title: 'Still Locked' }, ['title'])).rejects.toThrow(
+      'Metadata fields are locked: title',
+    );
+  });
+
+  it('passes transaction executors through lock replacement', async () => {
+    const { service, lockRepo } = makeService();
+    const tx = { id: 'tx' };
+
+    await service.replaceLockedFields(12, ['cover'], tx as never);
+
+    expect(lockRepo.replaceLockedFields).toHaveBeenCalledWith(12, ['cover'], tx);
+  });
+
   it('filters automated dto updates and preserves unlocked chapters', async () => {
     const { service } = makeService(['title', 'narrators', 'comicIssueNumber', 'googleBooksId']);
 

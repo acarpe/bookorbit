@@ -43,6 +43,7 @@ import { ExportBooksDto } from './dto/export-books.dto';
 import { MetadataExportDto } from './dto/metadata-export.dto';
 import { SaveProgressDto } from './dto/save-progress.dto';
 import { UpsertAudioProgressDto } from './dto/upsert-audio-progress.dto';
+import { UpdateBookMetadataAndLocksDto } from './dto/update-book-metadata-and-locks.dto';
 import { UpdateBookMetadataDto } from './dto/update-book-metadata.dto';
 import { SearchBooksDto } from './dto/search-books.dto';
 import { SetStatusDto } from '../user-book-status/dto/set-status.dto';
@@ -506,6 +507,18 @@ export class BookController {
   })
   updateMetadata(@Param('id', ParseIntPipe) id: number, @Body() dto: UpdateBookMetadataDto, @CurrentUser() user: RequestUser) {
     return this.bookService.updateMetadata(id, dto, user);
+  }
+
+  @Patch(':id/metadata-and-locks')
+  @RequirePermission(Permission.LibraryEditMetadata)
+  @Auditable({
+    action: AuditAction.BookMetadataUpdate,
+    resource: AuditResource.Book,
+    getResourceId: (req) => parseInt(req.params['id'] as string, 10),
+    description: (req) => `Updated metadata and locks for book #${req.params['id']}`,
+  })
+  updateMetadataAndLocks(@Param('id', ParseIntPipe) id: number, @Body() dto: UpdateBookMetadataAndLocksDto, @CurrentUser() user: RequestUser) {
+    return this.bookService.updateMetadataAndLocks(id, dto, user);
   }
 
   @Patch(':id/metadata-locks')

@@ -175,6 +175,7 @@ function makeService() {
     normalizeLockedFields: vi.fn().mockImplementation((fields: string[] | null | undefined) => fields ?? []),
     isFieldLocked: vi.fn().mockResolvedValue(false),
     assertManualUpdateAllowed: vi.fn().mockResolvedValue(undefined),
+    assertManualUpdateAllowedForLockTransition: vi.fn().mockResolvedValue(undefined),
     filterResolvedMetadata: vi.fn().mockImplementation((_bookId: number, resolved: unknown, providerIds: unknown) =>
       Promise.resolve({
         resolved,
@@ -1157,6 +1158,78 @@ describe('BookService', () => {
       await expect(service.updateMetadata(5, { title: 'Locked Title' }, user)).rejects.toThrow(error);
 
       expect(bookRepo.withTransaction).not.toHaveBeenCalled();
+    });
+
+    it('updateMetadataAndLocks persists edited metadata and final locks in one transaction', async () => {
+      const { service, bookRepo, bookMetadataLockService } = makeService();
+      const user = makeUser();
+      const tx = { id: 'tx-locks' };
+      vi.spyOn(service, 'verifyBookAccess').mockResolvedValue(undefined);
+      vi.spyOn(service, 'getDetail').mockResolvedValue({ id: 5, lockedFields: ['goodreadsId'] } as never);
+      bookRepo.withTransaction.mockImplementation(async (callback: (value: unknown) => Promise<unknown>) => callback(tx));
+      bookMetadataLockService.replaceLockedFields.mockResolvedValue(['goodreadsId']);
+
+      const result = await service.updateMetadataAndLocks(
+        5,
+        {
+          metadata: { goodreadsId: 'manual-goodreads-id' },
+          lockedFields: ['goodreadsId'],
+        },
+        user,
+      );
+
+      expect(bookMetadataLockService.assertManualUpdateAllowedForLockTransition).toHaveBeenCalledWith(5, { goodreadsId: 'manual-goodreads-id' }, [
+        'goodreadsId',
+      ]);
+      expect(bookRepo.updateMetadataFields).toHaveBeenCalledWith(
+        5,
+        expect.objectContaining({
+          goodreadsId: 'manual-goodreads-id',
+          updatedAt: expect.any(Date),
+        }),
+        tx,
+      );
+      expect(bookMetadataLockService.replaceLockedFields).toHaveBeenCalledWith(5, ['goodreadsId'], tx);
+      expect(result).toEqual({ id: 5, lockedFields: ['goodreadsId'] });
+    });
+
+    it('updateMetadataAndLocks rejects fields locked before and after without opening a transaction', async () => {
+      const { service, bookRepo, bookMetadataLockService } = makeService();
+      const user = makeUser();
+      const error = new ConflictException('Metadata fields are locked: title');
+      vi.spyOn(service, 'verifyBookAccess').mockResolvedValue(undefined);
+      bookMetadataLockService.assertManualUpdateAllowedForLockTransition.mockRejectedValue(error);
+
+      await expect(
+        service.updateMetadataAndLocks(
+          5,
+          {
+            metadata: { title: 'Blocked Title' },
+            lockedFields: ['title'],
+          },
+          user,
+        ),
+      ).rejects.toThrow(error);
+
+      expect(bookRepo.withTransaction).not.toHaveBeenCalled();
+      expect(bookMetadataLockService.replaceLockedFields).not.toHaveBeenCalled();
+    });
+
+    it('updateMetadataAndLocks can persist locks without scheduling metadata side effects', async () => {
+      const { service, bookRepo, bookMetadataLockService, embedder, fileWriteService, fileRenameService, scoreService } = makeService();
+      const user = makeUser();
+      vi.spyOn(service, 'verifyBookAccess').mockResolvedValue(undefined);
+      vi.spyOn(service, 'getDetail').mockResolvedValue({ id: 5, lockedFields: ['title'] } as never);
+      bookMetadataLockService.replaceLockedFields.mockResolvedValue(['title']);
+
+      await service.updateMetadataAndLocks(5, { metadata: {}, lockedFields: ['title'] }, user);
+
+      expect(bookRepo.updateMetadataFields).not.toHaveBeenCalled();
+      expect(bookMetadataLockService.replaceLockedFields).toHaveBeenCalledWith(5, ['title'], expect.anything());
+      expect(embedder.embedBook).not.toHaveBeenCalled();
+      expect(fileWriteService.scheduleWrite).not.toHaveBeenCalled();
+      expect(fileRenameService.scheduleRename).not.toHaveBeenCalled();
+      expect(scoreService.calculateAndSave).not.toHaveBeenCalled();
     });
 
     it('updateMetadata does not clear omitted scalar fields on transformed dto instances', async () => {

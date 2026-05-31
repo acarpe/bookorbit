@@ -64,9 +64,13 @@ export class BookMetadataLockService {
     return fields.includes(field);
   }
 
-  async replaceLockedFields(bookId: number, lockedFields: readonly string[]): Promise<BookMetadataLockField[]> {
+  async replaceLockedFields(
+    bookId: number,
+    lockedFields: readonly string[],
+    executor?: Parameters<BookMetadataLockRepository['replaceLockedFields']>[2],
+  ): Promise<BookMetadataLockField[]> {
     const normalized = this.normalizeLockedFields(lockedFields);
-    await this.lockRepo.replaceLockedFields(bookId, normalized);
+    await this.lockRepo.replaceLockedFields(bookId, normalized, executor);
     return normalized;
   }
 
@@ -107,6 +111,17 @@ export class BookMetadataLockService {
 
   async assertManualUpdateAllowed(bookId: number, dto: UpdateBookMetadataDto): Promise<void> {
     await this.assertFieldsUnlocked(bookId, this.getFieldsTargetedByBookUpdate(dto));
+  }
+
+  async assertManualUpdateAllowedForLockTransition(bookId: number, dto: UpdateBookMetadataDto, nextLockedFields: readonly string[]): Promise<void> {
+    const currentlyLocked = new Set(await this.getLockedFields(bookId));
+    const nextLocked = new Set(this.normalizeLockedFields(nextLockedFields));
+    const lockedBeforeAndAfter = [...currentlyLocked].filter((field) => nextLocked.has(field));
+    const targetedFields = this.getFieldsTargetedByBookUpdate(dto);
+    const blockedFields = targetedFields.filter((field) => lockedBeforeAndAfter.includes(field));
+    if (blockedFields.length === 0) return;
+
+    throw new ConflictException(`Metadata fields are locked: ${blockedFields.join(', ')}`);
   }
 
   async filterAutomatedBookUpdate(

@@ -120,4 +120,37 @@ describe('useMetadataLocks', () => {
     expect(result).toBeNull()
     expect(error.value).toBe('HTTP 409')
   })
+
+  it('stages lock changes without calling the API in deferred mode', async () => {
+    const { load, toggle, isLocked, locksDirty } = useMetadataLocks({ deferred: true })
+    load(makeBook())
+
+    await toggle(1, 'goodreadsId')
+
+    expect(apiMock).not.toHaveBeenCalled()
+    expect(isLocked('goodreadsId')).toBe(true)
+    expect(locksDirty.value).toBe(true)
+  })
+
+  it('resets deferred lock changes to the persisted lock state', async () => {
+    const { load, toggle, reset, lockedFields, locksDirty } = useMetadataLocks({ deferred: true })
+    load(makeBook({ lockedFields: ['title'] }))
+
+    await toggle(1, 'goodreadsId')
+    reset()
+
+    expect(lockedFields.value).toEqual(['title'])
+    expect(locksDirty.value).toBe(false)
+  })
+
+  it('marks deferred lock changes as persisted after a successful combined save', async () => {
+    const { load, toggle, markPersisted, lockedFields, locksDirty } = useMetadataLocks({ deferred: true })
+    load(makeBook())
+
+    await toggle(1, 'title')
+    markPersisted(['title'])
+
+    expect(lockedFields.value).toEqual(['title'])
+    expect(locksDirty.value).toBe(false)
+  })
 })

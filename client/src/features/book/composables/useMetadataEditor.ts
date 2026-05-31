@@ -1,6 +1,6 @@
 import { computed, reactive, ref } from 'vue'
 import { api } from '@/lib/api'
-import { FORMAT_TO_GROUP, type BookDetail } from '@bookorbit/types'
+import { FORMAT_TO_GROUP, type BookDetail, type BookMetadataLockField } from '@bookorbit/types'
 
 const ROOT_FIELDS = [
   'title',
@@ -181,14 +181,18 @@ export function useMetadataEditor() {
     return payload
   }
 
-  async function save(bookId: number): Promise<BookDetail | null> {
+  async function save(
+    bookId: number,
+    options: { lockedFields?: readonly BookMetadataLockField[]; saveLocks?: boolean } = {},
+  ): Promise<BookDetail | null> {
     saving.value = true
     error.value = null
     try {
-      const res = await api(`/api/v1/books/${bookId}/metadata`, {
+      const metadata = buildPayload()
+      const res = await api(options.saveLocks ? `/api/v1/books/${bookId}/metadata-and-locks` : `/api/v1/books/${bookId}/metadata`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(buildPayload()),
+        body: JSON.stringify(options.saveLocks ? { metadata, lockedFields: options.lockedFields ?? [] } : metadata),
       })
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
       const updated: BookDetail = await res.json()

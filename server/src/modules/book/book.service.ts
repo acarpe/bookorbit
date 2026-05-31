@@ -74,6 +74,7 @@ import type { MetadataExportColumnMode } from './dto/metadata-export-options.dto
 import { SaveProgressDto } from './dto/save-progress.dto';
 import { UpsertAudioProgressDto } from './dto/upsert-audio-progress.dto';
 import { UpdateBookMetadataDto } from './dto/update-book-metadata.dto';
+import type { UpdateBookMetadataAndLocksDto } from './dto/update-book-metadata-and-locks.dto';
 import { buildBookDetailSupplementalFields } from './utils/build-book-detail-supplemental-fields';
 import type { SetStatusDto } from '../user-book-status/dto/set-status.dto';
 
@@ -1108,94 +1109,7 @@ export class BookService {
     try {
       await this.verifyBookAccess(id, user);
       await this.bookMetadataLockService.assertManualUpdateAllowed(id, dto);
-
-      const scalarFields: Parameters<BookRepository['updateMetadataFields']>[1] = {};
-      if (dto.title !== undefined) scalarFields.title = dto.title ?? null;
-      if (dto.subtitle !== undefined) scalarFields.subtitle = dto.subtitle ?? null;
-      if (dto.description !== undefined) scalarFields.description = dto.description ?? null;
-      if (dto.publisher !== undefined) scalarFields.publisher = dto.publisher ?? null;
-      if (dto.publishedYear !== undefined) scalarFields.publishedYear = dto.publishedYear ?? null;
-      if (dto.language !== undefined) scalarFields.language = dto.language ?? null;
-      if (dto.pageCount !== undefined) scalarFields.pageCount = dto.pageCount ?? null;
-      if (dto.seriesName !== undefined) scalarFields.seriesName = dto.seriesName ?? null;
-      if (dto.seriesIndex !== undefined) scalarFields.seriesIndex = dto.seriesIndex ?? null;
-      if (dto.isbn10 !== undefined) scalarFields.isbn10 = dto.isbn10 ?? null;
-      if (dto.isbn13 !== undefined) scalarFields.isbn13 = dto.isbn13 ?? null;
-      if (dto.googleBooksId !== undefined) scalarFields.googleBooksId = dto.googleBooksId ?? null;
-      if (dto.goodreadsId !== undefined) scalarFields.goodreadsId = dto.goodreadsId ?? null;
-      if (dto.amazonId !== undefined) scalarFields.amazonId = dto.amazonId ?? null;
-      if (dto.hardcoverId !== undefined) scalarFields.hardcoverId = dto.hardcoverId ?? null;
-      if (dto.openLibraryId !== undefined) scalarFields.openLibraryId = dto.openLibraryId ?? null;
-      if (dto.itunesId !== undefined) scalarFields.itunesId = dto.itunesId ?? null;
-      if (dto.audibleId !== undefined) scalarFields.audibleId = dto.audibleId ?? null;
-      if (dto.comicvineId !== undefined) scalarFields.comicvineId = dto.comicvineId ?? null;
-      if (dto.rating !== undefined) scalarFields.rating = dto.rating ?? null;
-      if (dto.audioMetadata) {
-        if (dto.audioMetadata.durationSeconds !== undefined) scalarFields.durationSeconds = dto.audioMetadata.durationSeconds ?? null;
-        if (dto.audioMetadata.abridged !== undefined) scalarFields.abridged = dto.audioMetadata.abridged ?? false;
-        if (dto.audioMetadata.chapters !== undefined) scalarFields.chapters = dto.audioMetadata.chapters ?? null;
-      }
-
-      const scalarFieldCount = Object.keys(scalarFields).length;
-      let replacedAuthorIds: number[] = [];
-      await this.bookRepo.withTransaction(async (tx) => {
-        if (scalarFieldCount > 0) {
-          scalarFields.updatedAt = new Date();
-          await this.bookRepo.updateMetadataFields(id, scalarFields, tx);
-        }
-        this.throwIfMetadataUpdateFailpoint('afterScalarUpdate');
-
-        if (dto.comicMetadata) {
-          await this.comicMetadataService.upsert(id, dto.comicMetadata, tx);
-        }
-        this.throwIfMetadataUpdateFailpoint('afterComicMetadataUpsert');
-
-        if (dto.authors !== undefined) {
-          replacedAuthorIds = await this.metadataService.replaceAuthors(
-            id,
-            dto.authors.map((name) => ({ name, sortName: null })),
-            { executor: tx, emitEvent: false },
-          );
-        }
-        this.throwIfMetadataUpdateFailpoint('afterAuthorsReplace');
-
-        if (dto.audioMetadata?.narrators !== undefined) {
-          await this.narratorService.replaceForBook(id, dto.audioMetadata.narrators, { executor: tx });
-        }
-        this.throwIfMetadataUpdateFailpoint('afterNarratorsReplace');
-
-        if (dto.genres !== undefined) {
-          await this.metadataService.replaceGenres(id, dto.genres, { executor: tx });
-        }
-        this.throwIfMetadataUpdateFailpoint('afterGenresReplace');
-
-        if (dto.tags !== undefined) {
-          await this.metadataService.replaceTags(id, dto.tags, { executor: tx });
-        }
-        this.throwIfMetadataUpdateFailpoint('afterTagsReplace');
-        this.throwIfMetadataUpdateFailpoint('beforeTransactionCommit');
-      });
-
-      this.metadataService.emitAuthorsReplaced(id, replacedAuthorIds);
-
-      if (dto.rating !== undefined) {
-        const rating = dto.rating ?? null;
-        await this.bookRepo.bulkSetRating([id], rating, user.id);
-        this.achievementEvents?.emit(ACHIEVEMENT_EVENT_BOOK_RATING_CHANGED, {
-          userId: user.id,
-          bookIds: [id],
-          rating,
-        });
-      }
-
-      this.embedder?.embedBook(id).catch((err: Error) => this.logger.warn(`Embedding failed for book ${id}: ${err.message}`));
-      this.fileWriteService?.scheduleWrite(id, 'auto', user.id);
-      const hasRenameRelevantField = Array.from(RENAME_RELEVANT_FIELDS).some((field) => (dto as Record<string, unknown>)[field] !== undefined);
-      if (hasRenameRelevantField) {
-        this.fileRenameService?.scheduleRename(id, user.id);
-      }
-      this.scoreService.calculateAndSave(id).catch((err: Error) => this.logger.warn(`Score calculation failed for book ${id}: ${err.message}`));
-      const detail = await this.getDetail(id, user);
+      const { detail, scalarFieldCount } = await this.persistMetadataUpdate(id, dto, user);
       this.logger.log(
         `[${event}] [end] bookId=${id} durationMs=${Date.now() - startedAt} scalarFields=${scalarFieldCount} authorsUpdated=${dto.authors !== undefined} narratorsUpdated=${dto.audioMetadata?.narrators !== undefined} genresUpdated=${dto.genres !== undefined} tagsUpdated=${dto.tags !== undefined} audioMetadataUpdated=${dto.audioMetadata !== undefined} comicMetadataUpdated=${dto.comicMetadata !== undefined} - metadata update completed`,
       );
@@ -1208,6 +1122,142 @@ export class BookService {
       );
       throw err;
     }
+  }
+
+  async updateMetadataAndLocks(id: number, dto: UpdateBookMetadataAndLocksDto, user: RequestUser): Promise<BookDetailDto> {
+    const event = 'book.update_metadata_and_locks';
+    const startedAt = Date.now();
+    const metadata = dto.metadata ?? {};
+    this.logger.log(
+      `[${event}] [start] bookId=${id} userId=${user.id} metadataFields=${Object.keys(metadata).length} lockFields=${dto.lockedFields.length} - metadata and lock update started`,
+    );
+    try {
+      await this.verifyBookAccess(id, user);
+      await this.bookMetadataLockService.assertManualUpdateAllowedForLockTransition(id, metadata, dto.lockedFields);
+      const { detail, scalarFieldCount, normalizedLockedFields } = await this.persistMetadataUpdate(id, metadata, user, {
+        lockedFields: dto.lockedFields,
+      });
+      this.logger.log(
+        `[${event}] [end] bookId=${id} durationMs=${Date.now() - startedAt} scalarFields=${scalarFieldCount} lockFields=${normalizedLockedFields?.length ?? 0} - metadata and lock update completed`,
+      );
+      return detail;
+    } catch (err) {
+      const errorClass = err instanceof Error ? err.name : 'Error';
+      const errorMessage = sanitizeLogValue(err instanceof Error ? err.message : String(err));
+      this.logger.warn(
+        `[${event}] [fail] bookId=${id} userId=${user.id} durationMs=${Date.now() - startedAt} errorClass=${errorClass} error="${errorMessage}" - metadata and lock update failed`,
+      );
+      throw err;
+    }
+  }
+
+  private async persistMetadataUpdate(
+    id: number,
+    dto: UpdateBookMetadataDto,
+    user: RequestUser,
+    options: { lockedFields?: readonly string[] } = {},
+  ): Promise<{ detail: BookDetailDto; scalarFieldCount: number; normalizedLockedFields?: BookMetadataLockField[] }> {
+    const scalarFields: Parameters<BookRepository['updateMetadataFields']>[1] = {};
+    if (dto.title !== undefined) scalarFields.title = dto.title ?? null;
+    if (dto.subtitle !== undefined) scalarFields.subtitle = dto.subtitle ?? null;
+    if (dto.description !== undefined) scalarFields.description = dto.description ?? null;
+    if (dto.publisher !== undefined) scalarFields.publisher = dto.publisher ?? null;
+    if (dto.publishedYear !== undefined) scalarFields.publishedYear = dto.publishedYear ?? null;
+    if (dto.language !== undefined) scalarFields.language = dto.language ?? null;
+    if (dto.pageCount !== undefined) scalarFields.pageCount = dto.pageCount ?? null;
+    if (dto.seriesName !== undefined) scalarFields.seriesName = dto.seriesName ?? null;
+    if (dto.seriesIndex !== undefined) scalarFields.seriesIndex = dto.seriesIndex ?? null;
+    if (dto.isbn10 !== undefined) scalarFields.isbn10 = dto.isbn10 ?? null;
+    if (dto.isbn13 !== undefined) scalarFields.isbn13 = dto.isbn13 ?? null;
+    if (dto.googleBooksId !== undefined) scalarFields.googleBooksId = dto.googleBooksId ?? null;
+    if (dto.goodreadsId !== undefined) scalarFields.goodreadsId = dto.goodreadsId ?? null;
+    if (dto.amazonId !== undefined) scalarFields.amazonId = dto.amazonId ?? null;
+    if (dto.hardcoverId !== undefined) scalarFields.hardcoverId = dto.hardcoverId ?? null;
+    if (dto.openLibraryId !== undefined) scalarFields.openLibraryId = dto.openLibraryId ?? null;
+    if (dto.itunesId !== undefined) scalarFields.itunesId = dto.itunesId ?? null;
+    if (dto.audibleId !== undefined) scalarFields.audibleId = dto.audibleId ?? null;
+    if (dto.comicvineId !== undefined) scalarFields.comicvineId = dto.comicvineId ?? null;
+    if (dto.rating !== undefined) scalarFields.rating = dto.rating ?? null;
+    if (dto.audioMetadata) {
+      if (dto.audioMetadata.durationSeconds !== undefined) scalarFields.durationSeconds = dto.audioMetadata.durationSeconds ?? null;
+      if (dto.audioMetadata.abridged !== undefined) scalarFields.abridged = dto.audioMetadata.abridged ?? false;
+      if (dto.audioMetadata.chapters !== undefined) scalarFields.chapters = dto.audioMetadata.chapters ?? null;
+    }
+
+    const scalarFieldCount = Object.keys(scalarFields).length;
+    const hasMetadataUpdate = Object.keys(dto).length > 0;
+    let replacedAuthorIds: number[] = [];
+    let normalizedLockedFields: BookMetadataLockField[] | undefined;
+
+    await this.bookRepo.withTransaction(async (tx) => {
+      if (scalarFieldCount > 0) {
+        scalarFields.updatedAt = new Date();
+        await this.bookRepo.updateMetadataFields(id, scalarFields, tx);
+      }
+      this.throwIfMetadataUpdateFailpoint('afterScalarUpdate');
+
+      if (dto.comicMetadata) {
+        await this.comicMetadataService.upsert(id, dto.comicMetadata, tx);
+      }
+      this.throwIfMetadataUpdateFailpoint('afterComicMetadataUpsert');
+
+      if (dto.authors !== undefined) {
+        replacedAuthorIds = await this.metadataService.replaceAuthors(
+          id,
+          dto.authors.map((name) => ({ name, sortName: null })),
+          { executor: tx, emitEvent: false },
+        );
+      }
+      this.throwIfMetadataUpdateFailpoint('afterAuthorsReplace');
+
+      if (dto.audioMetadata?.narrators !== undefined) {
+        await this.narratorService.replaceForBook(id, dto.audioMetadata.narrators, { executor: tx });
+      }
+      this.throwIfMetadataUpdateFailpoint('afterNarratorsReplace');
+
+      if (dto.genres !== undefined) {
+        await this.metadataService.replaceGenres(id, dto.genres, { executor: tx });
+      }
+      this.throwIfMetadataUpdateFailpoint('afterGenresReplace');
+
+      if (dto.tags !== undefined) {
+        await this.metadataService.replaceTags(id, dto.tags, { executor: tx });
+      }
+      this.throwIfMetadataUpdateFailpoint('afterTagsReplace');
+
+      if (options.lockedFields !== undefined) {
+        normalizedLockedFields = await this.bookMetadataLockService.replaceLockedFields(id, options.lockedFields, tx);
+      }
+
+      this.throwIfMetadataUpdateFailpoint('beforeTransactionCommit');
+    });
+
+    if (dto.authors !== undefined) {
+      this.metadataService.emitAuthorsReplaced(id, replacedAuthorIds);
+    }
+
+    if (dto.rating !== undefined) {
+      const rating = dto.rating ?? null;
+      await this.bookRepo.bulkSetRating([id], rating, user.id);
+      this.achievementEvents?.emit(ACHIEVEMENT_EVENT_BOOK_RATING_CHANGED, {
+        userId: user.id,
+        bookIds: [id],
+        rating,
+      });
+    }
+
+    if (hasMetadataUpdate) {
+      this.embedder?.embedBook(id).catch((err: Error) => this.logger.warn(`Embedding failed for book ${id}: ${err.message}`));
+      this.fileWriteService?.scheduleWrite(id, 'auto', user.id);
+      const hasRenameRelevantField = Array.from(RENAME_RELEVANT_FIELDS).some((field) => (dto as Record<string, unknown>)[field] !== undefined);
+      if (hasRenameRelevantField) {
+        this.fileRenameService?.scheduleRename(id, user.id);
+      }
+      this.scoreService.calculateAndSave(id).catch((err: Error) => this.logger.warn(`Score calculation failed for book ${id}: ${err.message}`));
+    }
+
+    const detail = await this.getDetail(id, user);
+    return { detail, scalarFieldCount, normalizedLockedFields };
   }
 
   async updateMetadataLocks(id: number, lockedFields: string[], user: RequestUser): Promise<BookDetailDto> {

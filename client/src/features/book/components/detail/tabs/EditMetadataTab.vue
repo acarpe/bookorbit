@@ -80,13 +80,16 @@ const {
   updating: updatingLocks,
   error: lockError,
   areAllLocked,
+  locksDirty,
   load: loadLocks,
+  reset: resetLocks,
+  markPersisted: markLocksPersisted,
   isLocked,
   isUpdating: isUpdatingLock,
   toggle,
   lockAll,
   unlockAll,
-} = useMetadataLocks()
+} = useMetadataLocks({ deferred: true })
 const { search: searchAuthors } = useAuthorSearch()
 const { search: searchNarrators } = useNarratorSearch()
 const { search: searchGenres } = useGenreSearch()
@@ -142,14 +145,25 @@ watch(
 
 const combinedError = computed(() => lockError.value ?? error.value)
 const hasLockedFields = computed(() => lockedFields.value.length > 0)
+const hasPendingChanges = computed(() => isDirty.value || locksDirty.value)
 
 async function submit() {
   if (coverPanel.value?.hasPending) {
     const ok = await coverPanel.value.confirm()
     if (ok) emit('coverChanged', 'custom')
   }
-  const updated = await save(props.book.id)
-  if (updated) emit('saved', updated)
+  const shouldSaveLocks = locksDirty.value
+  const updated = await save(props.book.id, { saveLocks: shouldSaveLocks, lockedFields: lockedFields.value })
+  if (updated) {
+    markLocksPersisted(updated.lockedFields)
+    emit('saved', updated)
+    if (shouldSaveLocks) emit('locksChanged', updated.lockedFields)
+  }
+}
+
+function handleReset() {
+  reset()
+  resetLocks()
 }
 
 const hoverRating = ref<number | null>(null)
@@ -391,8 +405,7 @@ onBeforeUnmount(() => {
 })
 
 async function handleLockToggle(field: BookMetadataLockField) {
-  const updated = await toggle(props.book.id, field)
-  if (updated) emit('locksChanged', updated.lockedFields)
+  await toggle(props.book.id, field)
 }
 
 function handleCoverLockToggle() {
@@ -400,13 +413,11 @@ function handleCoverLockToggle() {
 }
 
 async function handleLockAll() {
-  const updated = await lockAll(props.book.id)
-  if (updated) emit('locksChanged', updated.lockedFields)
+  await lockAll(props.book.id)
 }
 
 async function handleUnlockAll() {
-  const updated = await unlockAll(props.book.id)
-  if (updated) emit('locksChanged', updated.lockedFields)
+  await unlockAll(props.book.id)
 }
 
 function handleCoverChanged(source: 'extracted' | 'custom' | null) {
@@ -530,15 +541,15 @@ function handleCoverChanged(source: 'extracted' | 'custom' | null) {
 
           <button
             class="flex items-center gap-1.5 h-8 px-2.5 sm:px-3 rounded-lg border border-input bg-background text-sm hover:bg-muted transition-colors disabled:opacity-40"
-            :disabled="!isDirty || saving"
-            @click="reset"
+            :disabled="!hasPendingChanges || saving"
+            @click="handleReset"
           >
             <X class="size-3.5" />
             Cancel
           </button>
           <button
             class="flex items-center gap-1.5 h-8 px-2.5 sm:px-3 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors disabled:opacity-40"
-            :disabled="!isDirty || saving"
+            :disabled="!hasPendingChanges || saving"
             @click="submit"
           >
             <Loader2 v-if="saving" class="size-3.5 animate-spin" />
@@ -1073,15 +1084,15 @@ function handleCoverChanged(source: 'extracted' | 'custom' | null) {
       >
         <button
           class="flex items-center gap-1.5 h-9 px-4 rounded-lg border border-input bg-background text-sm hover:bg-muted transition-colors disabled:opacity-40"
-          :disabled="!isDirty || saving"
-          @click="reset"
+          :disabled="!hasPendingChanges || saving"
+          @click="handleReset"
         >
           <X class="size-3.5" />
           Cancel
         </button>
         <button
           class="flex flex-1 items-center justify-center gap-1.5 h-9 px-4 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors disabled:opacity-40"
-          :disabled="!isDirty || saving"
+          :disabled="!hasPendingChanges || saving"
           @click="submit"
         >
           <Loader2 v-if="saving" class="size-3.5 animate-spin" />
