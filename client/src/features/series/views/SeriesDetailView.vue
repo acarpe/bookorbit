@@ -8,6 +8,7 @@ import type { BookCard, BookDetail, SortSpec } from '@bookorbit/types'
 import VirtualBookGrid from '@/features/book/components/VirtualBookGrid.vue'
 import BookListRow from '@/features/book/components/BookListRow.vue'
 import VirtualBookTable from '@/features/book/components/VirtualBookTable.vue'
+import BookCoverArtwork from '@/features/book/components/BookCoverArtwork.vue'
 import { bookCoverStyle } from '@/features/book/lib/book-cover'
 import { useCoverVersions } from '@/features/book/composables/useCoverVersions'
 import { useDisplaySettings } from '@/composables/useDisplaySettings'
@@ -25,6 +26,7 @@ import SeriesGapBanner from '../components/SeriesGapBanner.vue'
 import { fetchSeriesBooks } from '../api/series'
 import { useSeriesDetail } from '../composables/useSeriesDetail'
 import { useCoverStack, MAX_VISIBLE as MAX_STACK_VISIBLE } from '../composables/useCoverStack'
+import { centeredBottomScaleTransform, resolveSquareCoverScale, shouldPersistCoverRatio } from '../lib/cover-scale'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import type { ColumnId } from '@/features/book/composables/useTableColumns'
 
@@ -71,6 +73,7 @@ const leadDescriptionExpanded = ref(false)
 const leadGenresExpanded = ref(false)
 const leadCoverBookIds = ref<number[]>([])
 const failedLeadCovers = ref(new Set<number>())
+const leadCoverRatios = ref(new Map<number, number>())
 const leadBook = ref<{
   id: number
   title: string | null
@@ -106,7 +109,8 @@ const hiddenLeadGenres = computed(() => {
   const totalGenres = leadBook.value?.genres.length ?? 0
   return Math.max(0, totalGenres - displayedLeadGenres.value.length)
 })
-const seriesBooksCoverSize = computed(() => Math.max(100, portraitCoverSize.value - 20))
+const SERIES_AUDIOBOOK_COVER_SCALE = 1.25
+const seriesBooksCoverSize = computed(() => Math.max(125, portraitCoverSize.value - 20))
 const leadMetaItems = computed(() => {
   if (!leadBook.value) return []
   const items: string[] = []
@@ -169,13 +173,39 @@ function onLibraryFilterChange(event: Event) {
 
 function handleLeadCoverError(bookId: number) {
   failedLeadCovers.value = new Set([...failedLeadCovers.value, bookId])
+  if (leadCoverRatios.value.has(bookId)) {
+    const nextRatios = new Map(leadCoverRatios.value)
+    nextRatios.delete(bookId)
+    leadCoverRatios.value = nextRatios
+  }
 }
+
+function handleLeadCoverLoad(bookId: number, ratio: number | null) {
+  const prev = leadCoverRatios.value.get(bookId)
+  if (!shouldPersistCoverRatio(prev, ratio)) return
+  leadCoverRatios.value = new Map(leadCoverRatios.value).set(bookId, ratio)
+}
+
+const scaledLeadCoverStyles = computed(() =>
+  leadCoverStyles.value.map((base, index) => {
+    const bookId = visibleLeadCoverBookIds.value[index]
+    const ratio = bookId == null ? null : (leadCoverRatios.value.get(bookId) ?? null)
+    const squareScale = resolveSquareCoverScale(ratio, SERIES_AUDIOBOOK_COVER_SCALE)
+    const squareTransform = centeredBottomScaleTransform(squareScale)
+    if (!squareTransform) return base
+    return {
+      ...base,
+      ...squareTransform,
+    }
+  }),
+)
 
 async function loadLeadBookPreview(preserveCurrent = false) {
   if (!seriesName.value) {
     leadBook.value = null
     leadBookError.value = null
     leadCoverBookIds.value = []
+    leadCoverRatios.value = new Map<number, number>()
     return
   }
 
@@ -186,6 +216,7 @@ async function loadLeadBookPreview(preserveCurrent = false) {
     leadBook.value = null
     leadCoverBookIds.value = []
     failedLeadCovers.value = new Set<number>()
+    leadCoverRatios.value = new Map<number, number>()
   }
   leadDescriptionExpanded.value = false
   leadGenresExpanded.value = false
@@ -384,14 +415,19 @@ watch(
                 v-for="(bookId, i) in visibleLeadCoverBookIds"
                 :key="bookId"
                 class="absolute overflow-hidden rounded-lg"
-                :style="leadCoverStyles[i] ?? {}"
+                :style="scaledLeadCoverStyles[i] ?? {}"
               >
-                <img
+                <BookCoverArtwork
                   :src="coverUrl(bookId)"
+                  :has-cover="true"
+                  :title="seriesInfo.name"
+                  :seed="`${seriesInfo.name}-${bookId}`"
                   alt=""
-                  class="h-full w-full object-cover"
+                  frame-aspect-ratio="2/3"
                   loading="lazy"
                   decoding="async"
+                  :spine="false"
+                  @load="handleLeadCoverLoad(bookId, $event)"
                   @error="handleLeadCoverError(bookId)"
                 />
               </div>
@@ -577,6 +613,7 @@ watch(
           :books="books"
           :cover-size="seriesBooksCoverSize"
           :grid-gap="gridGap"
+          :audio-cover-scale="SERIES_AUDIOBOOK_COVER_SCALE"
           :virtualized="false"
           @action="handleBookAction"
           @update:book="handleTableBookUpdate"
