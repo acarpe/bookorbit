@@ -276,7 +276,7 @@ const secondaryLabelText = computed(() => resolveSeriesLabel(gridCardSecondaryLa
 }
 
 .grid-card-label__secondary {
-  font-size: 0.625rem;
+  font-size: 0.675rem;
   line-height: 0.875rem;
   overflow: hidden;
   text-overflow: ellipsis;
