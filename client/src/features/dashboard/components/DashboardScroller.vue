@@ -2,7 +2,7 @@
 import { computed, ref, useAttrs } from 'vue'
 import { Aperture, BookMarked, ChevronLeft, ChevronRight, ListOrdered, RefreshCw, Shuffle, Sparkles } from 'lucide-vue-next'
 
-import type { BookCard, ScrollerType } from '@bookorbit/types'
+import { isAudioFormat, type BookCard, type CoverAspectRatio, type ScrollerType } from '@bookorbit/types'
 import BookCoverCard from '@/features/book/components/BookCoverCard.vue'
 import BookQuickView from '@/features/book/components/BookQuickView.vue'
 import AddToCollectionSheet from '@/features/collection/components/AddToCollectionSheet.vue'
@@ -40,6 +40,8 @@ const typeIcon = computed(() => {
 })
 
 const SKELETONS = Array.from({ length: 8 })
+const DEFAULT_COVER_WIDTH_CLASS = 'w-[120px]'
+const SQUARE_AUDIOBOOK_COVER_WIDTH_CLASS = 'w-[150px]'
 
 type BookActionType = 'quick-view' | 'edit-metadata' | 'add-to-collection' | 'delete'
 
@@ -73,6 +75,18 @@ function handleBookAction(book: BookCard, action: BookActionType) {
   if (action === 'delete') {
     promptDelete(book.id)
   }
+}
+
+function isAudiobookCard(book: BookCard): boolean {
+  return book.files.some((file) => (file.format ? isAudioFormat(file.format) : false))
+}
+
+function coverWidthClass(book: BookCard): string {
+  return isAudiobookCard(book) ? SQUARE_AUDIOBOOK_COVER_WIDTH_CLASS : DEFAULT_COVER_WIDTH_CLASS
+}
+
+function coverAspectRatio(book: BookCard): CoverAspectRatio {
+  return isAudiobookCard(book) ? '1/1' : '2/3'
 }
 </script>
 
@@ -139,15 +153,16 @@ function handleBookAction(book: BookCard, action: BookActionType) {
     </div>
 
     <!-- Books row -->
-    <div v-else ref="scrollEl" class="flex gap-5 overflow-x-auto px-5 pb-5 pt-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+    <div v-else ref="scrollEl" class="flex items-end gap-5 overflow-x-auto px-5 pb-5 pt-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
       <div
         v-for="(book, index) in books"
         :key="book.id"
-        class="w-[120px] shrink-0"
+        class="shrink-0"
+        :class="coverWidthClass(book)"
         style="animation: dashboardFadeUp 0.35s ease both"
         :style="{ animationDelay: `${index * 35}ms` }"
       >
-        <BookCoverCard :book="book" @action="handleBookAction(book, $event)" />
+        <BookCoverCard :book="book" :cover-aspect-ratio="coverAspectRatio(book)" @action="handleBookAction(book, $event)" />
       </div>
     </div>
   </section>

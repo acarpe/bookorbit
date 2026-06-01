@@ -382,7 +382,7 @@ watch(
 </script>
 
 <template>
-  <main class="flex-1 overflow-y-auto p-4 md:p-6">
+  <main class="flex-1 overflow-y-auto py-2">
     <div class="mb-4">
       <button class="flex items-center gap-1 text-sm text-muted-foreground transition-colors hover:text-foreground" @click="goBack">
         <ChevronLeft :size="16" />
@@ -462,7 +462,7 @@ watch(
                 @click="editSeriesMetadata"
               >
                 <Pencil :size="14" />
-                {{ openingSeriesEditor ? 'Preparing editor...' : 'Edit Series Metadata' }}
+                {{ openingSeriesEditor ? 'Preparing editor...' : 'Edit Metadata' }}
               </button>
             </div>
 
@@ -538,7 +538,7 @@ watch(
       <!-- Books section -->
       <section v-if="seriesInfo" class="rounded-lg border border-border/70 bg-card/60 p-3">
         <div
-          class="sticky top-0 z-20 -mx-3 mb-3 border-b border-border/60 bg-card/92 px-3 pb-3 pt-2 backdrop-blur supports-[backdrop-filter]:bg-card/78"
+          class="sticky top-0 z-20 -mx-3 mb-3 border-b border-border/60 bg-card/92 px-3 pb-3 pt-1 backdrop-blur supports-backdrop-filter:bg-card/78"
         >
           <div class="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
             <h2 class="text-sm font-semibold text-foreground">Books</h2>

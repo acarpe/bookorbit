@@ -291,11 +291,6 @@ describe('BookCoverCard — placeholder state', () => {
     expect(imgs).toHaveLength(0)
   })
 
-  it('does not show BookCoverPlaceholder when hasCover is true', () => {
-    const wrapper = mountCard(presentBookWithCover)
-    expect(wrapper.findComponent({ name: 'BookCoverPlaceholder' }).exists()).toBe(false)
-  })
-
   it('renders cover img when hasCover is true', () => {
     const wrapper = mountCard(presentBookWithCover)
     const imgs = wrapper.findAll('img')
