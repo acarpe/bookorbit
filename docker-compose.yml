@@ -26,13 +26,13 @@ services:
       PUID: ${PUID:-1000}
       PGID: ${PGID:-1000}
       NODE_MAX_OLD_SPACE_SIZE: ${NODE_MAX_OLD_SPACE_SIZE:-2048}
+      BOOK_DOCK_PATH: ${BOOK_DOCK_PATH:-}
     depends_on:
       postgres:
         condition: service_healthy
     volumes:
       - ${BOOKS_HOST_PATH:-./books}:/books
       - ./data/app:/data
-      - ${BOOK_DROP_HOST_PATH:-./data/app/book-dock}:/data/book-dock
     read_only: true
     tmpfs:
       - /tmp

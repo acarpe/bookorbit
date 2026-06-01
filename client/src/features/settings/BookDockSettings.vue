@@ -169,9 +169,7 @@ async function onMetadataModeChange(event: Event) {
             >{{ bookDockPath }}</code
           >
           <p class="settings-hint mt-2">
-            To use a custom host path, set <code class="text-xs font-mono">BOOK_DROP_HOST_PATH</code> in your
-            <code class="text-xs font-mono">.env</code> file and add the corresponding volume to
-            <code class="text-xs font-mono">docker-compose.yml</code>. The path shown above is the container-internal path to bind-mount.
+            To change this path, set <code class="text-xs font-mono">BOOK_DOCK_PATH</code> in your <code class="text-xs font-mono">.env</code> file.
           </p>
         </div>
       </div>

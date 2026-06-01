@@ -24,9 +24,9 @@ import { isPrimaryFormat } from '../scanner/lib/classify';
 import { waitForStability } from '../scanner/lib/stability';
 import { BookDockWatcherService } from './book-dock-watcher.service';
 
-function makeService() {
+function makeService(bookDockPath = '/data/book-dock') {
   const config = {
-    get: vi.fn().mockReturnValue('/data'),
+    get: vi.fn().mockImplementation((key: string) => (key === 'storage.bookDockPath' ? bookDockPath : undefined)),
   };
   const ingestService = {
     ingestFromWatchedFolder: vi.fn(),
@@ -56,6 +56,17 @@ describe('BookDockWatcherService', () => {
     await service.rescan();
 
     expect(walkSpy).toHaveBeenCalledWith('/data/book-dock');
+    expect(emitSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it('rescan uses a custom configured Book Dock path', async () => {
+    const { service } = makeService('/books/bookdrop');
+    const walkSpy = vi.spyOn(service as any, 'walkAndIngest').mockResolvedValue(undefined);
+    const emitSpy = vi.spyOn(service as any, 'emitSummary').mockResolvedValue(undefined);
+
+    await service.rescan();
+
+    expect(walkSpy).toHaveBeenCalledWith('/books/bookdrop');
     expect(emitSpy).toHaveBeenCalledTimes(1);
   });
 

@@ -36,6 +36,7 @@ export class AppInfoService implements OnApplicationBootstrap {
     const version = this.config.get<string>('app.version') ?? 'Local build';
     const enabled = await this.appSettingsService.isUpdateCheckEnabled();
     const appDataPath = this.config.get<string>('storage.appDataPath') ?? '/data';
+    const bookDockPath = this.config.get<string>('storage.bookDockPath') ?? join(appDataPath, 'book-dock');
 
     if (enabled && SEMVER_RE.test(version)) {
       const now = Date.now();
@@ -49,7 +50,7 @@ export class AppInfoService implements OnApplicationBootstrap {
       version,
       updateAvailable: this.updateAvailable,
       latestVersion: this.latestVersion,
-      bookDockPath: join(appDataPath, 'book-dock'),
+      bookDockPath,
     };
   }
 

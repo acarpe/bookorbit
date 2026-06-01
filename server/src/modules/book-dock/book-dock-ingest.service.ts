@@ -30,8 +30,8 @@ export class BookDockIngestService implements OnApplicationBootstrap {
     private readonly metadataFetchPipeline: MetadataFetchPipeline,
     private readonly gateway: BookDockGateway,
   ) {
-    const appDataPath = this.config.get<string>('storage.appDataPath')!;
-    this.bookDockPath = join(appDataPath, 'book-dock');
+    const appDataPath = this.config.get<string>('storage.appDataPath') ?? '/data';
+    this.bookDockPath = this.config.get<string>('storage.bookDockPath') ?? join(appDataPath, 'book-dock');
   }
 
   async onApplicationBootstrap(): Promise<void> {

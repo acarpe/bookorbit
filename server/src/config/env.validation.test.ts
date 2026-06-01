@@ -78,4 +78,22 @@ describe('validateEnv', () => {
       }),
     ).toThrow('OIDC_ALLOW_LOCAL_ISSUERS must be one of true/false/1/0/yes/no/on/off');
   });
+
+  it('accepts a custom Book Dock container path', () => {
+    expect(() =>
+      validateEnv({
+        ...BASE_ENV,
+        BOOK_DOCK_PATH: '/books/bookdrop',
+      }),
+    ).not.toThrow();
+  });
+
+  it('accepts an empty custom Book Dock container path as an unset override', () => {
+    expect(() =>
+      validateEnv({
+        ...BASE_ENV,
+        BOOK_DOCK_PATH: '',
+      }),
+    ).not.toThrow();
+  });
 });

@@ -16,6 +16,7 @@ function resetEnv(): void {
   delete process.env.JWT_REFRESH_EXPIRES_IN;
   delete process.env.SETUP_BOOTSTRAP_TOKEN;
   delete process.env.APP_DATA_PATH;
+  delete process.env.BOOK_DOCK_PATH;
   delete process.env.FILE_WRITE_DEBOUNCE_MS;
   delete process.env.FILE_WRITE_MAX_CONCURRENT_WRITES;
   delete process.env.EMAIL_ENCRYPTION_KEY;
@@ -80,10 +81,26 @@ describe('config', () => {
   it('resolves storage path from APP_DATA_PATH', () => {
     process.env.APP_DATA_PATH = './tmp/bookorbit-data';
     expect(storageConfig().appDataPath).toBe(resolve('./tmp/bookorbit-data'));
+    expect(storageConfig().bookDockPath).toBe(resolve('./tmp/bookorbit-data/book-dock'));
   });
 
   it('falls back storage path to /data when APP_DATA_PATH is not set', () => {
     expect(storageConfig().appDataPath).toBe(resolve('/data'));
+    expect(storageConfig().bookDockPath).toBe(resolve('/data/book-dock'));
+  });
+
+  it('uses BOOK_DOCK_PATH as the Book Dock storage path when provided', () => {
+    process.env.APP_DATA_PATH = '/data';
+    process.env.BOOK_DOCK_PATH = '/books/bookdrop';
+
+    expect(storageConfig().bookDockPath).toBe(resolve('/books/bookdrop'));
+  });
+
+  it('ignores blank BOOK_DOCK_PATH values from compose defaults', () => {
+    process.env.APP_DATA_PATH = '/custom/data';
+    process.env.BOOK_DOCK_PATH = '';
+
+    expect(storageConfig().bookDockPath).toBe(resolve('/custom/data/book-dock'));
   });
 
   it('parses positive integers for file-write config and floors decimal values', () => {

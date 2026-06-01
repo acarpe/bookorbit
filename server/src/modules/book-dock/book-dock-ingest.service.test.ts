@@ -12,10 +12,10 @@ vi.mock('fs/promises', () => ({
 
 const mockedStat = vi.mocked(stat);
 
-function makeService() {
+function makeService(bookDockPath = '/books/book-dock') {
   const config = {
     get: vi.fn((key: string) => {
-      if (key === 'storage.appDataPath') return '/books';
+      if (key === 'storage.bookDockPath') return bookDockPath;
       return undefined;
     }),
   };
@@ -88,6 +88,17 @@ describe('BookDockIngestService', () => {
     expect(mkdir).toHaveBeenCalledWith('/books/book-dock', { recursive: true });
     expect(realpath).toHaveBeenCalledWith('/books/book-dock');
     expect((service as any).bookDockPath).toBe('/real/books/book-dock');
+  });
+
+  it('uses a custom configured Book Dock path', async () => {
+    const { service } = makeService('/books/bookdrop');
+    vi.mocked(realpath).mockResolvedValue('/real/books/bookdrop');
+
+    await service.onApplicationBootstrap();
+
+    expect(mkdir).toHaveBeenCalledWith('/books/bookdrop', { recursive: true });
+    expect(realpath).toHaveBeenCalledWith('/books/bookdrop');
+    expect((service as any).bookDockPath).toBe('/real/books/bookdrop');
   });
 
   describe('ingestUpload', () => {

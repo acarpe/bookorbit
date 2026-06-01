@@ -5,10 +5,10 @@ import { AppSettingsService } from '../app-settings/app-settings.service';
 import { GITHUB_RELEASES_API } from './app-info.constants';
 import { AppInfoService } from './app-info.service';
 
-function makeConfig(version = 'v1.2.3', appDataPath = '/data'): jest.Mocked<ConfigService> {
+function makeConfig(version = 'v1.2.3', bookDockPath = '/data/book-dock'): jest.Mocked<ConfigService> {
   return {
     get: vi.fn().mockImplementation((key: string) => {
-      if (key === 'storage.appDataPath') return appDataPath;
+      if (key === 'storage.bookDockPath') return bookDockPath;
       if (key === 'app.version') return version;
       return undefined;
     }),
@@ -61,19 +61,19 @@ describe('AppInfoService', () => {
       expect(info.latestVersion).toBeNull();
     });
 
-    it('returns bookDockPath as appDataPath/book-dock', async () => {
-      const service = new AppInfoService(makeConfig('v1.0.0', '/custom/data'), makeAppSettings());
-      expect((await service.getAppInfo()).bookDockPath).toBe('/custom/data/book-dock');
+    it('returns bookDockPath from config', async () => {
+      const service = new AppInfoService(makeConfig('v1.0.0', '/books/bookdrop'), makeAppSettings());
+      expect((await service.getAppInfo()).bookDockPath).toBe('/books/bookdrop');
     });
 
-    it('falls back to /data/book-dock when storage.appDataPath is not configured', async () => {
+    it('falls back to /data/book-dock when storage.bookDockPath is not configured', async () => {
       const config = { get: vi.fn().mockReturnValue(undefined) } as unknown as ConfigService;
       const service = new AppInfoService(config, makeAppSettings());
       expect((await service.getAppInfo()).bookDockPath).toBe('/data/book-dock');
     });
 
     it('includes bookDockPath in full response shape', async () => {
-      const service = new AppInfoService(makeConfig('Local build', '/app/data'), makeAppSettings());
+      const service = new AppInfoService(makeConfig('Local build', '/app/data/book-dock'), makeAppSettings());
       const info = await service.getAppInfo();
       expect(info).toMatchObject({
         version: 'Local build',

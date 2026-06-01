@@ -90,18 +90,6 @@ JWT_SECRET=                # signs login tokens          - openssl rand -hex 32
 SETUP_BOOTSTRAP_TOKEN=     # one-time setup wizard token - openssl rand -hex 16
 ```
 
-**Optional: Book Dock drop folder**
-
-To automatically ingest books placed in a folder (for example, a NAS share or a folder managed by another tool), set `BOOK_DROP_HOST_PATH` in `.env`:
-
-```dotenv
-BOOK_DROP_HOST_PATH=/mnt/nas/book-drop
-```
-
-Any ebook file copied or moved into that folder is automatically picked up and processed by Book Dock. The container-internal path it maps to is shown in Settings - Book Dock. Subdirectories are supported. Covers are stored in a `covers/` subdirectory inside the drop folder. Files are removed from the drop folder when finalized into a library.
-
-If `BOOK_DROP_HOST_PATH` is not set, the drop folder defaults to `./data/app/book-dock` inside the app data volume.
-
 Then start:
 
 ```bash
