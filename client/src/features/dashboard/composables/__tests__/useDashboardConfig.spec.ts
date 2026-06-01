@@ -52,8 +52,8 @@ describe('useDashboardConfig', () => {
 
     addScroller('smart-scope')
 
-    expect(scrollers.value).toHaveLength(4)
-    expect(DEFAULT_SCROLLERS).toHaveLength(3)
+    expect(scrollers.value).toHaveLength(5)
+    expect(DEFAULT_SCROLLERS).toHaveLength(4)
   })
 
   it('prunes shelves that reference deleted smart scopes', async () => {
@@ -124,6 +124,33 @@ describe('useDashboardConfig', () => {
 
     expect(scrollers.value).toEqual(DEFAULT_SCROLLERS)
     expect(localStorage.getItem(STORAGE_KEY)).toBeNull()
+  })
+
+  it('uses the default label for up-next-in-series when a custom label is empty', async () => {
+    const { useDashboardConfig } = await import('../useDashboardConfig')
+    const { scrollers, saveScrollers } = useDashboardConfig()
+
+    saveScrollers([
+      {
+        id: '12',
+        type: 'up-next-in-series',
+        label: '   ',
+        enabled: true,
+        order: 1,
+        limit: 20,
+      },
+    ])
+
+    expect(scrollers.value).toEqual([
+      {
+        id: '12',
+        type: 'up-next-in-series',
+        label: 'Up Next in Series',
+        enabled: true,
+        order: 1,
+        limit: 20,
+      },
+    ])
   })
 
   it('does not rewrite storage when smart scope prune keeps the same scrollers', async () => {

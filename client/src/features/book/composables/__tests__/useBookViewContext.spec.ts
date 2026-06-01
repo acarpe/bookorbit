@@ -46,7 +46,7 @@ describe('useBookViewContext', () => {
     const nav = useBookNavigation()
     const books = ref<BookCard[]>([makeBook(1), makeBook(2)])
     const total = ref(4)
-    const loadMore = vi.fn(async () => {
+    const loadMore = vi.fn<() => Promise<void>>(async () => {
       books.value = [makeBook(1), makeBook(2), makeBook(3), makeBook(4)]
     })
 

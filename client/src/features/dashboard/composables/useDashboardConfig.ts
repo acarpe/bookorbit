@@ -7,12 +7,14 @@ const MAX_SCROLLERS = 6
 
 export const DEFAULT_SCROLLERS: ScrollerConfig[] = [
   { id: '1', type: 'continue-reading', label: 'Continue Reading', enabled: false, order: 1, limit: 20 },
-  { id: '2', type: 'recently-added', label: 'Recently Added', enabled: true, order: 2, limit: 20 },
-  { id: '3', type: 'random', label: 'Discover Something New', enabled: true, order: 3, limit: 20 },
+  { id: '4', type: 'up-next-in-series', label: 'Up Next in Series', enabled: false, order: 2, limit: 20 },
+  { id: '2', type: 'recently-added', label: 'Recently Added', enabled: true, order: 3, limit: 20 },
+  { id: '3', type: 'random', label: 'Discover Something New', enabled: true, order: 4, limit: 20 },
 ]
 
 export const SCROLLER_LABELS: Record<ScrollerType, string> = {
   'continue-reading': 'Continue Reading',
+  'up-next-in-series': 'Up Next in Series',
   'recently-added': 'Recently Added',
   random: 'Discover Something New',
   'smart-scope': 'Smart Scope',

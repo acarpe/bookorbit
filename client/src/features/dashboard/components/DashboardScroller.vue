@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, ref, useAttrs } from 'vue'
-import { Aperture, BookMarked, ChevronLeft, ChevronRight, RefreshCw, Shuffle, Sparkles } from 'lucide-vue-next'
+import { Aperture, BookMarked, ChevronLeft, ChevronRight, ListOrdered, RefreshCw, Shuffle, Sparkles } from 'lucide-vue-next'
 
 import type { BookCard, ScrollerType } from '@bookorbit/types'
 import BookCoverCard from '@/features/book/components/BookCoverCard.vue'
@@ -33,6 +33,7 @@ function scrollBy(delta: number) {
 
 const typeIcon = computed(() => {
   if (props.type === 'continue-reading') return BookMarked
+  if (props.type === 'up-next-in-series') return ListOrdered
   if (props.type === 'recently-added') return Sparkles
   if (props.type === 'smart-scope') return Aperture
   return Shuffle
@@ -130,6 +131,7 @@ function handleBookAction(book: BookCard, action: BookActionType) {
       </div>
       <p class="text-sm text-muted-foreground">
         <template v-if="type === 'continue-reading'">No books in progress yet. Start reading one to see it here.</template>
+        <template v-else-if="type === 'up-next-in-series'">No next-in-series picks yet. Finish a volume to surface the next one.</template>
         <template v-else-if="type === 'recently-added'">No books in your library yet.</template>
         <template v-else-if="type === 'smart-scope'">No books match this smartScope.</template>
         <template v-else>No books found.</template>
