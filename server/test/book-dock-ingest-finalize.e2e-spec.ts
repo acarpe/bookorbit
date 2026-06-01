@@ -365,7 +365,7 @@ describe('Book Dock ingest + finalize (e2e)', () => {
 
     const seedRow = await createBookDockRow(context, {
       fileName: 'seed-duplicate.fb2',
-      selectedMetadata: { title: 'Duplicate Title', authors: ['Duplicate Author'] },
+      selectedMetadata: { title: 'Duplicate Seed Title', authors: ['Duplicate Author'], isbn13: '9780306406157' },
       targetLibraryId: destination.libraryId,
       targetFolderId: destination.libraryFolderId,
     });
@@ -380,7 +380,7 @@ describe('Book Dock ingest + finalize (e2e)', () => {
 
     const duplicateRow = await createBookDockRow(context, {
       fileName: 'duplicate-input.fb2',
-      selectedMetadata: { title: 'Duplicate Title', authors: ['Another Author'] },
+      selectedMetadata: { title: 'Duplicate Candidate Title', authors: ['Another Author'], isbn13: '9780306406157' },
       targetLibraryId: destination.libraryId,
       targetFolderId: destination.libraryFolderId,
     });
@@ -445,6 +445,50 @@ describe('Book Dock ingest + finalize (e2e)', () => {
     expect(await getBookDockRow(context, duplicateRow.id)).toBeDefined();
     expect(await getBookDockRow(context, conflictRow.id)).toBeDefined();
     expect(await getBookDockRow(context, successRow.id)).toBeUndefined();
+  });
+
+  it('finalize allows same title with different author when isbn is missing', async () => {
+    const destination = await createLibraryWithFolder(context);
+
+    const seedRow = await createBookDockRow(context, {
+      fileName: 'seed-same-title.fb2',
+      selectedMetadata: { title: 'Shared Title', authors: ['Author One'] },
+      targetLibraryId: destination.libraryId,
+      targetFolderId: destination.libraryFolderId,
+    });
+    const seedResponse = await context.app.inject({
+      method: 'POST',
+      url: '/api/v1/book-dock/finalize',
+      headers: authHeader(context.adminToken),
+      payload: { fileIds: [seedRow.id] },
+    });
+    expect(seedResponse.statusCode).toBe(201);
+    const seedBody = seedResponse.json() as BookDockFinalizeResult;
+    expect(seedBody.results[0]?.success).toBe(true);
+    const existingBookId = seedBody.results[0]!.bookId!;
+
+    const candidateRow = await createBookDockRow(context, {
+      fileName: 'candidate-same-title.fb2',
+      selectedMetadata: { title: 'Shared Title', authors: ['Author Two'] },
+      targetLibraryId: destination.libraryId,
+      targetFolderId: destination.libraryFolderId,
+    });
+
+    const response = await context.app.inject({
+      method: 'POST',
+      url: '/api/v1/book-dock/finalize',
+      headers: authHeader(context.adminToken),
+      payload: { fileIds: [candidateRow.id] },
+    });
+
+    expect(response.statusCode).toBe(201);
+    const body = response.json() as BookDockFinalizeResult;
+    expect(body).toMatchObject({ total: 1, succeeded: 1, failed: 0 });
+    expect(body.results[0]).toMatchObject({ fileId: candidateRow.id, success: true });
+    expect(body.results[0]?.isDuplicate).toBeUndefined();
+    expect(body.results[0]?.bookId).toEqual(expect.any(Number));
+    expect(body.results[0]?.bookId).not.toBe(existingBookId);
+    expect(await getBookDockRow(context, candidateRow.id)).toBeUndefined();
   });
 
   it('finalize stores a folder path even when the naming pattern is flat', async () => {

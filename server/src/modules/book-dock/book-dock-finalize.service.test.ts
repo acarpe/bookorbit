@@ -730,7 +730,7 @@ describe('BookDockFinalizeService', () => {
     await expect((service as any).findFolderOrFail(9, 5)).rejects.toBeInstanceOf(BadRequestException);
   });
 
-  it('buildDuplicateLookup collects isbn and title keys per library', async () => {
+  it('buildDuplicateLookup collects isbn and title+author keys per library', async () => {
     const { service, db } = makeService();
     const selectChain = {
       from: vi.fn(),
@@ -742,14 +742,14 @@ describe('BookDockFinalizeService', () => {
     selectChain.where
       .mockResolvedValueOnce([{ bookId: 11, isbn13: '9780306406157' }])
       .mockResolvedValueOnce([{ bookId: 12, isbn10: '0306406152' }])
-      .mockResolvedValueOnce([{ bookId: 13, normalizedTitle: 'dune' }]);
+      .mockResolvedValueOnce([{ bookId: 13, normalizedTitle: 'dune', normalizedAuthor: 'frank herbert' }]);
     db.select.mockReturnValue(selectChain);
 
     const lookup = await (service as any).buildDuplicateLookup(
       [
         makeRow({ id: 1, targetLibraryId: 5, selectedMetadata: { isbn13: '9780306406157' } }),
         makeRow({ id: 2, targetLibraryId: 5, selectedMetadata: { isbn10: '0306406152' } }),
-        makeRow({ id: 3, targetLibraryId: 5, selectedMetadata: { title: 'Dune' } }),
+        makeRow({ id: 3, targetLibraryId: 5, selectedMetadata: { title: 'Dune', authors: ['Frank Herbert'] } }),
       ],
       undefined,
       new Map(),
@@ -757,10 +757,38 @@ describe('BookDockFinalizeService', () => {
 
     expect(lookup.get('library:5|isbn13:9780306406157')).toBe(11);
     expect(lookup.get('library:5|isbn10:0306406152')).toBe(12);
-    expect(lookup.get('library:5|title:dune')).toBe(13);
+    expect(lookup.get('library:5|title:dune|author:frank herbert')).toBe(13);
   });
 
-  it('findDuplicate queries by isbn and title when prebuilt lookup misses', async () => {
+  it('buildDuplicateLookup keeps only requested title+author pairs', async () => {
+    const { service, db } = makeService();
+    const selectChain = {
+      from: vi.fn(),
+      innerJoin: vi.fn(),
+      where: vi.fn(),
+    };
+    selectChain.from.mockReturnValue(selectChain);
+    selectChain.innerJoin.mockReturnValue(selectChain);
+    selectChain.where.mockResolvedValueOnce([
+      { bookId: 13, normalizedTitle: 'dune', normalizedAuthor: 'frank herbert' },
+      { bookId: 14, normalizedTitle: 'dune', normalizedAuthor: 'isaac asimov' },
+    ]);
+    db.select.mockReturnValue(selectChain);
+
+    const lookup = await (service as any).buildDuplicateLookup(
+      [
+        makeRow({ id: 1, targetLibraryId: 5, selectedMetadata: { title: 'Dune', authors: ['Frank Herbert'] } }),
+        makeRow({ id: 2, targetLibraryId: 5, selectedMetadata: { title: 'Foundation', authors: ['Isaac Asimov'] } }),
+      ],
+      undefined,
+      new Map(),
+    );
+
+    expect(lookup.get('library:5|title:dune|author:frank herbert')).toBe(13);
+    expect(lookup.get('library:5|title:dune|author:isaac asimov')).toBeUndefined();
+  });
+
+  it('findDuplicate queries by isbn and title+author when prebuilt lookup misses', async () => {
     const { service, db } = makeService();
     const selectChain = {
       from: vi.fn(),
@@ -771,15 +799,32 @@ describe('BookDockFinalizeService', () => {
     selectChain.from.mockReturnValue(selectChain);
     selectChain.innerJoin.mockReturnValue(selectChain);
     selectChain.where.mockReturnValue(selectChain);
-    selectChain.limit
-      .mockResolvedValueOnce([{ bookId: 91 }])
-      .mockResolvedValueOnce([{ bookId: 92 }])
-      .mockResolvedValueOnce([]);
+    selectChain.limit.mockResolvedValueOnce([{ bookId: 91 }]).mockResolvedValueOnce([{ bookId: 92 }]);
     db.select.mockReturnValue(selectChain);
 
-    await expect((service as any).findDuplicate(4, { isbn13: '9780306406157', isbn10: null, title: null })).resolves.toBe(91);
-    await expect((service as any).findDuplicate(4, { isbn13: null, isbn10: null, title: 'Dune' })).resolves.toBe(92);
-    await expect((service as any).findDuplicate(4, { isbn13: null, isbn10: null, title: null })).resolves.toBeNull();
+    await expect((service as any).findDuplicate(4, { isbn13: '9780306406157', isbn10: null, title: null, authors: [] })).resolves.toBe(91);
+    await expect((service as any).findDuplicate(4, { isbn13: null, isbn10: null, title: 'Dune', authors: ['Frank Herbert'] })).resolves.toBe(92);
+    await expect((service as any).findDuplicate(4, { isbn13: null, isbn10: null, title: 'Dune', authors: [] })).resolves.toBeNull();
+  });
+
+  it('findDuplicate does not treat title-only prebuilt entries as duplicates when author differs', async () => {
+    const { service, db } = makeService();
+    const selectChain = {
+      from: vi.fn(),
+      innerJoin: vi.fn(),
+      where: vi.fn(),
+      limit: vi.fn(),
+    };
+    selectChain.from.mockReturnValue(selectChain);
+    selectChain.innerJoin.mockReturnValue(selectChain);
+    selectChain.where.mockReturnValue(selectChain);
+    selectChain.limit.mockResolvedValueOnce([]);
+    db.select.mockReturnValue(selectChain);
+
+    const duplicateLookup = new Map([['library:4|title:dune', 77]]);
+    await expect(
+      (service as any).findDuplicate(4, { isbn13: null, isbn10: null, title: 'Dune', authors: ['Brian Herbert'] }, duplicateLookup),
+    ).resolves.toBeNull();
   });
 
   it('resolveDestination builds names from patterns and falls back to original filename', async () => {
@@ -845,10 +890,21 @@ describe('BookDockFinalizeService', () => {
   });
 
   it('findDuplicate resolves from prebuilt lookup before querying database', async () => {
-    const { service } = makeService();
+    const { service, db } = makeService();
     const duplicateLookup = new Map([['library:4|isbn13:9780306406157', 88]]);
 
     await expect((service as any).findDuplicate(4, { isbn13: '9780306406157', isbn10: null, title: null }, duplicateLookup)).resolves.toBe(88);
+    expect(db.select).not.toHaveBeenCalled();
+  });
+
+  it('findDuplicate resolves title+author from prebuilt lookup before querying database', async () => {
+    const { service, db } = makeService();
+    const duplicateLookup = new Map([['library:4|title:dune|author:frank herbert', 89]]);
+
+    await expect(
+      (service as any).findDuplicate(4, { isbn13: null, isbn10: null, title: 'Dune', authors: ['Frank Herbert'] }, duplicateLookup),
+    ).resolves.toBe(89);
+    expect(db.select).not.toHaveBeenCalled();
   });
 
   it('triggerAutoFinalize skips when auto-finalize is disabled or destination is incomplete', async () => {
