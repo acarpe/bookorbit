@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useRouter } from 'vue-router'
-import { BookOpen, ChevronDown, Play } from 'lucide-vue-next'
+import { BookOpen, ChevronDown, Eye, Play } from 'lucide-vue-next'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { FORMAT_TO_GROUP, READER_OPENABLE_FORMATS } from '@bookorbit/types'
 import type { BookCard, BookFileRef } from '@bookorbit/types'
@@ -87,13 +87,21 @@ function formatBadgeStyle(format: string) {
   }
 }
 
-function openFile(file: BookFileRef | null) {
+function openFile(file: BookFileRef | null, mode?: 'peek') {
   if (!file || props.book.status === 'missing') return
   router.push({
     name: 'reader',
     params: { bookId: props.book.id, fileId: file.id },
-    query: { format: file.format ?? 'epub' },
+    query: mode === 'peek' ? { format: file.format ?? 'epub', mode } : { format: file.format ?? 'epub' },
   })
+}
+
+function openPrimaryFile() {
+  openFile(primaryFile.value)
+}
+
+function peekPrimaryFile() {
+  openFile(primaryFile.value, 'peek')
 }
 </script>
 
@@ -105,7 +113,7 @@ function openFile(file: BookFileRef | null) {
         class="inline-flex h-7 w-7 items-center justify-center rounded-l-md text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground"
         :aria-label="`${actionVerb(primaryFile)} ${formatLabel(primaryFile)}`"
         :title="`${actionVerb(primaryFile)} ${formatLabel(primaryFile)}`"
-        @click.stop="openFile(primaryFile)"
+        @click.stop="openPrimaryFile"
       >
         <Play v-if="primaryIsAudio" :size="13" class="text-sky-500" />
         <BookOpen v-else :size="13" class="text-emerald-500" />
@@ -133,21 +141,36 @@ function openFile(file: BookFileRef | null) {
             <span class="flex-1 truncate text-xs">{{ actionVerb(file) }} {{ formatLabel(file) }}</span>
             <span v-if="file.role === 'primary' && !isMultiTrackAudio" class="text-[10px] text-primary">Primary</span>
           </DropdownMenuItem>
+          <DropdownMenuItem v-for="file in openableFiles" :key="`peek-${file.id}`" class="gap-2" @select="openFile(file, 'peek')">
+            <Eye :size="13" class="text-primary" />
+            <span class="flex-1 truncate text-xs">Peek {{ formatLabel(file) }}</span>
+          </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
     </div>
 
-    <button
-      v-else
-      type="button"
-      class="mr-auto inline-flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground"
-      :aria-label="`${actionVerb(primaryFile)} ${formatLabel(primaryFile)}`"
-      :title="`${actionVerb(primaryFile)} ${formatLabel(primaryFile)}`"
-      @click.stop="openFile(primaryFile)"
-    >
-      <Play v-if="isAudioFile(primaryFile)" :size="13" class="text-sky-500" />
-      <BookOpen v-else :size="13" class="text-emerald-500" />
-    </button>
+    <div v-else class="mr-auto inline-flex h-7 items-center overflow-hidden rounded-md">
+      <button
+        type="button"
+        class="inline-flex h-7 w-7 items-center justify-center rounded-l-md text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground"
+        :aria-label="`${actionVerb(primaryFile)} ${formatLabel(primaryFile)}`"
+        :title="`${actionVerb(primaryFile)} ${formatLabel(primaryFile)}`"
+        @click.stop="openPrimaryFile"
+      >
+        <Play v-if="isAudioFile(primaryFile)" :size="13" class="text-sky-500" />
+        <BookOpen v-else :size="13" class="text-emerald-500" />
+      </button>
+      <div class="w-px shrink-0 bg-border/80" />
+      <button
+        type="button"
+        class="inline-flex h-7 w-7 items-center justify-center rounded-r-md text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground"
+        :aria-label="`Peek ${formatLabel(primaryFile)}`"
+        :title="`Peek ${formatLabel(primaryFile)}`"
+        @click.stop="peekPrimaryFile"
+      >
+        <Eye :size="13" class="text-primary" />
+      </button>
+    </div>
   </div>
 
   <span v-else class="text-xs text-muted-foreground/40">-</span>

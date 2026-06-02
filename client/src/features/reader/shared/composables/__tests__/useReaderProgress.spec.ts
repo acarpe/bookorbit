@@ -193,4 +193,20 @@ describe('useReaderProgress', () => {
 
     vi.useRealTimers()
   })
+
+  it('keeps relocate state in memory without loading or saving when tracking is disabled', async () => {
+    vi.useFakeTimers()
+    const trackingEnabled = ref(false)
+    const progress = useReaderProgress(1, 1, elapsedMinutes, 0, { trackingEnabled })
+
+    await progress.load()
+    progress.onRelocate(makeDetail({ fraction: 0.42 }))
+    await progress.save()
+    await vi.advanceTimersByTimeAsync(2500)
+
+    expect(progress.percentage.value).toBe(42)
+    expect(apiMock).not.toHaveBeenCalled()
+
+    vi.useRealTimers()
+  })
 })

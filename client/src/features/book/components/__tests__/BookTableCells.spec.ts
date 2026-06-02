@@ -272,6 +272,19 @@ describe('BookTableReadButtonCell', () => {
     })
   })
 
+  it('opens the primary readable file in peek mode from the peek button', async () => {
+    routerPush.mockReset()
+    const wrapper = mountReadButton(makeBook([{ id: 1, format: 'epub', role: 'primary', sizeBytes: null }]))
+    const peekButton = wrapper.findAll('button').find((button) => button.attributes('aria-label') === 'Peek EPUB')
+    expect(peekButton).toBeTruthy()
+    await peekButton!.trigger('click')
+    expect(routerPush).toHaveBeenCalledWith({
+      name: 'reader',
+      params: { bookId: 42, fileId: 1 },
+      query: { format: 'epub', mode: 'peek' },
+    })
+  })
+
   it('shows play action for audio formats and allows selecting alternate format', async () => {
     routerPush.mockReset()
     const wrapper = mountReadButton(

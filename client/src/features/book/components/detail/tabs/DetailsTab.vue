@@ -5,6 +5,7 @@ import {
   BookOpen,
   Check,
   ChevronDown,
+  Eye,
   Library,
   Headphones,
   Lock,
@@ -749,22 +750,30 @@ function openEditCover() {
   router.push({ name: 'book-detail', params: { bookId: props.book.id }, query: { tab: 'edit' } })
 }
 
-function openBook() {
+function openBookWithMode(mode?: 'peek') {
   if (!primaryFile.value) return
   router.push({
     name: 'reader',
     params: { bookId: props.book.id, fileId: primaryFile.value.id },
-    query: { format: primaryFile.value.format ?? 'epub' },
+    query: mode === 'peek' ? { format: primaryFile.value.format ?? 'epub', mode } : { format: primaryFile.value.format ?? 'epub' },
   })
 }
 
-function openBookFile(file: BookDetail['files'][number]) {
+function openBook() {
+  openBookWithMode()
+}
+
+function peekBook() {
+  openBookWithMode('peek')
+}
+
+function openBookFile(file: BookDetail['files'][number], mode?: 'peek') {
   readMenuOpen.value = false
   mobileReadMenuOpen.value = false
   router.push({
     name: 'reader',
     params: { bookId: props.book.id, fileId: file.id },
-    query: { format: file.format ?? 'epub' },
+    query: mode === 'peek' ? { format: file.format ?? 'epub', mode } : { format: file.format ?? 'epub' },
   })
 }
 
@@ -1075,6 +1084,19 @@ watch(
         <BookOpen v-else class="size-4" />
         {{ isPrimaryAudio ? 'Listen' : 'Read' }}
       </button>
+      <Tooltip>
+        <TooltipTrigger as-child>
+          <button
+            class="flex items-center justify-center h-9 w-12 rounded-md border border-input bg-background hover:bg-muted transition-colors disabled:opacity-50"
+            :disabled="!primaryFile"
+            aria-label="Peek"
+            @click="peekBook"
+          >
+            <Eye class="size-3.5" />
+          </button>
+        </TooltipTrigger>
+        <TooltipContent>Peek</TooltipContent>
+      </Tooltip>
       <div v-if="hasPermission('library_download')" class="w-12 shrink-0">
         <BookDownloadButton :files="book.files" :book-id="book.id" />
       </div>
@@ -1143,58 +1165,74 @@ watch(
         </BookCoverSurface>
 
         <div class="mt-4 space-y-2">
-          <!-- Read/Play button: split when multiple files, plain when single -->
-          <div v-if="hasMultipleFiles" class="flex w-full h-9 rounded-md overflow-hidden">
+          <div class="flex gap-2">
+            <!-- Read/Play button: split when multiple files, plain when single -->
+            <div v-if="hasMultipleFiles" class="flex flex-1 h-9 rounded-md overflow-hidden">
+              <button
+                class="flex flex-1 items-center justify-center gap-2 bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors disabled:opacity-50"
+                :disabled="!primaryFile"
+                @click="openBook"
+              >
+                <BookOpen v-if="isPrimaryAudio" class="size-4" />
+                <BookOpen v-else class="size-4" />
+                {{ isPrimaryAudio ? 'Listen' : 'Read' }}
+              </button>
+              <div class="w-px bg-primary-foreground/20 shrink-0" />
+              <Popover :open="readMenuOpen" @update:open="(v) => (readMenuOpen = v)">
+                <PopoverTrigger as-child>
+                  <button
+                    class="w-8 shrink-0 flex items-center justify-center bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
+                    title="Choose format"
+                  >
+                    <ChevronDown class="size-3.5" />
+                  </button>
+                </PopoverTrigger>
+                <PopoverContent class="w-52 p-1" align="end">
+                  <button
+                    v-for="file in openableFiles"
+                    :key="file.id"
+                    class="flex w-full items-center gap-2.5 px-2 py-1.5 rounded text-sm hover:bg-muted transition-colors"
+                    @click="openBookFile(file)"
+                  >
+                    <span
+                      class="text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded border shrink-0"
+                      :style="formatBadgeStyle(file.format ?? '?')"
+                      >{{ file.format ?? '?' }}</span
+                    >
+                    <span class="flex-1 text-left text-muted-foreground text-xs truncate">
+                      <template v-if="isMultiTrackAudio && FORMAT_TO_GROUP[file.format!] === 'audio'">Audiobook</template>
+                      <template v-else>{{ formatFileSize(file.sizeBytes) }}</template>
+                    </span>
+                    <span v-if="file.role === 'primary' && !isMultiTrackAudio" class="text-[10px] text-primary font-medium shrink-0">Primary</span>
+                  </button>
+                </PopoverContent>
+              </Popover>
+            </div>
             <button
-              class="flex flex-1 items-center justify-center gap-2 bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors disabled:opacity-50"
+              v-else
+              class="flex flex-1 items-center justify-center gap-2 h-9 rounded-md bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors disabled:opacity-50"
               :disabled="!primaryFile"
               @click="openBook"
             >
-              <BookOpen v-if="isPrimaryAudio" class="size-4" />
+              <Headphones v-if="isPrimaryAudio" class="size-4" />
               <BookOpen v-else class="size-4" />
               {{ isPrimaryAudio ? 'Listen' : 'Read' }}
             </button>
-            <div class="w-px bg-primary-foreground/20 shrink-0" />
-            <Popover :open="readMenuOpen" @update:open="(v) => (readMenuOpen = v)">
-              <PopoverTrigger as-child>
+
+            <Tooltip>
+              <TooltipTrigger as-child>
                 <button
-                  class="w-8 shrink-0 flex items-center justify-center bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
-                  title="Choose format"
+                  class="flex items-center justify-center h-9 w-12 shrink-0 rounded-md border border-input bg-background hover:bg-muted transition-colors disabled:opacity-50"
+                  :disabled="!primaryFile"
+                  aria-label="Peek"
+                  @click="peekBook"
                 >
-                  <ChevronDown class="size-3.5" />
+                  <Eye class="size-4" />
                 </button>
-              </PopoverTrigger>
-              <PopoverContent class="w-52 p-1" align="end">
-                <button
-                  v-for="file in openableFiles"
-                  :key="file.id"
-                  class="flex w-full items-center gap-2.5 px-2 py-1.5 rounded text-sm hover:bg-muted transition-colors"
-                  @click="openBookFile(file)"
-                >
-                  <span
-                    class="text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded border shrink-0"
-                    :style="formatBadgeStyle(file.format ?? '?')"
-                    >{{ file.format ?? '?' }}</span
-                  >
-                  <span class="flex-1 text-left text-muted-foreground text-xs truncate">
-                    <template v-if="isMultiTrackAudio && FORMAT_TO_GROUP[file.format!] === 'audio'">Audiobook</template>
-                    <template v-else>{{ formatFileSize(file.sizeBytes) }}</template>
-                  </span>
-                  <span v-if="file.role === 'primary' && !isMultiTrackAudio" class="text-[10px] text-primary font-medium shrink-0">Primary</span>
-                </button>
-              </PopoverContent>
-            </Popover>
+              </TooltipTrigger>
+              <TooltipContent>Peek</TooltipContent>
+            </Tooltip>
           </div>
-          <button
-            v-else
-            class="flex w-full items-center justify-center gap-2 h-9 rounded-md bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors disabled:opacity-50"
-            :disabled="!primaryFile"
-            @click="openBook"
-          >
-            <Headphones v-if="isPrimaryAudio" class="size-4" />
-            <BookOpen v-else class="size-4" />
-            {{ isPrimaryAudio ? 'Listen' : 'Read' }}
-          </button>
 
           <div class="flex gap-2">
             <div v-if="hasPermission('library_download')" class="flex-1">

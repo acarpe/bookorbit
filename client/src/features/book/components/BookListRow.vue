@@ -9,6 +9,7 @@ import { useRouter } from 'vue-router'
 import {
   BookOpen,
   Check,
+  Eye,
   ExternalLink,
   FolderPlus,
   Loader2,
@@ -98,12 +99,17 @@ const coverSrc = computed(() => coverUrl(props.book.id))
 const { refreshing, refreshWithFeedback } = useRefreshMetadata()
 const coverAspectRatio = inject(COVER_ASPECT_RATIO_KEY, ref(DEFAULT_COVER_ASPECT_RATIO))
 
-function openFile(file: BookFileRef) {
+function openFile(file: BookFileRef, mode?: 'peek') {
   router.push({
     name: 'reader',
     params: { bookId: props.book.id, fileId: file.id },
-    query: { format: file.format ?? 'epub' },
+    query: mode === 'peek' ? { format: file.format ?? 'epub', mode } : { format: file.format ?? 'epub' },
   })
+}
+
+function peekPrimaryFile() {
+  if (!primaryFile.value || isMissing.value) return
+  openFile(primaryFile.value, 'peek')
 }
 
 function openAuthorBrowse() {
@@ -229,7 +235,11 @@ function openAuthorBrowse() {
         <DropdownMenuContent align="end">
           <DropdownMenuItem :disabled="!primaryFile || isMissing" @click="primaryFile && !isMissing && openFile(primaryFile)">
             <BookOpen class="size-4 mr-2" />
-            Open
+            Read
+          </DropdownMenuItem>
+          <DropdownMenuItem :disabled="!primaryFile || isMissing" @click="peekPrimaryFile">
+            <Eye class="size-4 mr-2" />
+            Peek
           </DropdownMenuItem>
           <DropdownMenuItem @click="emit('action', 'quick-view')">
             <PanelRight class="size-4 mr-2" />

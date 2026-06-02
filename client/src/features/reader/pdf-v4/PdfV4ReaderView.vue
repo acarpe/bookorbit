@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { onMounted, onUnmounted, ref } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, ref } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { PDFViewer, ScrollPlugin, ScrollStrategy, SpreadMode, ZoomMode } from '@embedpdf/vue-pdf-viewer'
 import type { PDFViewerConfig, PluginRegistry, ScrollCapability, EmbedPdfContainer } from '@embedpdf/vue-pdf-viewer'
 import { getAccessToken } from '@/lib/api'
@@ -10,16 +11,23 @@ import { useThemeStore, ACCENT_OPTIONS } from '@/stores/theme'
 import type { PdfReaderSettings } from '@bookorbit/types'
 import { getIsDark, lookupAccentHex } from './pdf-viewer-utils'
 
-const props = defineProps<{ bookId: number; fileId: number }>()
+const props = defineProps<{ bookId: number; fileId: number; peekMode?: boolean }>()
+const route = useRoute()
+const router = useRouter()
+const trackingEnabled = computed(() => !props.peekMode)
 
 const themeStore = useThemeStore()
 
 const bookSettings = useReaderSettings(props.fileId, 'pdf')
-const { onActivity, elapsedMinutes } = useReadingSession(props.fileId, () => ({
-  percentage: progress.percentage.value,
-  pageNumber: progress.pageNumber.value,
-}))
-const progress = useReaderProgress(props.bookId, props.fileId, elapsedMinutes)
+const { onActivity, elapsedMinutes } = useReadingSession(
+  props.fileId,
+  () => ({
+    percentage: progress.percentage.value,
+    pageNumber: progress.pageNumber.value,
+  }),
+  { trackingEnabled },
+)
+const progress = useReaderProgress(props.bookId, props.fileId, elapsedMinutes, 0, { trackingEnabled })
 
 let saveTimer: ReturnType<typeof setTimeout> | null = null
 let unsubPageChange: (() => void) | null = null
@@ -38,6 +46,8 @@ function buildThemeConfig() {
 }
 
 function scheduleSave(pageNumber: number, totalPages: number) {
+  currentPageNumber.value = pageNumber
+  totalPageCount.value = totalPages
   if (saveTimer) clearTimeout(saveTimer)
   saveTimer = setTimeout(() => {
     progress.pageNumber.value = pageNumber
@@ -48,6 +58,8 @@ function scheduleSave(pageNumber: number, totalPages: number) {
 
 const configReady = ref(false)
 const viewerConfig = ref<PDFViewerConfig>({})
+const currentPageNumber = ref<number | null>(null)
+const totalPageCount = ref<number | null>(null)
 
 onMounted(async () => {
   await bookSettings.load()
@@ -116,6 +128,8 @@ async function setupProgressTracking(registry: PluginRegistry) {
   unsubLayoutReady = scroll.onLayoutReady(({ isInitial, totalPages }) => {
     if (!isInitial) return
     const initialPage = progress.pageNumber.value ?? 1
+    currentPageNumber.value = initialPage
+    totalPageCount.value = totalPages
     if (initialPage > 1 && initialPage <= totalPages) {
       scroll.scrollToPage({ pageNumber: initialPage })
     }
@@ -152,6 +166,19 @@ function setupThemeSync() {
   })
 }
 
+async function startTrackedReading() {
+  const query = { ...route.query }
+  delete query.mode
+  await router.replace({ name: 'reader', params: route.params, query })
+  await nextTick()
+  if (currentPageNumber.value !== null) {
+    progress.pageNumber.value = currentPageNumber.value
+    progress.percentage.value = totalPageCount.value ? (currentPageNumber.value / totalPageCount.value) * 100 : progress.percentage.value
+  }
+  await progress.save()
+  onActivity()
+}
+
 onUnmounted(() => {
   unsubPageChange?.()
   unsubLayoutReady?.()
@@ -162,6 +189,17 @@ onUnmounted(() => {
 
 <template>
   <div class="fixed inset-0 flex flex-col">
+    <div v-if="props.peekMode" class="pointer-events-none absolute left-0 right-0 top-3 z-50 flex justify-center">
+      <div class="pointer-events-auto flex h-8 items-center gap-2 rounded-md border border-primary/30 bg-background/95 px-2 text-primary shadow-sm">
+        <span class="text-xs font-medium">Peeking</span>
+        <button
+          class="h-6 rounded-sm bg-primary px-2 text-[11px] font-semibold text-primary-foreground hover:bg-primary/90"
+          @click="startTrackedReading"
+        >
+          Start reading
+        </button>
+      </div>
+    </div>
     <PDFViewer v-if="configReady" :config="viewerConfig" style="flex: 1; min-height: 0" @init="handleInit" @ready="handleReady" />
   </div>
 </template>

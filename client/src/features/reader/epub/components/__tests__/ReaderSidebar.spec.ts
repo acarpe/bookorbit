@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import ReaderSidebar from '../ReaderSidebar.vue'
 
 describe('ReaderSidebar', () => {
-  const scrollIntoView = vi.fn()
+  const scrollIntoView = vi.fn<() => void>()
 
   beforeEach(() => {
     scrollIntoView.mockClear()

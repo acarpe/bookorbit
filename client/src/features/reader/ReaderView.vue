@@ -43,6 +43,11 @@ const fileFormat = (route.query.format as string) || 'epub'
 const isAudioFormat = getFormatGroup(fileFormat) === 'audio'
 const isPdfFormat = fileFormat === 'pdf'
 const isComicFormat = fileFormat === 'cbz' || fileFormat === 'cbr' || fileFormat === 'cb7'
+const isPeekMode = computed(() => {
+  const mode = route.query.mode
+  return (Array.isArray(mode) ? mode[0] : mode) === 'peek'
+})
+const trackingEnabled = computed(() => !isPeekMode.value)
 
 const containerRef = ref<HTMLElement | null>(null)
 const showSidebar = ref(false)
@@ -82,13 +87,17 @@ const {
 
 const customFonts = useCustomFonts()
 
-const { onActivity, elapsedMinutes } = useReadingSession(fileId, () => ({
-  percentage: progress.percentage.value,
-  cfi: progress.cfi.value,
-  pageNumber: progress.pageNumber.value,
-}))
+const { onActivity, elapsedMinutes } = useReadingSession(
+  fileId,
+  () => ({
+    percentage: progress.percentage.value,
+    cfi: progress.cfi.value,
+    pageNumber: progress.pageNumber.value,
+  }),
+  { trackingEnabled },
+)
 
-const progress = useReaderProgress(bookId, fileId, elapsedMinutes)
+const progress = useReaderProgress(bookId, fileId, elapsedMinutes, 0, { trackingEnabled })
 const { cfi, chapterTitle, sectionIndex, totalSections, fraction, locationTotal, footerMode, cycleFooterMode, updateHeadsFeet } = progress
 
 const visibility = useVisibility()
@@ -138,6 +147,15 @@ const { showHelpModal } = useReaderKeyboardShortcuts({
 
 function toggleHelpModal() {
   showHelpModal.value = !showHelpModal.value
+}
+
+async function startTrackedReading() {
+  const query = { ...route.query }
+  delete query.mode
+  await router.replace({ name: 'reader', params: route.params, query })
+  await nextTick()
+  await progress.save()
+  onActivity()
 }
 
 const chapterStartFraction = computed(() => {
@@ -498,9 +516,9 @@ watch(
 </script>
 
 <template>
-  <PdfV4ReaderView v-if="isPdfFormat" :bookId="bookId" :fileId="fileId" />
-  <CbzReaderView v-else-if="isComicFormat" :bookId="bookId" :fileId="fileId" />
-  <AudiobookReaderView v-else-if="isAudioFormat" :bookId="bookId" :fileId="fileId" />
+  <PdfV4ReaderView v-if="isPdfFormat" :bookId="bookId" :fileId="fileId" :peek-mode="isPeekMode" />
+  <CbzReaderView v-else-if="isComicFormat" :bookId="bookId" :fileId="fileId" :peek-mode="isPeekMode" />
+  <AudiobookReaderView v-else-if="isAudioFormat" :bookId="bookId" :fileId="fileId" :peek-mode="isPeekMode" />
   <div
     v-else
     class="fixed inset-0 overflow-hidden"
@@ -513,6 +531,7 @@ watch(
       :isBookmarked="bookmarks.isCurrentCfiBookmarked.value"
       :settings-open="showSettings"
       :footerMode="footerMode"
+      :peek-mode="isPeekMode"
       class="transition-all duration-300"
       :class="headerVisible ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-full pointer-events-none'"
       @back="router.back()"
@@ -523,6 +542,7 @@ watch(
       @toggleFullscreen="toggleFullscreen"
       @toggleHelp="toggleHelpModal"
       @cycleFooterMode="cycleFooterMode"
+      @startReading="startTrackedReading"
     >
       <template #settingsPanel>
         <ReaderSettingsPanel :state="state" :customFonts="customFonts" @update="applyUpdate" />

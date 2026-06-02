@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { type Component, computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import {
   AlignJustify,
   ArrowDownUp,
@@ -37,16 +37,22 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger } from '@/compon
 
 const TWO_PAGE_BREAKPOINT = 900
 
-const props = defineProps<{ bookId: number; fileId: number }>()
+const props = defineProps<{ bookId: number; fileId: number; peekMode?: boolean }>()
+const route = useRoute()
 const router = useRouter()
+const trackingEnabled = computed(() => !props.peekMode)
 
 const { headerVisible, footerVisible, handleMiddleTap, showHeader, showFooter, setVisibilityLock } = useVisibility()
 
-const { onActivity, elapsedMinutes } = useReadingSession(props.fileId, () => ({
-  percentage: progress.percentage.value,
-  pageNumber: progress.pageNumber.value,
-}))
-const progress = useReaderProgress(props.bookId, props.fileId, elapsedMinutes)
+const { onActivity, elapsedMinutes } = useReadingSession(
+  props.fileId,
+  () => ({
+    percentage: progress.percentage.value,
+    pageNumber: progress.pageNumber.value,
+  }),
+  { trackingEnabled },
+)
+const progress = useReaderProgress(props.bookId, props.fileId, elapsedMinutes, 0, { trackingEnabled })
 const { pageCount, bookTitle, loading, error, pageUrl, load } = useCbz(props.fileId, props.bookId)
 const { fitMode, viewMode, scrollMode, direction, spreadAlignment, forceTwoPage, widePageSingletonMode, bgColor, bgValue, imgFitClass } =
   useCbzSettings()
@@ -537,6 +543,17 @@ function onResize() {
   viewportWidth.value = window.innerWidth
 }
 
+async function startTrackedReading() {
+  const query = { ...route.query }
+  delete query.mode
+  await router.replace({ name: 'reader', params: route.params, query })
+  await nextTick()
+  progress.pageNumber.value = progressPageIndex.value + 1
+  progress.percentage.value = progressPercent.value
+  await progress.save()
+  onActivity()
+}
+
 // ── Mount / unmount ────────────────────────────────────────────────────────────
 onMounted(async () => {
   viewportWidth.value = window.innerWidth
@@ -594,6 +611,15 @@ onUnmounted(() => {
         <div class="flex-1 min-w-0 flex flex-col justify-center px-2">
           <span v-if="bookTitle" class="text-sm font-serif text-foreground truncate leading-tight">{{ bookTitle }}</span>
           <span class="text-xs text-muted-foreground tabular-nums">{{ pageLabel }}</span>
+        </div>
+        <div v-if="props.peekMode" class="flex h-7 items-center gap-1 rounded-md border border-primary/30 bg-primary/10 px-1.5 text-primary">
+          <span class="hidden text-[11px] font-medium sm:inline">Peeking</span>
+          <button
+            class="h-5 rounded-sm bg-primary px-1.5 text-[10px] font-semibold text-primary-foreground hover:bg-primary/90"
+            @click="startTrackedReading"
+          >
+            Start reading
+          </button>
         </div>
         <DropdownMenu v-model:open="showSettings">
           <DropdownMenuTrigger as-child>

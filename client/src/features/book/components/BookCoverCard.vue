@@ -8,6 +8,7 @@ import {
   BookOpen,
   Check,
   Download,
+  Eye,
   ExternalLink,
   FolderPlus,
   Image,
@@ -181,12 +182,17 @@ function handleArtworkError() {
   coverImageRatio.value = null
 }
 
-function openFile(file: BookFileRef) {
+function openFile(file: BookFileRef, mode?: 'peek') {
   router.push({
     name: 'reader',
     params: { bookId: props.book.id, fileId: file.id },
-    query: { format: file.format ?? 'epub' },
+    query: mode === 'peek' ? { format: file.format ?? 'epub', mode } : { format: file.format ?? 'epub' },
   })
+}
+
+function peekPrimaryFile() {
+  if (!primaryFile.value || isMissing.value) return
+  openFile(primaryFile.value, 'peek')
 }
 
 function openBookDetails() {
@@ -534,12 +540,12 @@ const secondaryLabelText = computed(() => resolveBookLabel(gridCardSecondaryLabe
                 <DropdownMenuContent align="end">
                   <DropdownMenuItem v-if="openableFiles.length <= 1 && primaryFile && !isMissing" @click="openFile(primaryFile)">
                     <BookOpen class="size-4 mr-2" />
-                    Open
+                    Read
                   </DropdownMenuItem>
                   <DropdownMenuSub v-else-if="openableFiles.length > 1 && !isMissing">
                     <DropdownMenuSubTrigger>
                       <BookOpen class="size-4 mr-2" />
-                      Open
+                      Read
                     </DropdownMenuSubTrigger>
                     <DropdownMenuSubContent>
                       <DropdownMenuItem v-for="file in openableFiles" :key="file.id" @click="openFile(file)">
@@ -549,6 +555,10 @@ const secondaryLabelText = computed(() => resolveBookLabel(gridCardSecondaryLabe
                       </DropdownMenuItem>
                     </DropdownMenuSubContent>
                   </DropdownMenuSub>
+                  <DropdownMenuItem v-if="primaryFile && !isMissing" @click="peekPrimaryFile">
+                    <Eye class="size-4 mr-2" />
+                    Peek
+                  </DropdownMenuItem>
 
                   <!-- Download submenu -->
                   <DropdownMenuItem
@@ -665,12 +675,12 @@ const secondaryLabelText = computed(() => resolveBookLabel(gridCardSecondaryLabe
           <DropdownMenuContent align="end">
             <DropdownMenuItem v-if="openableFiles.length <= 1 && primaryFile && !isMissing" @click="openFile(primaryFile)">
               <BookOpen class="size-4 mr-2" />
-              Open
+              Read
             </DropdownMenuItem>
             <DropdownMenuSub v-else-if="openableFiles.length > 1 && !isMissing">
               <DropdownMenuSubTrigger>
                 <BookOpen class="size-4 mr-2" />
-                Open
+                Read
               </DropdownMenuSubTrigger>
               <DropdownMenuSubContent>
                 <DropdownMenuItem v-for="file in openableFiles" :key="file.id" @click="openFile(file)">
@@ -680,6 +690,10 @@ const secondaryLabelText = computed(() => resolveBookLabel(gridCardSecondaryLabe
                 </DropdownMenuItem>
               </DropdownMenuSubContent>
             </DropdownMenuSub>
+            <DropdownMenuItem v-if="primaryFile && !isMissing" @click="peekPrimaryFile">
+              <Eye class="size-4 mr-2" />
+              Peek
+            </DropdownMenuItem>
 
             <DropdownMenuItem
               v-if="hasPermission('library_download') && openableFiles.length === 1 && primaryFile"

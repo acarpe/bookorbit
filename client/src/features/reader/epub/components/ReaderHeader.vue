@@ -22,6 +22,7 @@ const props = defineProps<{
   isBookmarked: boolean
   settingsOpen: boolean
   footerMode: 0 | 1 | 2
+  peekMode?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -33,6 +34,7 @@ const emit = defineEmits<{
   toggleFullscreen: []
   toggleHelp: []
   cycleFooterMode: []
+  startReading: []
 }>()
 
 const isFullscreen = ref(false)
@@ -105,6 +107,16 @@ onUnmounted(() => document.removeEventListener('fullscreenchange', onFullscreenC
 
     <!-- Right button group -->
     <div class="flex items-center gap-1 shrink-0 ml-auto">
+      <div v-if="props.peekMode" class="flex h-7 items-center gap-1 rounded-md border border-primary/30 bg-primary/10 px-1.5 text-primary">
+        <span class="hidden text-[11px] font-medium sm:inline">Peeking</span>
+        <button
+          class="h-5 rounded-sm bg-primary px-1.5 text-[10px] font-semibold text-primary-foreground transition-colors hover:bg-primary/90 sm:h-6 sm:px-2 sm:text-[11px]"
+          @click="emit('startReading')"
+        >
+          Start reading
+        </button>
+      </div>
+
       <Tooltip>
         <TooltipTrigger as-child>
           <button class="viewer-btn" aria-label="Search" @click="emit('toggleSearch')">

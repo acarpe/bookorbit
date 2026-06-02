@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref, watch, type WatchStopHandle } from 'vue'
-import { useRouter } from 'vue-router'
+import { computed, nextTick, onMounted, onUnmounted, ref, watch, type WatchStopHandle } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import {
   Bookmark,
   BookmarkCheck,
@@ -33,8 +33,10 @@ import { useAudioSettings } from './composables/useAudioSettings'
 import { useAudioBookmarks, type AudioBookmark } from './composables/useAudioBookmarks'
 import { useReadingSession } from '../shared/composables/useReadingSession'
 
-const props = defineProps<{ bookId: number; fileId: number }>()
+const props = defineProps<{ bookId: number; fileId: number; peekMode?: boolean }>()
+const route = useRoute()
 const router = useRouter()
+const trackingEnabled = computed(() => !props.peekMode)
 
 const detail = ref<BookDetail | null>(null)
 const loading = ref(true)
@@ -65,7 +67,7 @@ const audioFiles = computed<BookDetailFile[]>(() => {
 
 // ── Progress ──────────────────────────────────────────────────────────────────
 
-const progress = useAudioProgress(props.bookId)
+const progress = useAudioProgress(props.bookId, { trackingEnabled })
 
 // ── Queue (created lazily after files load) ───────────────────────────────────
 
@@ -139,7 +141,7 @@ const audioBookmarks = useAudioBookmarks(props.bookId)
 
 // ── Reading session ───────────────────────────────────────────────────────────
 
-const session = useReadingSession(props.fileId, () => ({ percentage: progressPct.value }))
+const session = useReadingSession(props.fileId, () => ({ percentage: progressPct.value }), { trackingEnabled })
 
 // ── Ticker (updates position every 500ms while playing) ──────────────────────
 
@@ -560,6 +562,19 @@ function handleScrubberLeave() {
   if (!isDragging.value) scrubberHoverSeconds.value = null
 }
 
+async function startTrackedReading() {
+  const query = { ...route.query }
+  delete query.mode
+  await router.replace({ name: 'reader', params: route.params, query })
+  await nextTick()
+  const fileId = audioFiles.value[currentFileIndex.value]?.id
+  if (fileId) {
+    progress.update(fileId, currentPosition.value, progressPct.value)
+    progress.flush()
+  }
+  session.onActivity()
+}
+
 // ── Computed helpers ──────────────────────────────────────────────────────────
 
 const absolutePositionSeconds = computed(() => {
@@ -775,6 +790,12 @@ onMounted(async () => {
             <p v-if="detail.audioMetadata?.narrators.length" class="text-xs text-white/55 truncate">
               {{ detail.audioMetadata.narrators.map((n) => n.name).join(', ') }}
             </p>
+          </div>
+          <div v-if="props.peekMode" class="flex h-8 items-center gap-1 rounded-md border border-white/20 bg-white/10 px-1.5 text-white">
+            <span class="hidden text-[11px] font-medium sm:inline">Peeking</span>
+            <button class="h-6 rounded-sm bg-white px-2 text-[11px] font-semibold text-black hover:bg-white/90" @click="startTrackedReading">
+              Start reading
+            </button>
           </div>
           <!-- Bookmark toggle -->
           <button

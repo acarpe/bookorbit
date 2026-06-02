@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, watch, computed } from 'vue'
 import { useRouter } from 'vue-router'
-import { BookOpen, Download, Files, Headphones, History, FolderOpen, ArrowUpDown, MoreVertical } from 'lucide-vue-next'
+import { BookOpen, Download, Eye, Files, Headphones, History, FolderOpen, ArrowUpDown, MoreVertical } from 'lucide-vue-next'
 import type { BookDetail, BookDetailFile, WriteLogEntry } from '@bookorbit/types'
 import { READER_OPENABLE_FORMATS } from '@bookorbit/types'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
@@ -102,11 +102,11 @@ function formatRelative(iso: string): string {
   return `${d}d ago`
 }
 
-function openFile(file: BookDetailFile) {
+function openFile(file: BookDetailFile, mode?: 'peek') {
   router.push({
     name: 'reader',
     params: { bookId: props.book.id, fileId: file.id },
-    query: { format: file.format ?? 'epub' },
+    query: mode === 'peek' ? { format: file.format ?? 'epub', mode } : { format: file.format ?? 'epub' },
   })
 }
 
@@ -299,6 +299,14 @@ async function toggleWriteLog() {
             <Headphones class="size-3.5" />
             Play
           </button>
+          <button
+            v-if="READER_OPENABLE_FORMATS.has(file.format ?? '')"
+            class="flex items-center gap-1.5 h-7 px-2.5 rounded border border-input bg-background text-xs font-medium hover:bg-muted transition-colors"
+            @click="openFile(file, 'peek')"
+          >
+            <Eye class="size-3.5" />
+            Peek
+          </button>
           <Tooltip v-if="hasPermission('library_download')">
             <TooltipTrigger as-child>
               <button
@@ -330,6 +338,10 @@ async function toggleWriteLog() {
             <DropdownMenuItem v-if="isAudioFile(file)" @click="openFile(file)">
               <Headphones class="mr-2 size-4" />
               Play
+            </DropdownMenuItem>
+            <DropdownMenuItem v-if="READER_OPENABLE_FORMATS.has(file.format ?? '')" @click="openFile(file, 'peek')">
+              <Eye class="mr-2 size-4" />
+              Peek
             </DropdownMenuItem>
             <DropdownMenuItem v-if="hasPermission('library_download')" @click="downloadFile(file)">
               <Download class="mr-2 size-4" />

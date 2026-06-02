@@ -1,8 +1,12 @@
-import { onUnmounted, ref, type Ref } from 'vue'
+import { onUnmounted, ref, unref, type MaybeRef, type Ref } from 'vue'
 import { api } from '@/lib/api'
 import type { FoliateRenderer, RelocateDetail } from '../../epub/composables/useFoliate'
 
 export type FooterDisplayMode = 0 | 1 | 2
+
+export interface ReaderProgressOptions {
+  trackingEnabled?: MaybeRef<boolean>
+}
 
 export function formatTimeRemaining(minutes: number): string {
   if (!Number.isFinite(minutes) || minutes < 0) return ''
@@ -14,7 +18,13 @@ export function formatTimeRemaining(minutes: number): string {
   return `${hours} hr ${remainder} min`
 }
 
-export function useReaderProgress(bookId: number, fileId: number, elapsedMinutes: Ref<number>, initialFooterMode: FooterDisplayMode = 0) {
+export function useReaderProgress(
+  bookId: number,
+  fileId: number,
+  elapsedMinutes: Ref<number>,
+  initialFooterMode: FooterDisplayMode = 0,
+  options: ReaderProgressOptions = {},
+) {
   const cfi = ref<string | null>(null)
   const pageNumber = ref<number | null>(null)
   const percentage = ref(0)
@@ -31,6 +41,7 @@ export function useReaderProgress(bookId: number, fileId: number, elapsedMinutes
   const timeTotal = ref(0)
 
   const footerMode = ref<FooterDisplayMode>(initialFooterMode)
+  const trackingEnabled = options.trackingEnabled ?? true
 
   let saveTimer: ReturnType<typeof setTimeout> | null = null
 
@@ -39,6 +50,7 @@ export function useReaderProgress(bookId: number, fileId: number, elapsedMinutes
   })
 
   async function load() {
+    if (!unref(trackingEnabled)) return
     const res = await api(`/api/v1/books/files/${fileId}/progress`)
     if (!res.ok) return
     const data = await res.json()
@@ -63,10 +75,12 @@ export function useReaderProgress(bookId: number, fileId: number, elapsedMinutes
     timeTotal.value = detail?.time?.total ?? 0
 
     if (saveTimer) clearTimeout(saveTimer)
+    if (!unref(trackingEnabled)) return
     saveTimer = setTimeout(() => save(), 2000)
   }
 
   async function save() {
+    if (!unref(trackingEnabled)) return
     await api(`/api/v1/books/files/${fileId}/progress`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
