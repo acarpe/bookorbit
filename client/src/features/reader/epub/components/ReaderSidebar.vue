@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, nextTick, ref, watch } from 'vue'
 import { Bookmark, BookOpen, Highlighter, Trash2 } from 'lucide-vue-next'
 import type { TocItem } from '../composables/useToc'
 import type { Bookmark as BookmarkType } from '../composables/useBookmarks'
@@ -29,6 +29,7 @@ const emit = defineEmits<{
 
 type Tab = 'chapters' | 'bookmarks' | 'highlights'
 const activeTab = ref<Tab>('chapters')
+const scrollContainer = ref<HTMLElement | null>(null)
 type SortMode = 'location' | 'newest' | 'oldest'
 const bookmarkQuery = ref('')
 const bookmarkSort = ref<SortMode>('location')
@@ -93,6 +94,26 @@ const filteredAndSortedHighlights = computed(() => {
 
 const activeBookmarkId = computed(() => findNearestCfi(filteredAndSortedBookmarks.value, props.currentCfi)?.id ?? null)
 const activeAnnotationId = computed(() => findNearestCfi(filteredAndSortedHighlights.value, props.currentCfi)?.id ?? null)
+const activeRowSelectorByTab: Record<Tab, string> = {
+  chapters: '[data-reader-active-row="chapter"]',
+  bookmarks: '[data-reader-active-row="bookmark"]',
+  highlights: '[data-reader-active-row="highlight"]',
+}
+
+async function scrollActiveSidebarRow() {
+  await nextTick()
+  const activeRow = scrollContainer.value?.querySelector<HTMLElement>(activeRowSelectorByTab[activeTab.value])
+  if (!activeRow || typeof activeRow.scrollIntoView !== 'function') return
+  activeRow.scrollIntoView({ block: 'center', inline: 'nearest' })
+}
+
+watch(
+  () => [activeTab.value, props.activeHref, props.currentCfi, props.chapters, props.bookmarks, props.annotations, props.expandedHrefs] as const,
+  () => {
+    void scrollActiveSidebarRow()
+  },
+  { immediate: true, flush: 'post' },
+)
 
 function getLocationLabel(cfi: string | null | undefined): string {
   return formatCfiLocation(cfi) ?? 'Location unavailable'
@@ -199,7 +220,7 @@ function deleteAnnotation(id: number) {
         </button>
       </div>
 
-      <div class="flex-1 overflow-y-auto">
+      <div ref="scrollContainer" class="flex-1 overflow-y-auto">
         <template v-if="activeTab === 'chapters'">
           <TocList
             :items="chapters"
@@ -240,6 +261,7 @@ function deleteAnnotation(id: number) {
                 :key="bm.id"
                 class="flex items-start gap-2.5 px-3 py-2.5 group transition-colors"
                 :class="bm.id === activeBookmarkId ? 'bg-primary/10 ring-1 ring-primary/25' : 'hover:bg-muted/50'"
+                :data-reader-active-row="bm.id === activeBookmarkId ? 'bookmark' : undefined"
               >
                 <button type="button" class="flex flex-1 min-w-0 items-start gap-2.5 text-left cursor-pointer" @click="navigateBookmark(bm.cfi)">
                   <Bookmark :size="14" class="mt-0.5 shrink-0 text-muted-foreground" />
@@ -314,6 +336,7 @@ function deleteAnnotation(id: number) {
                 :key="ann.id"
                 class="px-3 py-2.5 group transition-colors"
                 :class="ann.id === activeAnnotationId ? 'bg-primary/10 ring-1 ring-primary/25' : 'hover:bg-muted/50'"
+                :data-reader-active-row="ann.id === activeAnnotationId ? 'highlight' : undefined"
               >
                 <div class="flex items-start gap-2">
                   <button type="button" class="flex flex-1 min-w-0 items-start gap-2 text-left cursor-pointer" @click="navigateAnnotation(ann.cfi)">
@@ -390,6 +413,8 @@ const TocList = defineComponent({
                   'w-full text-left flex items-center gap-1 px-3 py-1.5 text-[13px] leading-snug transition-colors hover:bg-muted/50',
                   active ? 'text-primary font-medium bg-primary/8' : 'text-foreground',
                 ],
+                'data-reader-active-row': active ? 'chapter' : undefined,
+                'aria-current': active ? 'location' : undefined,
                 style: { paddingLeft: `${12 + props.depth * 10}px` },
                 onClick: () => {
                   emit('navigate', item.href)

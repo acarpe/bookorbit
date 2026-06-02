@@ -1,14 +1,30 @@
 import { mount } from '@vue/test-utils'
-import { describe, expect, it } from 'vitest'
+import { nextTick } from 'vue'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import ReaderSidebar from '../ReaderSidebar.vue'
 
 describe('ReaderSidebar', () => {
+  const scrollIntoView = vi.fn()
+
+  beforeEach(() => {
+    scrollIntoView.mockClear()
+    Object.defineProperty(Element.prototype, 'scrollIntoView', {
+      configurable: true,
+      value: scrollIntoView,
+    })
+  })
+
   const global = {
     stubs: {
       Tooltip: { template: '<div><slot /></div>' },
       TooltipTrigger: { template: '<div><slot /></div>' },
       TooltipContent: { template: '<div><slot /></div>' },
     },
+  }
+
+  async function flushScrollWatcher() {
+    await nextTick()
+    await nextTick()
   }
 
   function makeBaseProps() {
@@ -48,6 +64,29 @@ describe('ReaderSidebar', () => {
     await chevronToggle.trigger('click')
 
     expect(wrapper.emitted('toggleExpand')?.[0]).toEqual(['ch1.xhtml#start'])
+  })
+
+  it('scrolls the active TOC chapter into view when the active href changes', async () => {
+    const wrapper = mount(ReaderSidebar, {
+      props: {
+        ...makeBaseProps(),
+        chapters: Array.from({ length: 20 }, (_, index) => ({
+          label: `Chapter ${index + 1}`,
+          href: `ch${index + 1}.xhtml#start`,
+        })),
+        activeHref: 'ch1.xhtml#middle',
+      },
+      global,
+    })
+
+    await flushScrollWatcher()
+    scrollIntoView.mockClear()
+
+    await wrapper.setProps({ activeHref: 'ch18.xhtml#middle' })
+    await flushScrollWatcher()
+
+    expect(wrapper.find('[data-reader-active-row="chapter"]').text()).toContain('Chapter 18')
+    expect(scrollIntoView).toHaveBeenCalledWith({ block: 'center', inline: 'nearest' })
   })
 
   it('navigates and deletes bookmark/annotation entries from sidebar tabs', async () => {
