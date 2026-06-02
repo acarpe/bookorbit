@@ -74,6 +74,7 @@ const BOOK_EMIT_FLUSH_INTERVAL_MS = 1000;
 const BOOK_STATUS_NOTIFY_DEBOUNCE_MS = 1000;
 const WATCHER_NOTIFY_DEBOUNCE_MS = 30_000;
 const TARGETED_BOOK_SCAN_MAX_CONCURRENCY = 8;
+const MISSING_FILE_STAT_BATCH_SIZE = 50;
 type OrganizationMode = 'book_per_file' | 'book_per_folder';
 
 interface ScanCounts {
@@ -688,8 +689,9 @@ export class ScannerService implements OnApplicationBootstrap {
     const totals = { added: 0, updated: 0 };
     const allRetainedFileIds = new Set<number>();
     const seenBookIds = new Set<number>();
+    const candidateFolderPaths = new Set(candidates.map((candidate) => candidate.folderPath));
     for (const candidate of candidates) {
-      const result = await this.processCandidate(candidate, libraryId, libraryFolder.id, maps, settings.formatPriority, false);
+      const result = await this.processCandidate(candidate, libraryId, libraryFolder.id, maps, settings.formatPriority, false, candidateFolderPaths);
       this.emitTargetedScanResult(libraryId, result);
       seenBookIds.add(result.bookId);
       for (const fid of result.retainedFileIds) allRetainedFileIds.add(fid);
@@ -783,7 +785,15 @@ export class ScannerService implements OnApplicationBootstrap {
     };
 
     const maps = await this.loadCandidateMaps(filePath, libraryId);
-    const result = await this.processCandidate(candidate, libraryId, libraryFolder.id, maps, settings.formatPriority, false);
+    const result = await this.processCandidate(
+      candidate,
+      libraryId,
+      libraryFolder.id,
+      maps,
+      settings.formatPriority,
+      false,
+      new Set([candidate.folderPath]),
+    );
     await this.pruneMissingBookFiles(result.bookId, result.retainedFileIds, maps.fileIdsByBookId, maps.fileByPath, maps.fileByIno, {
       added: 0,
       updated: 0,
@@ -842,7 +852,15 @@ export class ScannerService implements OnApplicationBootstrap {
     };
 
     const maps = await this.loadCandidateMaps(filePath, libraryId);
-    const result = await this.processCandidate(candidate, libraryId, libraryFolder.id, maps, settings.formatPriority, false);
+    const result = await this.processCandidate(
+      candidate,
+      libraryId,
+      libraryFolder.id,
+      maps,
+      settings.formatPriority,
+      false,
+      new Set([candidate.folderPath]),
+    );
     await this.pruneMissingBookFiles(result.bookId, result.retainedFileIds, maps.fileIdsByBookId, maps.fileByPath, maps.fileByIno, {
       added: 0,
       updated: 0,
@@ -921,7 +939,15 @@ export class ScannerService implements OnApplicationBootstrap {
     }
 
     const maps = await this.loadCandidateMaps(resolvedBookFolder, libraryId);
-    const result = await this.processCandidate(candidate, libraryId, libraryFolder.id, maps, settings.formatPriority, false);
+    const result = await this.processCandidate(
+      candidate,
+      libraryId,
+      libraryFolder.id,
+      maps,
+      settings.formatPriority,
+      false,
+      new Set([candidate.folderPath]),
+    );
     await this.pruneMissingBookFiles(result.bookId, result.retainedFileIds, maps.fileIdsByBookId, maps.fileByPath, maps.fileByIno, {
       added: 0,
       updated: 0,
@@ -1107,9 +1133,10 @@ export class ScannerService implements OnApplicationBootstrap {
 
       const seenBookIds = new Set<number>();
       const allRetainedFileIds = new Set<number>();
+      const candidateFolderPaths = new Set(candidates.map((candidate) => candidate.folderPath));
 
       for (const candidate of candidates) {
-        const result = await this.processCandidate(candidate, libraryId, libraryFolderId, maps, formatPriority, isFirstScan);
+        const result = await this.processCandidate(candidate, libraryId, libraryFolderId, maps, formatPriority, isFirstScan, candidateFolderPaths);
         seenBookIds.add(result.bookId);
         for (const fid of result.retainedFileIds) allRetainedFileIds.add(fid);
         counts.addedCount += result.added;
@@ -1150,9 +1177,10 @@ export class ScannerService implements OnApplicationBootstrap {
         if (unchangedDirs.has(parentDir)) return true;
         return false;
       };
-      const missingIds = knownBooks
+      const missingCandidates = knownBooks
         .filter((b) => !seenBookIds.has(b.id) && !isUnderSkippedDir(b.folderPath) && !isInUnchangedDir(b.folderPath))
         .map((b) => b.id);
+      const missingIds = await this.filterBookIdsMissingOnDisk(missingCandidates);
       if (missingIds.length > 0) {
         await this.scannerRepo.markBooksAsMissing(missingIds);
         counts.missingCount += missingIds.length;
@@ -1182,13 +1210,24 @@ export class ScannerService implements OnApplicationBootstrap {
     maps: ScanLookupMaps,
     formatPriority: string[],
     isFirstScan: boolean,
+    candidateFolderPaths: Set<string>,
   ): Promise<{ bookId: number; added: number; updated: number; retainedFileIds: Set<number>; becameVisible: boolean }> {
     const { bookByFolderPath, booksByParentDir, fileByPath, fileByIno } = maps;
     const counts = { added: 0, updated: 0 };
     const fileCounts: ScanCounts = { addedCount: 0, updatedCount: 0, missingCount: 0 };
     const retainedFileIds = new Set<number>();
 
-    const book = await this.upsertBook(candidate, libraryId, libraryFolderId, bookByFolderPath, booksByParentDir, fileByPath, fileByIno, fileCounts);
+    const book = await this.upsertBook(
+      candidate,
+      libraryId,
+      libraryFolderId,
+      bookByFolderPath,
+      booksByParentDir,
+      fileByPath,
+      fileByIno,
+      fileCounts,
+      candidateFolderPaths,
+    );
     // If the book was transferred from another library, its files exist globally
     // but not in our local maps - we need global lookups even on a "first scan"
     const skipGlobalLookups = isFirstScan && fileCounts.addedCount > 0;
@@ -1348,8 +1387,18 @@ export class ScannerService implements OnApplicationBootstrap {
     fileByPath: Map<string, FileByPathEntry>,
     fileByIno: Map<number, FileByInoEntry>,
     counts: ScanCounts,
+    candidateFolderPaths: Set<string>,
   ) {
     const existing = bookByFolderPath.get(candidate.folderPath);
+    const candidateOwnedBookIds = new Set<number>();
+    for (const file of candidate.files) {
+      const byPath = fileByPath.get(file.absolutePath);
+      if (byPath) candidateOwnedBookIds.add(byPath.bookId);
+      if (file.ino !== 0) {
+        const byIno = fileByIno.get(file.ino);
+        if (byIno) candidateOwnedBookIds.add(byIno.bookId);
+      }
+    }
 
     if (!existing) {
       // Detect series-to-single-book merge: files were renamed so all stems match,
@@ -1358,7 +1407,11 @@ export class ScannerService implements OnApplicationBootstrap {
       // and pick the lowest-ID one as the survivor to preserve its reading progress.
       // Use pre-built parent-dir index instead of O(N) filter
       const virtualChildren = (booksByParentDir.get(candidate.folderPath) ?? []).filter(
-        (b) => b.folderPath !== candidate.folderPath && b.folderPath.startsWith(candidate.folderPath + sep),
+        (b) =>
+          b.folderPath !== candidate.folderPath &&
+          b.folderPath.startsWith(candidate.folderPath + sep) &&
+          !candidateFolderPaths.has(b.folderPath) &&
+          candidateOwnedBookIds.has(b.id),
       );
 
       if (virtualChildren.length > 0) {
@@ -1408,21 +1461,19 @@ export class ScannerService implements OnApplicationBootstrap {
       this.bufferBooksRestoredNotification(libraryId, [existing.id]);
     }
 
-    // Drain any virtual siblings that share this real folder (created by old stem-split
-    // logic or by detectMovedFile updating a book's folderPath to the real directory).
-    // Marking them missing here ensures processFile will reassign their files to
-    // "existing", and reconcile cannot restore them once their files are gone.
-    // Use pre-built parent-dir index instead of O(N) filter
+    // Defer virtual sibling cleanup until the final missing pass so real nested
+    // book folders can still be processed when their own candidates appear later.
+    // Use pre-built parent-dir index instead of O(N) filter.
     const virtualSiblings = (booksByParentDir.get(candidate.folderPath) ?? []).filter(
-      (b) => b.id !== existing.id && b.folderPath !== candidate.folderPath && b.folderPath.startsWith(candidate.folderPath + sep),
+      (b) =>
+        b.id !== existing.id &&
+        b.folderPath !== candidate.folderPath &&
+        b.folderPath.startsWith(candidate.folderPath + sep) &&
+        !candidateFolderPaths.has(b.folderPath),
     );
     if (virtualSiblings.length > 0) {
-      const siblingIds = virtualSiblings.map((b) => b.id);
-      await this.scannerRepo.markBooksAsMissing(siblingIds);
-      this.scanGateway.emitBookMissing({ libraryId, bookIds: siblingIds });
-      this.bufferBooksUnavailableNotification(libraryId, siblingIds);
       this.logger.log(
-        `[scanner.upsert_book] [end] libraryId=${libraryId} bookId=${existing.id} folder="${sanitizeLogValue(candidate.folderPath)}" drainedCount=${virtualSiblings.length} action=drain_virtual_siblings - virtual siblings drained`,
+        `[scanner.upsert_book] [end] libraryId=${libraryId} bookId=${existing.id} folder="${sanitizeLogValue(candidate.folderPath)}" siblingCount=${virtualSiblings.length} action=defer_virtual_siblings - virtual sibling cleanup deferred`,
       );
     }
 
@@ -1513,6 +1564,25 @@ export class ScannerService implements OnApplicationBootstrap {
       if (entry.fileHash === fileHash) return entry;
     }
     return null;
+  }
+
+  private async filterBookIdsMissingOnDisk(bookIds: number[]): Promise<number[]> {
+    if (bookIds.length === 0) return [];
+
+    const files = (await this.scannerRepo.findBookFilesByBookIds(bookIds)).filter((file) => file.role === 'content');
+    const presentBookIds = new Set<number>();
+
+    for (let i = 0; i < files.length; i += MISSING_FILE_STAT_BATCH_SIZE) {
+      const batch = files.slice(i, i + MISSING_FILE_STAT_BATCH_SIZE);
+      await Promise.all(
+        batch.map(async (file) => {
+          const fileStat = await stat(file.absolutePath).catch(() => null);
+          if (fileStat?.isFile()) presentBookIds.add(file.bookId);
+        }),
+      );
+    }
+
+    return bookIds.filter((bookId) => !presentBookIds.has(bookId));
   }
 
   private async tryTransferMissingBook(

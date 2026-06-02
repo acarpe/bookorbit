@@ -259,6 +259,66 @@ describe('missing book detection', () => {
 
     expect(repo.markBooksAsMissing).not.toHaveBeenCalled();
   });
+
+  it('does not mark books as missing when their tracked content files still exist on disk', async () => {
+    const folderPath = '/library/Author/Book';
+    const file = makeBookFile({ id: 10, bookId: 5, absolutePath: `${folderPath}/book.epub`, relPath: 'Author/Book/book.epub' });
+    const repo = makeRepo({
+      findBooksByLibraryFolder: vi.fn().mockResolvedValue([{ id: 5, libraryId: 1, libraryFolderId: 1, folderPath, status: 'present' }]),
+      findBookFilesByBookIds: vi.fn().mockResolvedValue([file]),
+    });
+    mockFindCandidates.mockResolvedValue({ candidates: [], skippedDirs: new Set(), unchangedDirs: new Set(), dirMtimes: new Map() });
+
+    const done = awaitScan(repo);
+    const { service } = makeService(repo);
+    await service.startScan(1, 'manual');
+    await done;
+
+    expect(repo.findBookFilesByBookIds).toHaveBeenCalledWith([5]);
+    expect(repo.markBooksAsMissing).not.toHaveBeenCalled();
+  });
+
+  it('marks books as missing when their tracked content files no longer exist on disk', async () => {
+    const folderPath = '/library/Author/Book';
+    const file = makeBookFile({ id: 10, bookId: 5, absolutePath: `${folderPath}/book.epub`, relPath: 'Author/Book/book.epub' });
+    const repo = makeRepo({
+      findBooksByLibraryFolder: vi.fn().mockResolvedValue([{ id: 5, libraryId: 1, libraryFolderId: 1, folderPath, status: 'present' }]),
+      findBookFilesByBookIds: vi.fn().mockResolvedValue([file]),
+    });
+    mockFindCandidates.mockResolvedValue({ candidates: [], skippedDirs: new Set(), unchangedDirs: new Set(), dirMtimes: new Map() });
+    mockStat.mockRejectedValueOnce(Object.assign(new Error('ENOENT'), { code: 'ENOENT' }));
+
+    const done = awaitScan(repo);
+    const { service } = makeService(repo);
+    await service.startScan(1, 'manual');
+    await done;
+
+    expect(repo.markBooksAsMissing).toHaveBeenCalledWith([5]);
+  });
+
+  it('does not let existing non-content files keep a book present when content is gone', async () => {
+    const folderPath = '/library/Author/Book';
+    const cover = makeBookFile({
+      id: 10,
+      bookId: 5,
+      absolutePath: `${folderPath}/cover.jpg`,
+      relPath: 'Author/Book/cover.jpg',
+      format: 'jpg',
+      role: 'cover',
+    });
+    const repo = makeRepo({
+      findBooksByLibraryFolder: vi.fn().mockResolvedValue([{ id: 5, libraryId: 1, libraryFolderId: 1, folderPath, status: 'present' }]),
+      findBookFilesByBookIds: vi.fn().mockResolvedValue([cover]),
+    });
+    mockFindCandidates.mockResolvedValue({ candidates: [], skippedDirs: new Set(), unchangedDirs: new Set(), dirMtimes: new Map() });
+
+    const done = awaitScan(repo);
+    const { service } = makeService(repo);
+    await service.startScan(1, 'manual');
+    await done;
+
+    expect(repo.markBooksAsMissing).toHaveBeenCalledWith([5]);
+  });
 });
 
 describe('books unavailable notifications', () => {
@@ -1484,6 +1544,89 @@ describe('cross-library transfer', () => {
 // ── Virtual sibling drain / merge ────────────────────────────────────────────
 
 describe('virtual sibling drain', () => {
+  it('does not merge nested child records into a new parent when child candidates are also seen', async () => {
+    const parentFolder = '/library/Rising Queen (Court of the Sea Fae Trilogy Book 3) (2020)';
+    const childFolder = `${parentFolder}/City of Thorns (2021)`;
+    const parentFile = makeFileStat({
+      absolutePath: `${parentFolder}/Rising Queen.epub`,
+      relPath: 'Rising Queen (Court of the Sea Fae Trilogy Book 3) (2020)/Rising Queen.epub',
+      ino: 1001,
+    });
+    const childFile = makeFileStat({
+      absolutePath: `${childFolder}/City of Thorns - C.N. Crawford.epub`,
+      relPath: 'Rising Queen (Court of the Sea Fae Trilogy Book 3) (2020)/City of Thorns (2021)/City of Thorns - C.N. Crawford.epub',
+      ino: 1002,
+    });
+
+    const repo = makeRepo({
+      findBooksByLibraryFolder: vi.fn().mockResolvedValue([{ id: 2, libraryId: 1, libraryFolderId: 1, folderPath: childFolder, status: 'present' }]),
+      findBookFilesByLibraryFolder: vi
+        .fn()
+        .mockResolvedValue([
+          makeBookFile({ id: 12, bookId: 2, absolutePath: childFile.absolutePath, relPath: childFile.relPath, ino: childFile.ino }),
+        ]),
+      createBook: vi.fn().mockResolvedValue({ id: 1, status: 'present', libraryFolderId: 1, folderPath: parentFolder, libraryId: 1 }),
+    });
+    mockFindCandidates.mockResolvedValue({
+      candidates: [makeCandidate(parentFolder, [parentFile]), makeCandidate(childFolder, [childFile])],
+      skippedDirs: new Set(),
+      unchangedDirs: new Set(),
+      dirMtimes: new Map(),
+    });
+
+    const done = awaitScan(repo);
+    const { service } = makeService(repo);
+    await service.startScan(1, 'manual');
+    await done;
+
+    expect(repo.updateBookFolderPath).not.toHaveBeenCalledWith(2, parentFolder);
+    expect(repo.markBooksAsMissing).not.toHaveBeenCalled();
+    expect(repo.completeScanJob).toHaveBeenCalledWith(100, expect.objectContaining({ missingCount: 0 }));
+  });
+
+  it('does not mark nested real book folders missing when parent and child candidates are both seen', async () => {
+    const parentFolder = '/library/Rising Queen (Court of the Sea Fae Trilogy Book 3) (2020)';
+    const childFolder = `${parentFolder}/City of Thorns (2021)`;
+    const parentFile = makeFileStat({
+      absolutePath: `${parentFolder}/Rising Queen.epub`,
+      relPath: 'Rising Queen (Court of the Sea Fae Trilogy Book 3) (2020)/Rising Queen.epub',
+      ino: 1001,
+    });
+    const childFile = makeFileStat({
+      absolutePath: `${childFolder}/City of Thorns - C.N. Crawford.epub`,
+      relPath: 'Rising Queen (Court of the Sea Fae Trilogy Book 3) (2020)/City of Thorns (2021)/City of Thorns - C.N. Crawford.epub',
+      ino: 1002,
+    });
+
+    const repo = makeRepo({
+      findBooksByLibraryFolder: vi.fn().mockResolvedValue([
+        { id: 1, libraryId: 1, libraryFolderId: 1, folderPath: parentFolder, status: 'present' },
+        { id: 2, libraryId: 1, libraryFolderId: 1, folderPath: childFolder, status: 'present' },
+      ]),
+      findBookFilesByLibraryFolder: vi
+        .fn()
+        .mockResolvedValue([
+          makeBookFile({ id: 11, bookId: 1, absolutePath: parentFile.absolutePath, relPath: parentFile.relPath, ino: parentFile.ino }),
+          makeBookFile({ id: 12, bookId: 2, absolutePath: childFile.absolutePath, relPath: childFile.relPath, ino: childFile.ino }),
+        ]),
+    });
+    mockFindCandidates.mockResolvedValue({
+      candidates: [makeCandidate(parentFolder, [parentFile]), makeCandidate(childFolder, [childFile])],
+      skippedDirs: new Set(),
+      unchangedDirs: new Set(),
+      dirMtimes: new Map(),
+    });
+
+    const done = awaitScan(repo);
+    const { service } = makeService(repo);
+    await service.startScan(1, 'manual');
+    await done;
+
+    expect(repo.markBooksAsMissing).not.toHaveBeenCalled();
+    expect(mockGateway.emitBookMissing).not.toHaveBeenCalled();
+    expect(repo.completeScanJob).toHaveBeenCalledWith(100, expect.objectContaining({ missingCount: 0 }));
+  });
+
   it('marks virtual children missing when real folder book exists (drain path)', async () => {
     const repo = makeRepo({
       findBooksByLibraryFolder: vi.fn().mockResolvedValue([
@@ -1509,14 +1652,61 @@ describe('virtual sibling drain', () => {
   });
 
   it('picks lowest-id virtual child as survivor and updates its folderPath when no exact match exists (merge path)', async () => {
+    const mergedFile = makeFileStat({ absolutePath: '/library/Series/book.epub', relPath: 'Series/book.epub' });
     const repo = makeRepo({
       findBooksByLibraryFolder: vi.fn().mockResolvedValue([
         { id: 3, libraryId: 1, libraryFolderId: 1, folderPath: '/library/Series/TitleOne', status: 'present' },
         { id: 1, libraryId: 1, libraryFolderId: 1, folderPath: '/library/Series/TitleTwo', status: 'present' },
       ]),
+      findBookFilesByLibraryFolder: vi
+        .fn()
+        .mockResolvedValue([
+          makeBookFile({ id: 10, bookId: 1, absolutePath: mergedFile.absolutePath, relPath: mergedFile.relPath, ino: mergedFile.ino }),
+        ]),
     });
     mockFindCandidates.mockResolvedValue({
-      candidates: [makeCandidate('/library/Series', [makeFileStat({ absolutePath: '/library/Series/book.epub', relPath: 'Series/book.epub' })])],
+      candidates: [makeCandidate('/library/Series', [mergedFile])],
+      skippedDirs: new Set(),
+      unchangedDirs: new Set(),
+      dirMtimes: new Map(),
+    });
+
+    const done = awaitScan(repo);
+    const { service } = makeService(repo);
+    await service.startScan(1, 'manual');
+    await done;
+
+    expect(repo.updateBookFolderPath).toHaveBeenCalledWith(1, '/library/Series');
+    expect(repo.createBook).not.toHaveBeenCalled();
+  });
+
+  it('uses inode ownership to merge renamed virtual children into the lowest-id survivor', async () => {
+    const currentFirst = makeFileStat({ absolutePath: '/library/Series/renamed-one.epub', relPath: 'Series/renamed-one.epub', ino: 3003 });
+    const currentSecond = makeFileStat({ absolutePath: '/library/Series/renamed-two.epub', relPath: 'Series/renamed-two.epub', ino: 1001 });
+    const repo = makeRepo({
+      findBooksByLibraryFolder: vi.fn().mockResolvedValue([
+        { id: 3, libraryId: 1, libraryFolderId: 1, folderPath: '/library/Series/TitleOne', status: 'present' },
+        { id: 1, libraryId: 1, libraryFolderId: 1, folderPath: '/library/Series/TitleTwo', status: 'present' },
+      ]),
+      findBookFilesByLibraryFolder: vi.fn().mockResolvedValue([
+        makeBookFile({
+          id: 30,
+          bookId: 3,
+          absolutePath: '/library/Series/TitleOne/old-one.epub',
+          relPath: 'Series/TitleOne/old-one.epub',
+          ino: 3003,
+        }),
+        makeBookFile({
+          id: 10,
+          bookId: 1,
+          absolutePath: '/library/Series/TitleTwo/old-two.epub',
+          relPath: 'Series/TitleTwo/old-two.epub',
+          ino: 1001,
+        }),
+      ]),
+    });
+    mockFindCandidates.mockResolvedValue({
+      candidates: [makeCandidate('/library/Series', [currentFirst, currentSecond])],
       skippedDirs: new Set(),
       unchangedDirs: new Set(),
       dirMtimes: new Map(),
@@ -1532,14 +1722,20 @@ describe('virtual sibling drain', () => {
   });
 
   it('restores the survivor to present when it was missing during the merge', async () => {
+    const mergedFile = makeFileStat({ absolutePath: '/library/Series/book.epub', relPath: 'Series/book.epub' });
     const repo = makeRepo({
       findBooksByLibraryFolder: vi.fn().mockResolvedValue([
         { id: 1, libraryId: 1, libraryFolderId: 1, folderPath: '/library/Series/TitleOne', status: 'missing' },
         { id: 2, libraryId: 1, libraryFolderId: 1, folderPath: '/library/Series/TitleTwo', status: 'present' },
       ]),
+      findBookFilesByLibraryFolder: vi
+        .fn()
+        .mockResolvedValue([
+          makeBookFile({ id: 10, bookId: 1, absolutePath: mergedFile.absolutePath, relPath: mergedFile.relPath, ino: mergedFile.ino }),
+        ]),
     });
     mockFindCandidates.mockResolvedValue({
-      candidates: [makeCandidate('/library/Series', [makeFileStat({ absolutePath: '/library/Series/book.epub', relPath: 'Series/book.epub' })])],
+      candidates: [makeCandidate('/library/Series', [mergedFile])],
       skippedDirs: new Set(),
       unchangedDirs: new Set(),
       dirMtimes: new Map(),
