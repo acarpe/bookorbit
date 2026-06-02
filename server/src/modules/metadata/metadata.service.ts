@@ -15,6 +15,7 @@ import {
   isExtractedBookCoverFileName,
 } from '../../common/book-cover-storage';
 import { sanitizeLogValue } from '../../common/utils/log-sanitize.utils';
+import { SeriesIdentityService } from '../../common/services/series-identity.service';
 import { BookEmbedderService } from '../embedding/book-embedder.service';
 import { BookMetadataLockService } from '../book-metadata-lock/book-metadata-lock.service';
 import { ComicMetadataRepository } from './comic-metadata.repository';
@@ -71,6 +72,7 @@ export class MetadataService {
     private readonly bookMetadataLockService: BookMetadataLockService,
     @Optional() private readonly embedder: BookEmbedderService,
     @Optional() private readonly metadataEvents?: MetadataEventsService,
+    @Optional() private readonly seriesIdentity?: SeriesIdentityService,
   ) {
     this.appDataPath = this.config.get<string>('storage.appDataPath')!;
     const audio = new AudioFormatExtractor();
@@ -568,7 +570,8 @@ export class MetadataService {
     if (filtered.itunesId !== undefined) scalarFields.itunesId = filtered.itunesId;
     if (Object.keys(scalarFields).length > 0) {
       scalarFields.updatedAt = new Date();
-      await this.db.update(bookMetadata).set(scalarFields).where(eq(bookMetadata.bookId, bookId));
+      const patch = (await this.seriesIdentity?.resolveMetadataPatch(scalarFields)) ?? scalarFields;
+      await this.db.update(bookMetadata).set(patch).where(eq(bookMetadata.bookId, bookId));
     }
 
     if (filtered.authors !== undefined) {
