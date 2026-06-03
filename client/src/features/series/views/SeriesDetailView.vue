@@ -26,7 +26,15 @@ import SeriesGapBanner from '../components/SeriesGapBanner.vue'
 import { fetchSeriesBooks } from '../api/series'
 import { useSeriesDetail } from '../composables/useSeriesDetail'
 import { useCoverStack, MAX_VISIBLE as MAX_STACK_VISIBLE } from '../composables/useCoverStack'
-import { centeredBottomScaleTransform, resolveSquareCoverScale, shouldPersistCoverRatio } from '../lib/cover-scale'
+import {
+  PORTRAIT_STACK_FRAME_ASPECT_RATIO,
+  centeredBottomScaleTransform,
+  resolveCoverStackAspectRatio,
+  resolveCoverStackDisplayMode,
+  resolveCoverStackFrameAspectRatio,
+  resolveSquareCoverScale,
+  shouldPersistCoverRatio,
+} from '../lib/cover-scale'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import type { ColumnId } from '@/features/book/composables/useTableColumns'
 
@@ -187,15 +195,28 @@ function handleLeadCoverLoad(bookId: number, ratio: number | null) {
   leadCoverRatios.value = new Map(leadCoverRatios.value).set(bookId, ratio)
 }
 
+function leadCoverRatioAt(index: number): number | null {
+  const bookId = visibleLeadCoverBookIds.value[index]
+  return bookId == null ? null : (leadCoverRatios.value.get(bookId) ?? null)
+}
+
+const leadCoverFrameAspectRatios = computed(() =>
+  visibleLeadCoverBookIds.value.map((_, index) => resolveCoverStackFrameAspectRatio(leadCoverRatioAt(index))),
+)
+const leadCoverDisplayModes = computed(() => visibleLeadCoverBookIds.value.map((_, index) => resolveCoverStackDisplayMode(leadCoverRatioAt(index))))
+
 const scaledLeadCoverStyles = computed(() =>
   leadCoverStyles.value.map((base, index) => {
-    const bookId = visibleLeadCoverBookIds.value[index]
-    const ratio = bookId == null ? null : (leadCoverRatios.value.get(bookId) ?? null)
+    const ratio = leadCoverRatioAt(index)
     const squareScale = resolveSquareCoverScale(ratio, SERIES_AUDIOBOOK_COVER_SCALE)
     const squareTransform = centeredBottomScaleTransform(squareScale)
-    if (!squareTransform) return base
-    return {
+    const baseForRatio = {
       ...base,
+      aspectRatio: resolveCoverStackAspectRatio(ratio),
+    }
+    if (!squareTransform) return baseForRatio
+    return {
+      ...baseForRatio,
       ...squareTransform,
     }
   }),
@@ -425,7 +446,8 @@ watch(
                   :title="seriesInfo.name"
                   :seed="`${seriesInfo.name}-${bookId}`"
                   alt=""
-                  frame-aspect-ratio="2/3"
+                  :mode="leadCoverDisplayModes[i]"
+                  :frame-aspect-ratio="leadCoverFrameAspectRatios[i] ?? PORTRAIT_STACK_FRAME_ASPECT_RATIO"
                   loading="lazy"
                   decoding="async"
                   :spine="false"

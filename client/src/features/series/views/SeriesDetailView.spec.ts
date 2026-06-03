@@ -184,8 +184,18 @@ const VirtualBookTableStub = defineComponent({
 
 const BookCoverArtworkStub = defineComponent({
   name: 'BookCoverArtwork',
+  props: {
+    mode: {
+      type: String,
+      default: undefined,
+    },
+    frameAspectRatio: {
+      type: String,
+      default: undefined,
+    },
+  },
   emits: ['load', 'error'],
-  template: '<div data-testid="lead-cover-artwork" />',
+  template: '<div data-testid="lead-cover-artwork" :data-mode="mode ?? \'\'" :data-frame-aspect-ratio="frameAspectRatio ?? \'\'" />',
 })
 
 const AddToCollectionSheetStub = defineComponent({
@@ -340,6 +350,9 @@ describe('SeriesDetailView', () => {
     expect(style).toContain('scale(1.25)')
     expect(style).toContain('transform-origin: center bottom')
     expect(style).toContain('translateY(-12.5%)')
+    expect(style).toContain('aspect-ratio: 1 / 1')
+    expect(wrapper.get('[data-testid="lead-cover-artwork"]').attributes('data-mode')).toBe('natural-bottom')
+    expect(wrapper.get('[data-testid="lead-cover-artwork"]').attributes('data-frame-aspect-ratio')).toBe('1/1')
 
     artwork.vm.$emit('load', 1)
     await nextTick()
