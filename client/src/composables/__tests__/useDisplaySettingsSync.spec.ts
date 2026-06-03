@@ -21,7 +21,7 @@ function validDisplayPreferences(overrides: Partial<DisplayPreferences> = {}): D
     bookShadowStrength: 'strong',
     bookCoverDisplayMode: 'blurred-fit',
     cardInfoMode: 'hover-overlay',
-    seriesCardCoverMode: 'mosaic',
+    seriesCardCoverMode: 'stack',
     gridCardPrimaryLabel: 'hidden',
     gridCardSecondaryLabel: 'hidden',
     ...overrides,

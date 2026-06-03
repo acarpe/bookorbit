@@ -47,7 +47,7 @@ const DEFAULT_GRID_GAP = 28
 const DEFAULT_BOOK_SPINE_OVERLAY: BookSpineOverlay = 'off'
 const DEFAULT_BOOK_SHADOW_STRENGTH: BookShadowStrength = 'default'
 const DEFAULT_BOOK_COVER_DISPLAY_MODE: BookCoverDisplayMode = 'blurred-fit'
-const DEFAULT_SERIES_CARD_COVER_MODE: SeriesCardCoverMode = 'mosaic'
+const DEFAULT_SERIES_CARD_COVER_MODE: SeriesCardCoverMode = 'stack'
 const DEFAULT_CARD_OVERLAYS: CardOverlayKey[] = ['progress-bar', 'format', 'rating', 'read-status', 'series-position']
 
 function normalizeBookSpineOverlay(value: unknown): BookSpineOverlay {

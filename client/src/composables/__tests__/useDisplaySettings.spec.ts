@@ -20,9 +20,10 @@ function resetDisplaySettings() {
   settings.bookSpineOverlay.value = 'off'
   settings.bookShadowStrength.value = 'default'
   settings.bookCoverDisplayMode.value = 'blurred-fit'
-  settings.seriesCardCoverMode.value = 'mosaic'
+  settings.seriesCardCoverMode.value = 'stack'
   settings.gridCardPrimaryLabel.value = 'hidden'
   settings.gridCardSecondaryLabel.value = 'hidden'
+  settings.cardInfoMode.value = 'hover-overlay'
 }
 
 afterEach(() => {
@@ -99,8 +100,9 @@ describe('useDisplaySettings preferences helpers', () => {
   })
 
   it('sanitizes valid seriesCardCoverMode values', () => {
-    const sanitized = sanitizeDisplayPreferences({ seriesCardCoverMode: 'latest-volume' })
-    expect(sanitized).toEqual({ seriesCardCoverMode: 'latest-volume' })
+    for (const value of ['stack', 'mosaic', 'first-volume', 'latest-volume', 'first-unread'] as const) {
+      expect(sanitizeDisplayPreferences({ seriesCardCoverMode: value })).toEqual({ seriesCardCoverMode: value })
+    }
   })
 
   it('drops invalid seriesCardCoverMode values', () => {
@@ -113,9 +115,9 @@ describe('useDisplaySettings preferences helpers', () => {
     expect(settings.seriesCardCoverMode.value).toBe('first-unread')
   })
 
-  it('defaults seriesCardCoverMode to mosaic', () => {
+  it('defaults seriesCardCoverMode to stack', () => {
     resetDisplaySettings()
-    expect(settings.seriesCardCoverMode.value).toBe('mosaic')
+    expect(settings.seriesCardCoverMode.value).toBe('stack')
   })
 
   it('includes gridCardPrimaryLabel and gridCardSecondaryLabel in snapshot', () => {

@@ -49,9 +49,10 @@ const validDisplayPreferences: DisplayPreferences = {
   bookSpineOverlay: 'subtle',
   bookShadowStrength: 'strong',
   bookCoverDisplayMode: 'natural-bottom',
-  seriesCardCoverMode: 'mosaic',
+  seriesCardCoverMode: 'stack',
   gridCardPrimaryLabel: 'hidden',
   gridCardSecondaryLabel: 'hidden',
+  cardInfoMode: 'hover-overlay',
 };
 
 describe('UserPreferencesController', () => {

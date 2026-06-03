@@ -51,7 +51,7 @@ const DISPLAY_PREFERENCES_SCHEMA = z
     bookSpineOverlay: z.enum(BOOK_SPINE_OVERLAYS),
     bookShadowStrength: z.enum(BOOK_SHADOW_STRENGTHS),
     bookCoverDisplayMode: z.enum(BOOK_COVER_DISPLAY_MODES),
-    seriesCardCoverMode: z.enum(SERIES_CARD_COVER_MODES).default('mosaic'),
+    seriesCardCoverMode: z.enum(SERIES_CARD_COVER_MODES).default('stack'),
     gridCardPrimaryLabel: z.enum(GRID_CARD_LABEL_FIELDS).default('hidden'),
     gridCardSecondaryLabel: z.enum(GRID_CARD_LABEL_FIELDS).default('hidden'),
     cardInfoMode: z.enum(CARD_INFO_MODES).default('hover-overlay'),

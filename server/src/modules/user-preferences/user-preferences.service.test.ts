@@ -30,7 +30,7 @@ const validDisplayPreferences: DisplayPreferences = {
   bookSpineOverlay: 'subtle',
   bookShadowStrength: 'strong',
   bookCoverDisplayMode: 'natural-bottom',
-  seriesCardCoverMode: 'mosaic',
+  seriesCardCoverMode: 'stack',
   gridCardPrimaryLabel: 'hidden',
   gridCardSecondaryLabel: 'hidden',
   cardInfoMode: 'hover-overlay',
@@ -151,6 +151,23 @@ describe('UserPreferencesService', () => {
   it('upsertDisplayPreferences persists validated settings', async () => {
     await expect(service.upsertDisplayPreferences(11, validDisplayPreferences as unknown as Record<string, unknown>)).resolves.toBeUndefined();
     expect(repo.upsert).toHaveBeenCalledWith(11, 'display', validDisplayPreferences);
+  });
+
+  it('upsertDisplayPreferences accepts all valid seriesCardCoverMode values', async () => {
+    for (const value of ['stack', 'mosaic', 'first-volume', 'latest-volume', 'first-unread']) {
+      await expect(
+        service.upsertDisplayPreferences(11, { ...validDisplayPreferences, seriesCardCoverMode: value } as unknown as Record<string, unknown>),
+      ).resolves.toBeUndefined();
+    }
+  });
+
+  it('upsertDisplayPreferences defaults seriesCardCoverMode to stack when omitted', async () => {
+    const { seriesCardCoverMode, ...withoutMode } = validDisplayPreferences;
+    void seriesCardCoverMode;
+
+    await expect(service.upsertDisplayPreferences(11, withoutMode as unknown as Record<string, unknown>)).resolves.toBeUndefined();
+
+    expect(repo.upsert).toHaveBeenCalledWith(11, 'display', expect.objectContaining({ seriesCardCoverMode: 'stack' }));
   });
 
   it('upsertDisplayPreferences rejects invalid cover display modes', async () => {
