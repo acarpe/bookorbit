@@ -1,19 +1,20 @@
 import { Injectable, Logger, OnModuleDestroy } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { readdir, readFile } from 'fs/promises';
-import { join } from 'path';
+import { basename, extname, join } from 'path';
 
-import type { WriteResult } from '@bookorbit/types';
-import { isAudioFormat, NotificationType } from '@bookorbit/types';
+import type { BookFileWriteDisabledReason, BookFileWriteField, BookFileWriteStatus, BookFormat, WriteResult } from '@bookorbit/types';
+import { BOOK_FORMATS, getBookFileWriteFormatFields, isAudioFormat, NotificationType } from '@bookorbit/types';
 import { bookCoverDirPath, findPreferredBookCoverFileName } from '../../common/book-cover-storage';
 import { sanitizeLogValue } from '../../common/utils/log-sanitize.utils';
 import { NotificationService } from '../notification/notification.service';
 import { computeFileHash } from '../scanner/lib/hash';
 import { AUDIO_WRITE_FORMATS, FORMAT_CB7, FORMAT_CBZ, FORMAT_EPUB, FORMAT_PDF, createBookWriteFieldMask } from './file-write.constants';
-import { FileLockService } from './file-lock.service';
+import { FileLockService, bookOperationLockKey } from './file-lock.service';
 import { FileWriteRepository } from './file-write.repository';
 import { FormatWriterRegistry } from './format-writer.registry';
 import type { BookWritePayload } from './interfaces/book-write-payload.interface';
+import type { FormatWriteOptions } from './interfaces/format-write-options.interface';
 
 const FILE_WRITE_EVENT = 'file_write.write';
 const FILE_WRITE_SCHEDULE_EVENT = 'file_write.schedule';
@@ -21,6 +22,7 @@ const FILE_WRITE_COVER_EVENT = 'file_write.cover_load';
 const UNKNOWN_FORMAT = 'unknown';
 const DEFAULT_WRITE_DEBOUNCE_MS = 3_000;
 const DEFAULT_MAX_CONCURRENT_WRITES = 2;
+const BOOK_FORMAT_SET = new Set<string>(BOOK_FORMATS);
 
 type FileWriteTarget = {
   id: number;
@@ -30,6 +32,10 @@ type FileWriteTarget = {
   fileHash?: string | null;
   libraryId: number;
 };
+
+type AudioWriteContextByFileId = Map<number, Pick<FormatWriteOptions, 'trackNumber' | 'trackTotal' | 'trackTitle' | 'isMultiTrackAudio'>>;
+type FileWriteCapabilityFile = Pick<FileWriteTarget, 'id' | 'format' | 'sizeBytes'>;
+type FileWriteCapabilityLibraryConfig = Partial<LibraryFileWriteConfig> | null | undefined;
 
 @Injectable()
 export class FileWriteService implements OnModuleDestroy {
@@ -117,6 +123,19 @@ export class FileWriteService implements OnModuleDestroy {
     force = false,
     suppressNotification = false,
   ): Promise<WriteResult> {
+    return this.lockService.withLock(bookOperationLockKey(bookId), () =>
+      this.writeToFileLocked(bookId, triggeredBy, userId, dryRun, force, suppressNotification),
+    );
+  }
+
+  private async writeToFileLocked(
+    bookId: number,
+    triggeredBy: 'auto' | 'sync',
+    userId?: number,
+    dryRun = false,
+    force = false,
+    suppressNotification = false,
+  ): Promise<WriteResult> {
     await this.acquireWriteSlot();
 
     const startedAt = Date.now();
@@ -183,15 +202,23 @@ export class FileWriteService implements OnModuleDestroy {
         payload.coverBytes = await this.loadCoverBytes(bookId);
       }
 
+      const audioWriteContexts = this.resolveAudioWriteContexts(targets);
       const targetResults: WriteResult[] = [];
       for (const target of targets) {
-        const result = await this.writeTarget(bookId, target, payload, libConfig, {
-          triggeredBy,
-          userId,
-          dryRun,
-          suppressNotification,
-          startedAt,
-        });
+        const result = await this.writeTarget(
+          bookId,
+          target,
+          payload,
+          libConfig,
+          {
+            triggeredBy,
+            userId,
+            dryRun,
+            suppressNotification,
+            startedAt,
+          },
+          audioWriteContexts.get(target.id),
+        );
         targetResults.push(result);
       }
 
@@ -222,6 +249,44 @@ export class FileWriteService implements OnModuleDestroy {
     return this.fileWriteRepo.findWriteLog(bookId, limit);
   }
 
+  resolveBookFileWriteStatus(
+    libraryConfig: FileWriteCapabilityLibraryConfig,
+    files: FileWriteCapabilityFile[],
+    primaryFileId: number | null,
+  ): BookFileWriteStatus {
+    if (!isCompleteLibraryFileWriteConfig(libraryConfig) || !libraryConfig.fileWriteEnabled) {
+      return disabledBookFileWriteStatus('library_disabled');
+    }
+
+    const primaryFile = primaryFileId == null ? null : files.find((file) => file.id === primaryFileId);
+    if (!primaryFile) return disabledBookFileWriteStatus('no_primary_file');
+
+    const targets = resolveCapabilityWriteTargets(files, primaryFile);
+    if (targets.length === 0) return disabledBookFileWriteStatus('no_primary_file');
+
+    const targetStatuses = targets.map((target) => {
+      const format = normalizeFormat(target.format);
+      const skip = this.resolveTargetSkip(target, libraryConfig);
+      return skip ? { enabled: false, reason: mapFileWriteSkipReason(skip.reason), format } : { enabled: true, format };
+    });
+
+    const writableTargetStatuses = targetStatuses.filter(
+      (status): status is { enabled: true; format: BookFormat } => status.enabled && isBookFormat(status.format),
+    );
+    const writableFormats = uniqueBookFormats(writableTargetStatuses.map((status) => status.format));
+    if (writableFormats.length > 0) {
+      const writableFields = uniqueBookFileWriteFields(
+        writableTargetStatuses.flatMap((status) => resolveWritableFieldsForFormat(status.format, libraryConfig)),
+      );
+      return { enabled: true, reason: null, writableFormats, writableFields };
+    }
+
+    const reasons = targetStatuses
+      .filter((status): status is { enabled: false; reason: BookFileWriteDisabledReason; format: string } => !status.enabled)
+      .map((status) => status.reason);
+    return disabledBookFileWriteStatus(resolveBookFileWriteDisabledReason(reasons));
+  }
+
   private async resolveWriteTargets(bookId: number, primaryFile: FileWriteTarget): Promise<FileWriteTarget[]> {
     const primaryFormat = normalizeFormat(primaryFile.format);
     if (!primaryFormat || !isAudioFormat(primaryFormat)) {
@@ -249,6 +314,7 @@ export class FileWriteService implements OnModuleDestroy {
       suppressNotification: boolean;
       startedAt: number;
     },
+    audioWriteContext?: Pick<FormatWriteOptions, 'trackNumber' | 'trackTotal' | 'trackTitle' | 'isMultiTrackAudio'>,
   ): Promise<WriteResult> {
     const { triggeredBy, userId, dryRun, suppressNotification, startedAt } = options;
     const format = normalizeFormat(file.format);
@@ -268,7 +334,7 @@ export class FileWriteService implements OnModuleDestroy {
     let result: WriteResult;
     try {
       result = await this.lockService.withLock(file.absolutePath, () =>
-        writer.write(file.absolutePath, payload, { fieldMask: createBookWriteFieldMask(), dryRun }),
+        writer.write(file.absolutePath, payload, { fieldMask: createBookWriteFieldMask(), dryRun, ...audioWriteContext }),
       );
     } catch (error) {
       const reason = error instanceof Error ? error.message : String(error);
@@ -299,7 +365,30 @@ export class FileWriteService implements OnModuleDestroy {
     return result;
   }
 
-  private resolveTargetSkip(file: FileWriteTarget, libConfig: LibraryFileWriteConfig): WriteResult | null {
+  private resolveAudioWriteContexts(targets: FileWriteTarget[]): AudioWriteContextByFileId {
+    const audioTargets = targets.filter((target) => {
+      const format = normalizeFormat(target.format);
+      return Boolean(format && isAudioFormat(format) && this.registry.supports(format));
+    });
+
+    const isMultiTrackAudio = audioTargets.length > 1;
+    return new Map(
+      audioTargets.map((target, index) => {
+        const trackNumber = index + 1;
+        return [
+          target.id,
+          {
+            trackNumber,
+            trackTotal: audioTargets.length,
+            trackTitle: resolveTrackTitle(target.absolutePath, trackNumber),
+            isMultiTrackAudio,
+          },
+        ];
+      }),
+    );
+  }
+
+  private resolveTargetSkip(file: Pick<FileWriteTarget, 'format' | 'sizeBytes'>, libConfig: LibraryFileWriteConfig): WriteResult | null {
     const format = normalizeFormat(file.format);
 
     if (!format || !this.registry.supports(format)) {
@@ -487,8 +576,67 @@ function aggregateWriteResults(results: WriteResult[], durationMs: number): Writ
   };
 }
 
+function resolveCapabilityWriteTargets(files: FileWriteCapabilityFile[], primaryFile: FileWriteCapabilityFile): FileWriteCapabilityFile[] {
+  const primaryFormat = normalizeFormat(primaryFile.format);
+  if (!primaryFormat || !isAudioFormat(primaryFormat)) return [primaryFile];
+
+  const audioFiles = files.filter((file) => {
+    const format = normalizeFormat(file.format);
+    return Boolean(format && isAudioFormat(format));
+  });
+  return audioFiles.length > 0 ? audioFiles : [primaryFile];
+}
+
+function isCompleteLibraryFileWriteConfig(config: FileWriteCapabilityLibraryConfig): config is LibraryFileWriteConfig {
+  if (!config) return false;
+  return (
+    typeof config.fileWriteEnabled === 'boolean' &&
+    typeof config.fileWriteWriteCover === 'boolean' &&
+    typeof config.fileWriteEpubEnabled === 'boolean' &&
+    typeof config.fileWriteEpubMaxFileSizeMb === 'number' &&
+    typeof config.fileWritePdfEnabled === 'boolean' &&
+    typeof config.fileWritePdfMaxFileSizeMb === 'number' &&
+    typeof config.fileWriteCbxEnabled === 'boolean' &&
+    typeof config.fileWriteCbxMaxFileSizeMb === 'number' &&
+    typeof config.fileWriteAudioEnabled === 'boolean' &&
+    typeof config.fileWriteAudioMaxFileSizeMb === 'number'
+  );
+}
+
+function mapFileWriteSkipReason(reason: string | undefined): BookFileWriteDisabledReason {
+  if (reason === 'file exceeds size limit') return 'file_exceeds_size_limit';
+  if (reason === 'format disabled') return 'format_disabled';
+  return 'format_not_supported';
+}
+
+function resolveBookFileWriteDisabledReason(reasons: BookFileWriteDisabledReason[]): BookFileWriteDisabledReason {
+  if (reasons.includes('file_exceeds_size_limit')) return 'file_exceeds_size_limit';
+  if (reasons.includes('format_disabled')) return 'format_disabled';
+  return reasons[0] ?? 'format_not_supported';
+}
+
+function disabledBookFileWriteStatus(reason: BookFileWriteDisabledReason): BookFileWriteStatus {
+  return { enabled: false, reason, writableFormats: [], writableFields: [] };
+}
+
+function uniqueBookFormats(values: BookFormat[]): BookFormat[] {
+  return [...new Set(values)];
+}
+
+function uniqueBookFileWriteFields(values: BookFileWriteField[]): BookFileWriteField[] {
+  return [...new Set(values)];
+}
+
+function resolveWritableFieldsForFormat(format: string, config: LibraryFileWriteConfig): BookFileWriteField[] {
+  return getBookFileWriteFormatFields(format).filter((field) => field !== 'coverBytes' || config.fileWriteWriteCover);
+}
+
 function normalizeFormat(format: string | null | undefined): string {
   return (format ?? '').toLowerCase();
+}
+
+function isBookFormat(format: string): format is BookFormat {
+  return BOOK_FORMAT_SET.has(format);
 }
 
 function resolvePositiveInteger(value: unknown, fallback: number): number {
@@ -505,4 +653,11 @@ function formatUserId(userId: number | undefined): string {
 
 function sanitizeErrorMessage(message: string): string {
   return sanitizeLogValue(message);
+}
+
+function resolveTrackTitle(filePath: string, trackNumber: number): string {
+  const fileName = basename(filePath);
+  const extension = extname(fileName);
+  const stem = (extension ? fileName.slice(0, -extension.length) : fileName).trim();
+  return stem || `Part ${String(trackNumber).padStart(2, '0')}`;
 }
