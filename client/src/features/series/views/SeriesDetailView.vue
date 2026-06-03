@@ -21,6 +21,9 @@ import { useSafeHtml } from '@/features/book/composables/useSafeHtml'
 import { api } from '@/lib/api'
 import EntityNotFound from '@/components/EntityNotFound.vue'
 import AddToCollectionSheet from '@/features/collection/components/AddToCollectionSheet.vue'
+import BookQuickView from '@/features/book/components/BookQuickView.vue'
+import DeleteBookDialog from '@/features/book/components/DeleteBookDialog.vue'
+import { useDeleteBook } from '@/features/book/composables/useDeleteBook'
 import SeriesCompletionBar from '../components/SeriesCompletionBar.vue'
 import SeriesGapBanner from '../components/SeriesGapBanner.vue'
 import { fetchSeriesBooks } from '../api/series'
@@ -131,17 +134,36 @@ const leadMetaItems = computed(() => {
 
 type BookActionType = 'quick-view' | 'add-to-collection' | 'delete'
 
+const quickViewBookId = ref<number | null>(null)
+const quickViewOpen = ref(false)
+
+const {
+  pendingId: deleteBookId,
+  deleting: deletingBook,
+  promptDelete,
+  cancelDelete,
+  confirmDelete,
+} = useDeleteBook((id) => {
+  books.value = books.value.filter((b) => b.id !== id)
+})
+
 function handleBookAction(book: BookCard, action: BookActionType) {
   if (action === 'quick-view') {
     addToCollectionOpen.value = false
     addToCollectionBookId.value = null
-    void router.push({ name: 'book-detail', params: { bookId: book.id } })
+    quickViewBookId.value = book.id
+    quickViewOpen.value = true
     return
   }
 
   if (action === 'add-to-collection') {
     addToCollectionBookId.value = book.id
     addToCollectionOpen.value = true
+    return
+  }
+
+  if (action === 'delete') {
+    promptDelete(book.id)
     return
   }
 }
@@ -427,18 +449,25 @@ watch(
         <div class="flex flex-col gap-4 md:flex-row md:items-start">
           <div class="mx-auto w-full max-w-[360px] md:mx-0 md:w-[340px] md:shrink-0 lg:w-[360px]">
             <div
-              class="relative isolate overflow-hidden rounded-lg border border-border/60 bg-linear-to-b from-white/[0.035] via-background/5 to-black/[0.07]"
-              style="aspect-ratio: 11 / 8"
+              class="series-cover-stack-container relative isolate rounded-lg border border-border/60 bg-linear-to-b from-white/[0.035] via-background/5 to-black/[0.07]"
+              style="aspect-ratio: 11 / 8; transform-style: preserve-3d; perspective: 1000px"
             >
-              <div class="pointer-events-none absolute -right-8 -top-12 h-36 w-36 rounded-full bg-primary/10 blur-3xl" />
-              <div class="pointer-events-none absolute -bottom-12 -left-10 h-32 w-32 rounded-full bg-primary/8 blur-3xl" />
-              <div class="absolute inset-x-[21%] bottom-[5%] h-4 rounded-full bg-black/10 blur-2xl opacity-38" />
+              <!-- Contained background decorative effects -->
+              <div class="absolute inset-0 overflow-hidden rounded-lg pointer-events-none z-0">
+                <div class="absolute -right-8 -top-12 h-36 w-36 rounded-full bg-primary/10 blur-3xl" />
+                <div class="absolute -bottom-12 -left-10 h-32 w-32 rounded-full bg-primary/8 blur-3xl" />
+                <div class="absolute inset-x-[21%] bottom-[5%] h-4 rounded-full bg-black/10 blur-2xl opacity-38" />
+              </div>
 
               <div
                 v-for="(bookId, i) in visibleLeadCoverBookIds"
                 :key="bookId"
-                class="absolute overflow-hidden rounded-lg"
-                :style="scaledLeadCoverStyles[i] ?? {}"
+                class="series-cover-stack-item absolute overflow-hidden rounded-lg"
+                :style="{
+                  ...(scaledLeadCoverStyles[i] ?? {}),
+                  '--offset': i - (visibleLeadCoverBookIds.length - 1) / 2,
+                  '--abs-offset': Math.abs(i - (visibleLeadCoverBookIds.length - 1) / 2),
+                }"
               >
                 <BookCoverArtwork
                   :src="coverUrl(bookId)"
@@ -672,4 +701,42 @@ watch(
     :book-ids="addToCollectionBookId ? [addToCollectionBookId] : []"
     @update:open="handleAddToCollectionOpenChange"
   />
+
+  <BookQuickView
+    :book-id="quickViewBookId"
+    :open="quickViewOpen"
+    @update:open="quickViewOpen = $event"
+    @action="quickViewBookId !== null && handleBookAction({ id: quickViewBookId } as BookCard, $event)"
+  />
+
+  <DeleteBookDialog :open="deleteBookId !== null" :deleting="deletingBook" @confirm="confirmDelete" @cancel="cancelDelete" />
 </template>
+
+<style scoped>
+.series-cover-stack-container {
+  transition: padding 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.series-cover-stack-item {
+  transition:
+    transform 0.4s cubic-bezier(0.16, 1, 0.3, 1),
+    box-shadow 0.4s ease;
+  transform: perspective(1000px) rotateY(calc(var(--offset) * -8deg)) translateZ(calc(var(--abs-offset) * -18px))
+    scale(calc(1 - var(--abs-offset) * 0.035));
+  transform-style: preserve-3d;
+  will-change: transform, box-shadow;
+}
+
+.series-cover-stack-container:hover .series-cover-stack-item {
+  transform: perspective(1000px) rotateY(calc(var(--offset) * -3deg)) translateX(calc(var(--offset) * 14px))
+    translateZ(calc(var(--abs-offset) * -10px)) scale(calc(1 - var(--abs-offset) * 0.015));
+}
+
+.series-cover-stack-item:hover {
+  transform: perspective(1000px) rotateY(0deg) translateY(-12px) translateZ(40px) scale(1.03) !important;
+  z-index: 50 !important;
+  box-shadow:
+    0 20px 25px -5px rgba(0, 0, 0, 0.4),
+    0 10px 10px -5px rgba(0, 0, 0, 0.3) !important;
+}
+</style>

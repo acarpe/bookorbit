@@ -218,6 +218,26 @@ const AddToCollectionSheetStub = defineComponent({
   `,
 })
 
+const BookQuickViewStub = defineComponent({
+  name: 'BookQuickView',
+  props: {
+    bookId: {
+      type: Number,
+      default: null,
+    },
+    open: {
+      type: Boolean,
+      required: true,
+    },
+  },
+  emits: ['update:open', 'action'],
+  template: `
+    <div data-testid="quick-view" :data-open="open ? 'true' : 'false'" :data-book-id="bookId ?? ''">
+      <button data-testid="quick-view-action-add" @click="$emit('action', 'add-to-collection')">add</button>
+    </div>
+  `,
+})
+
 function mountView(mode: ViewMode) {
   mocks.effectiveViewMode.value = mode
 
@@ -229,6 +249,7 @@ function mountView(mode: ViewMode) {
         VirtualBookTable: VirtualBookTableStub,
         AddToCollectionSheet: AddToCollectionSheetStub,
         BookCoverArtwork: BookCoverArtworkStub,
+        BookQuickView: BookQuickViewStub,
         EntityNotFound: true,
         SeriesCompletionBar: true,
         SeriesGapBanner: true,
@@ -303,14 +324,16 @@ describe('SeriesDetailView', () => {
     expect(sheet.attributes('data-book-ids')).toBe('91')
   })
 
-  it('navigates on quick-view and closes the collection sheet state', async () => {
+  it('opens quick-view and closes the collection sheet state', async () => {
     const wrapper = mountView('grid')
     await nextTick()
 
     await wrapper.get('[data-testid="grid-add-action"]').trigger('click')
     await wrapper.get('[data-testid="grid-quick-action"]').trigger('click')
 
-    expect(mocks.routerPush).toHaveBeenCalledWith({ name: 'book-detail', params: { bookId: 42 } })
+    const quickView = wrapper.get('[data-testid="quick-view"]')
+    expect(quickView.attributes('data-open')).toBe('true')
+    expect(quickView.attributes('data-book-id')).toBe('42')
     const sheet = wrapper.get('[data-testid="collection-sheet"]')
     expect(sheet.attributes('data-open')).toBe('false')
     expect(sheet.attributes('data-book-ids')).toBe('')
