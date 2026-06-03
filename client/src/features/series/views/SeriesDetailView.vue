@@ -1,23 +1,21 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { ChevronLeft, Pencil, RotateCcw, SlidersHorizontal } from 'lucide-vue-next'
+import { ChevronLeft, Pencil } from 'lucide-vue-next'
 import { toast } from 'vue-sonner'
 
-import type { BookCard, BookDetail, SortSpec } from '@bookorbit/types'
+import type { BookCard, BookDetail } from '@bookorbit/types'
 import VirtualBookGrid from '@/features/book/components/VirtualBookGrid.vue'
-import BookListRow from '@/features/book/components/BookListRow.vue'
-import VirtualBookTable from '@/features/book/components/VirtualBookTable.vue'
 import BookCoverArtwork from '@/features/book/components/BookCoverArtwork.vue'
 import { bookCoverStyle } from '@/features/book/lib/book-cover'
 import { useCoverVersions } from '@/features/book/composables/useCoverVersions'
 import { useDisplaySettings } from '@/composables/useDisplaySettings'
-import { useEffectiveViewMode } from '@/composables/useEffectiveViewMode'
 import { usePermissions } from '@/features/auth/composables/usePermissions'
 import { useBookNavigation } from '@/features/book/composables/useBookNavigation'
 import { useLibraries } from '@/features/library/composables/useLibraries'
 import { usePageTitle } from '@/composables/usePageTitle'
 import { useSafeHtml } from '@/features/book/composables/useSafeHtml'
+import ToggleSwitch from '@/components/ui/ToggleSwitch.vue'
 import { api } from '@/lib/api'
 import EntityNotFound from '@/components/EntityNotFound.vue'
 import AddToCollectionSheet from '@/features/collection/components/AddToCollectionSheet.vue'
@@ -27,6 +25,7 @@ import { useDeleteBook } from '@/features/book/composables/useDeleteBook'
 import SeriesCompletionBar from '../components/SeriesCompletionBar.vue'
 import SeriesGapBanner from '../components/SeriesGapBanner.vue'
 import { fetchSeriesBooks } from '../api/series'
+import { groupSeriesBooksByMedia } from '../composables/useSeriesBookMediaGroups'
 import { useSeriesDetail } from '../composables/useSeriesDetail'
 import { useCoverStack, MAX_VISIBLE as MAX_STACK_VISIBLE } from '../composables/useCoverStack'
 import {
@@ -38,8 +37,6 @@ import {
   resolveSquareCoverScale,
   shouldPersistCoverRatio,
 } from '../lib/cover-scale'
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
-import type { ColumnId } from '@/features/book/composables/useTableColumns'
 
 const route = useRoute()
 const router = useRouter()
@@ -48,7 +45,6 @@ const { setBookContext } = useBookNavigation()
 const { coverUrl } = useCoverVersions()
 
 const { portraitCoverSize, gridGap } = useDisplaySettings()
-const { effectiveViewMode } = useEffectiveViewMode()
 const { libraries, fetchLibraries } = useLibraries()
 
 const seriesId = computed(() => {
@@ -122,6 +118,7 @@ const hiddenLeadGenres = computed(() => {
   return Math.max(0, totalGenres - displayedLeadGenres.value.length)
 })
 const SERIES_AUDIOBOOK_COVER_SCALE = 1.25
+const GROUP_BY_MEDIA_STORAGE_KEY = 'bookorbit:series-detail:group-by-media'
 const seriesBooksCoverSize = computed(() => Math.max(125, portraitCoverSize.value - 20))
 const leadMetaItems = computed(() => {
   if (!leadBook.value) return []
@@ -134,6 +131,28 @@ const leadMetaItems = computed(() => {
 
 type BookActionType = 'quick-view' | 'add-to-collection' | 'delete'
 
+function loadGroupByMediaPreference(): boolean {
+  try {
+    const stored = localStorage.getItem(GROUP_BY_MEDIA_STORAGE_KEY)
+    if (stored === 'true') return true
+    if (stored === 'false') return false
+  } catch {
+    return false
+  }
+
+  return false
+}
+
+function saveGroupByMediaPreference(value: boolean) {
+  try {
+    localStorage.setItem(GROUP_BY_MEDIA_STORAGE_KEY, String(value))
+  } catch {
+    return
+  }
+}
+
+const groupByMedia = ref(loadGroupByMediaPreference())
+const nonEmptyMediaGroups = computed(() => groupSeriesBooksByMedia(books.value).filter((group) => group.books.length > 0))
 const quickViewBookId = ref<number | null>(null)
 const quickViewOpen = ref(false)
 
@@ -173,20 +192,14 @@ function handleAddToCollectionOpenChange(open: boolean) {
   if (!open) addToCollectionBookId.value = null
 }
 
-function handleTableBookUpdate(updated: BookCard) {
+function handleBookUpdate(updated: BookCard) {
   const idx = books.value.findIndex((b) => b.id === updated.id)
   if (idx !== -1) books.value = books.value.map((b, i) => (i === idx ? updated : b))
 }
 
-const tableSort = ref<SortSpec[]>([{ field: 'seriesIndex', dir: 'asc' }])
-const tableRef = ref<InstanceType<typeof VirtualBookTable> | null>(null)
-
-function handleResetColumns() {
-  tableRef.value?.resetLayout()
-}
-
-function handleToggleColumn(id: ColumnId) {
-  tableRef.value?.toggleColumn(id)
+function handleGroupByMediaUpdate(value: boolean) {
+  groupByMedia.value = value
+  saveGroupByMediaPreference(value)
 }
 
 function goBack() {
@@ -593,8 +606,8 @@ watch(
         <div
           class="sticky top-0 z-20 -mx-3 mb-3 border-b border-border/60 bg-card/92 px-3 pb-3 pt-1 backdrop-blur supports-backdrop-filter:bg-card/78"
         >
-          <div class="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-            <h2 class="text-sm font-semibold text-foreground">Books</h2>
+          <div class="flex flex-col gap-2 md:flex-row md:items-center" :class="groupByMedia ? 'md:justify-end' : 'md:justify-between'">
+            <h2 v-if="!groupByMedia" data-testid="series-books-section-heading" class="text-sm font-semibold text-foreground">Books</h2>
             <div class="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
               <select
                 v-model="sort"
@@ -622,36 +635,15 @@ watch(
                 <option v-for="library in libraries" :key="library.id" :value="library.id">{{ library.name }}</option>
               </select>
 
-              <Popover v-if="effectiveViewMode === 'table'">
-                <PopoverTrigger as-child>
-                  <button
-                    class="flex h-8 w-full items-center gap-1.5 rounded-md border border-input px-2.5 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground sm:w-auto"
-                  >
-                    <SlidersHorizontal :size="13" />
-                    Columns
-                  </button>
-                </PopoverTrigger>
-                <PopoverContent align="end" class="w-52 p-3">
-                  <template v-if="tableRef">
-                    <div class="mb-2 flex items-center justify-between">
-                      <span class="text-xs font-semibold uppercase tracking-wide text-foreground">Columns</span>
-                      <button class="text-xs text-muted-foreground hover:text-foreground" @click="handleResetColumns">
-                        <RotateCcw :size="11" class="mr-0.5 inline" />Reset
-                      </button>
-                    </div>
-                    <div class="space-y-1">
-                      <label
-                        v-for="col in tableRef.allColumns.filter((c) => c.pinned === null)"
-                        :key="col.id"
-                        class="flex cursor-pointer items-center gap-2 rounded px-1.5 py-1 text-xs hover:bg-accent"
-                      >
-                        <input type="checkbox" :checked="col.visible" class="accent-primary" @change="handleToggleColumn(col.id)" />
-                        {{ col.header || col.id }}
-                      </label>
-                    </div>
-                  </template>
-                </PopoverContent>
-              </Popover>
+              <div class="flex h-8 w-full items-center justify-between gap-2 rounded-md border border-input px-2.5 text-sm sm:w-auto">
+                <span class="whitespace-nowrap text-muted-foreground">Group by media</span>
+                <ToggleSwitch
+                  :model-value="groupByMedia"
+                  aria-label="Group by media"
+                  data-testid="series-group-by-media-toggle"
+                  @update:model-value="handleGroupByMediaUpdate"
+                />
+              </div>
             </div>
           </div>
         </div>
@@ -661,32 +653,36 @@ watch(
           <p class="text-xs text-muted-foreground">Try selecting another library.</p>
         </div>
 
-        <VirtualBookGrid
-          v-if="effectiveViewMode === 'grid' && books.length > 0"
-          :books="books"
-          :cover-size="seriesBooksCoverSize"
-          :grid-gap="gridGap"
-          :audio-cover-scale="SERIES_AUDIOBOOK_COVER_SCALE"
-          :virtualized="false"
-          @action="handleBookAction"
-          @update:book="handleTableBookUpdate"
-        />
+        <template v-if="books.length > 0">
+          <div v-if="groupByMedia" class="space-y-7">
+            <section v-for="group in nonEmptyMediaGroups" :key="group.key" class="space-y-3" :data-testid="`series-media-group-${group.key}`">
+              <div class="flex items-center justify-between border-b border-border/60 pb-2">
+                <h3 class="text-sm font-semibold text-foreground">{{ group.label }}</h3>
+                <span class="text-xs text-muted-foreground">{{ group.books.length.toLocaleString() }}</span>
+              </div>
+              <VirtualBookGrid
+                :books="group.books"
+                :cover-size="seriesBooksCoverSize"
+                :grid-gap="gridGap"
+                :audio-cover-scale="SERIES_AUDIOBOOK_COVER_SCALE"
+                :virtualized="false"
+                @action="handleBookAction"
+                @update:book="handleBookUpdate"
+              />
+            </section>
+          </div>
 
-        <div v-if="effectiveViewMode === 'list' && books.length > 0" class="flex flex-col divide-y divide-border">
-          <BookListRow v-for="book in books" :key="book.id" :book="book" @action="handleBookAction(book, $event)" />
-        </div>
-
-        <!-- Table view -->
-        <VirtualBookTable
-          v-if="effectiveViewMode === 'table'"
-          ref="tableRef"
-          :books="books"
-          :sort="tableSort"
-          view-type="series"
-          @update:sort="tableSort = $event"
-          @action="handleBookAction"
-          @update:book="handleTableBookUpdate"
-        />
+          <VirtualBookGrid
+            v-else
+            :books="books"
+            :cover-size="seriesBooksCoverSize"
+            :grid-gap="gridGap"
+            :audio-cover-scale="SERIES_AUDIOBOOK_COVER_SCALE"
+            :virtualized="false"
+            @action="handleBookAction"
+            @update:book="handleBookUpdate"
+          />
+        </template>
 
         <div ref="sentinel" class="mt-4 flex h-8 items-center justify-center">
           <span v-if="loadingBooks" class="text-xs text-muted-foreground">Loading...</span>
