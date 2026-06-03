@@ -62,6 +62,19 @@ const primaryFile = computed(() => props.book.files.find((f) => f.role === 'prim
 const isAudiobook = computed(() => primaryFile.value?.format != null && FORMAT_TO_GROUP[primaryFile.value.format] === 'audio')
 const secondaryFiles = computed(() => props.book.files.filter((f) => f !== primaryFile.value))
 
+const uniqueSecondaryFiles = computed(() => {
+  const seenFormats = new Set<string>()
+  if (primaryFile.value?.format) seenFormats.add(primaryFile.value.format)
+
+  return secondaryFiles.value.filter((f) => {
+    const format = f.format
+    if (!format) return true
+    if (seenFormats.has(format)) return false
+    seenFormats.add(format)
+    return true
+  })
+})
+
 const metaLine = computed(() => {
   const parts: string[] = []
   if (props.book.publishedYear) parts.push(String(props.book.publishedYear))
@@ -213,7 +226,7 @@ function openAuthorBrowse() {
           </TooltipTrigger>
           <TooltipContent>Open as {{ primaryFile.format?.toUpperCase() ?? 'unknown' }}</TooltipContent>
         </Tooltip>
-        <Tooltip v-for="file in secondaryFiles" :key="file.id">
+        <Tooltip v-for="file in uniqueSecondaryFiles" :key="file.id">
           <TooltipTrigger as-child>
             <button
               class="text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-muted text-muted-foreground hover:bg-muted/70 transition-colors"
