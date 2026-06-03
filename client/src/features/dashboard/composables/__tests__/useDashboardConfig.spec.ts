@@ -50,12 +50,12 @@ describe('useDashboardConfig', () => {
     expect(scrollers.value).toEqual(DEFAULT_SCROLLERS)
     expect(scrollers.value).not.toBe(DEFAULT_SCROLLERS)
     expect(DEFAULT_SCROLLERS.map((scroller) => [scroller.type, scroller.label, scroller.enabled, scroller.order])).toEqual([
-      ['continue-reading', 'Continue Reading', false, 1],
-      ['continue-listening', 'Continue Listening', true, 2],
-      ['want-to-read', 'Want to Read', true, 3],
-      ['up-next-in-series', 'Up Next in Series', false, 4],
-      ['recently-added', 'Recently Added', true, 5],
-      ['random', 'Discover Something New', true, 6],
+      ['recently-added', 'Recently Added', true, 1],
+      ['random', 'Discover Something New', true, 2],
+      ['continue-reading', 'Continue Reading', true, 3],
+      ['continue-listening', 'Continue Listening', true, 4],
+      ['want-to-read', 'Want to Read', false, 5],
+      ['up-next-in-series', 'Up Next in Series', false, 6],
     ])
 
     addScroller('smart-scope')
