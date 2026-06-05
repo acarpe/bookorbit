@@ -1,6 +1,7 @@
 import { createWriteStream } from 'fs';
 import { dirname, join } from 'path';
 import { randomUUID } from 'crypto';
+import type { Readable } from 'stream';
 import * as unzipper from 'unzipper';
 import archiver from 'archiver';
 import { replaceFileAtomically } from '../shared/atomic-file-replace';
@@ -34,7 +35,7 @@ export async function writeComicInfoToZip(filePath: string, xmlContent: string):
 
     for (const entry of zip.files) {
       if (isComicInfoEntry(entry.path)) continue;
-      archive.append(entry.stream(), { name: entry.path });
+      appendEntryStream(archive, entry, reject);
     }
 
     archive.append(Buffer.from(xmlContent, 'utf-8'), { name: xmlEntryPath });
@@ -42,4 +43,14 @@ export async function writeComicInfoToZip(filePath: string, xmlContent: string):
   });
 
   await replaceFileAtomically(tmpPath, filePath);
+}
+
+function appendEntryStream(
+  archive: ReturnType<typeof archiver>,
+  entry: { path: string; stream: () => Readable },
+  reject: (error: Error) => void,
+): void {
+  const source = entry.stream();
+  source.once('error', reject);
+  archive.append(source, { name: entry.path });
 }
