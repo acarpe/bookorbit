@@ -89,8 +89,8 @@ onUnmounted(() => clearTimeout(debounceTimer))
       </span>
       <input
         v-model="query"
-        class="flex-1 min-w-24 bg-transparent outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed"
-        :placeholder="modelValue.length === 0 ? placeholder : ''"
+        class="flex-1 min-w-24 bg-transparent outline-none placeholder:text-muted-foreground/50 disabled:cursor-not-allowed"
+        :placeholder="placeholder ?? (modelValue.length === 0 ? 'Type and press Enter to add' : 'Press Enter to add')"
         :disabled="props.disabled"
         @input="onInput"
         @keydown="onKeydown"
