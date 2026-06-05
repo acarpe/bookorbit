@@ -298,7 +298,7 @@ const openableFiles = computed(() => {
   return readableFiles.value
 })
 const hasMultipleFiles = computed(() => openableFiles.value.length > 1)
-const authorLine = computed(() => props.book.authors.map((a) => a.name).join(', ') || null)
+const authorLinks = computed(() => props.book.authors.filter((author) => author.name.trim().length > 0))
 const narratorLine = computed(() => props.book.audioMetadata?.narrators?.map((n) => n.name).join(', ') || null)
 const formats = computed(() => {
   const all = [...new Set(props.book.files.filter((f) => f.format && FORMAT_TO_GROUP[f.format]).map((f) => f.format!))]
@@ -982,9 +982,17 @@ watch(
 
         <!-- Author / narrator / series -->
         <div class="mt-2 space-y-1 min-w-0">
-          <p v-if="authorLine" class="text-xs break-words">
+          <p v-if="authorLinks.length" class="text-xs break-words">
             <span class="text-muted-foreground">by</span>
-            <span class="ml-1 font-medium text-foreground">{{ authorLine }}</span>
+            <span class="ml-1 font-medium text-foreground">
+              <template v-for="(author, index) in authorLinks" :key="`${author.id}-${index}`">
+                <RouterLink
+                  :to="{ name: 'author-detail', params: { id: author.id } }"
+                  class="hover:text-primary hover:underline underline-offset-2 transition-colors"
+                  >{{ author.name }}</RouterLink
+                ><span v-if="index < authorLinks.length - 1">, </span>
+              </template>
+            </span>
           </p>
           <p v-if="narratorLine" class="text-xs break-words">
             <span class="text-muted-foreground">narrated by</span>
@@ -1349,9 +1357,17 @@ watch(
         <p v-if="book.subtitle" class="text-base text-muted-foreground mt-1 leading-snug">{{ book.subtitle }}</p>
 
         <div class="flex items-baseline flex-wrap gap-x-2 gap-y-1 mt-3">
-          <p v-if="authorLine" class="text-sm">
+          <p v-if="authorLinks.length" class="text-sm">
             <span class="text-muted-foreground">by</span>
-            <span class="ml-1 font-medium text-foreground">{{ authorLine }}</span>
+            <span class="ml-1 font-medium text-foreground">
+              <template v-for="(author, index) in authorLinks" :key="`${author.id}-${index}`">
+                <RouterLink
+                  :to="{ name: 'author-detail', params: { id: author.id } }"
+                  class="hover:text-primary hover:underline underline-offset-2 transition-colors"
+                  >{{ author.name }}</RouterLink
+                ><span v-if="index < authorLinks.length - 1">, </span>
+              </template>
+            </span>
           </p>
           <p v-if="narratorLine" class="text-sm">
             <span class="text-muted-foreground">narrated by</span>

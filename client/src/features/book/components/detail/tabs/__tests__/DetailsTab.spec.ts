@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises, shallowMount } from '@vue/test-utils'
+import { defineComponent } from 'vue'
 import type { BookDetail } from '@bookorbit/types'
 import DetailsTab from '../DetailsTab.vue'
 import { useDisplaySettings } from '@/composables/useDisplaySettings'
@@ -82,6 +83,17 @@ function response(data: unknown): Response {
   } as Response
 }
 
+const RouterLinkStub = defineComponent({
+  name: 'RouterLink',
+  props: {
+    to: {
+      type: [String, Object],
+      required: true,
+    },
+  },
+  template: '<a><slot /></a>',
+})
+
 function mountDetails(book: BookDetail) {
   return shallowMount(DetailsTab, {
     props: { book },
@@ -89,6 +101,7 @@ function mountDetails(book: BookDetail) {
       stubs: {
         BookCoverArtwork: false,
         BookCoverSurface: false,
+        RouterLink: RouterLinkStub,
       },
     },
   })
@@ -209,5 +222,28 @@ describe('DetailsTab cover surface', () => {
     await loadCoverImages(wrapper)
 
     expect(wrapper.findAll('.book-cover-spine-layer').length).toBe(0)
+  })
+
+  it('links authors to their author detail pages', async () => {
+    const wrapper = mountDetails(
+      makeBook({
+        authors: [
+          { id: 41, name: 'Author One', sortName: null },
+          { id: 42, name: 'Author Two', sortName: null },
+        ],
+      }),
+    )
+    await flushPromises()
+
+    const authorLinks = wrapper.findAllComponents(RouterLinkStub).filter((link) => link.text() === 'Author One' || link.text() === 'Author Two')
+
+    expect(authorLinks).toHaveLength(4)
+    expect(authorLinks.map((link) => link.props('to'))).toEqual([
+      { name: 'author-detail', params: { id: 41 } },
+      { name: 'author-detail', params: { id: 42 } },
+      { name: 'author-detail', params: { id: 41 } },
+      { name: 'author-detail', params: { id: 42 } },
+    ])
+    expect(wrapper.text()).toContain('Author One, Author Two')
   })
 })
