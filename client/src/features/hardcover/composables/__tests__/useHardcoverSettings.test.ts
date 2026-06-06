@@ -18,6 +18,8 @@ const mockValidate = vi.mocked(validateHardcoverToken)
 const SETTINGS: HardcoverSettings = {
   tokenConfigured: true,
   enabled: true,
+  effectiveEnabled: true,
+  disabledReason: null,
   autoSyncOnStatusChange: true,
   autoSyncOnProgressUpdate: true,
   autoSyncOnRatingChange: true,

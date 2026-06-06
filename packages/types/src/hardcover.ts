@@ -1,15 +1,15 @@
+export type HardcoverSyncDisabledReason = "permission_denied" | "missing_token" | "user_disabled";
+
 export interface HardcoverSettings {
   tokenConfigured: boolean;
   enabled: boolean;
+  effectiveEnabled: boolean;
+  disabledReason: HardcoverSyncDisabledReason | null;
   autoSyncOnStatusChange: boolean;
   autoSyncOnProgressUpdate: boolean;
   autoSyncOnRatingChange: boolean;
   privacySettingId: number;
   lastSyncedAt: string | null;
-}
-
-export interface HardcoverAdminSettings {
-  featureEnabled: boolean;
 }
 
 export interface UpsertHardcoverSettingsPayload {

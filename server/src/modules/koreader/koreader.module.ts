@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 
 import { CommonModule } from '../../common/common.module';
+import { AchievementModule } from '../achievement/achievement.module';
 import { UserModule } from '../user/user.module';
 import { UserBookStatusModule } from '../user-book-status/user-book-status.module';
 import { KoreaderAuthGuard } from './koreader-auth.guard';
@@ -11,7 +12,7 @@ import { KoreaderRepository } from './koreader.repository';
 import { KoreaderService } from './koreader.service';
 
 @Module({
-  imports: [CommonModule, UserModule, UserBookStatusModule],
+  imports: [CommonModule, UserModule, UserBookStatusModule, AchievementModule],
   controllers: [KoreaderController],
   providers: [KoreaderService, KoreaderRepository, KoreaderAuthGuard, KoreaderChapterService, KoreaderChapterExtractorService],
   exports: [KoreaderService, KoreaderRepository],

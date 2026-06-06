@@ -7,6 +7,7 @@ import { KoreaderRepository } from './koreader.repository';
 import { KoreaderChapterService } from './koreader-chapter.service';
 import { KoreaderChapterExtractorService } from './koreader-chapter-extractor.service';
 import { UserBookStatusService } from '../user-book-status/user-book-status.service';
+import { AchievementEventsService, ACHIEVEMENT_EVENT_BOOK_PROGRESS_CHANGED } from '../achievement/achievement-events.service';
 
 const BCRYPT_ROUNDS = 12;
 const SYNC_EVENT = 'koreader.sync';
@@ -22,6 +23,7 @@ export class KoreaderService {
     private readonly chapterService: KoreaderChapterService,
     private readonly chapterExtractor: KoreaderChapterExtractorService,
     private readonly userBookStatusService: UserBookStatusService,
+    private readonly achievementEvents: AchievementEventsService,
   ) {}
 
   async createCredentials(userId: number, username: string, password: string) {
@@ -134,6 +136,13 @@ export class KoreaderService {
     const bookorbitPercentage = toBookorbitPercentage(data.percentage);
     await this.repo.upsertReadingProgress(bookFile.id, userId, bookorbitPercentage);
     await this.userBookStatusService.autoUpdate(userId, bookFile.bookId, bookorbitPercentage);
+    this.achievementEvents.emit(ACHIEVEMENT_EVENT_BOOK_PROGRESS_CHANGED, {
+      userId,
+      bookId: bookFile.bookId,
+      bookFileId: bookFile.id,
+      progress: bookorbitPercentage,
+      source: 'koreader',
+    });
 
     this.logger.debug(
       `[${SYNC_EVENT}] [end] userId=${userId} bookFileId=${bookFile.id} device=${device} durationMs=${Date.now() - startedAt} percentage=${data.percentage} - save progress completed`,

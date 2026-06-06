@@ -1,9 +1,13 @@
 import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 
-import type { HardcoverAdminSettings, HardcoverSettings, HardcoverTokenValidationResult, UpsertHardcoverSettingsPayload } from '@bookorbit/types';
+import type {
+  HardcoverSettings,
+  HardcoverSyncDisabledReason,
+  HardcoverTokenValidationResult,
+  UpsertHardcoverSettingsPayload,
+} from '@bookorbit/types';
 
 import { sanitizeLogValue } from '../../common/utils/log-sanitize.utils';
-import { AppSettingsService } from '../app-settings/app-settings.service';
 import { HARDCOVER_PRIVACY } from './hardcover.constants';
 import { HardcoverClientService } from './hardcover-client.service';
 import { HardcoverRepository } from './hardcover.repository';
@@ -17,43 +21,23 @@ export class HardcoverSettingsService {
   constructor(
     private readonly repo: HardcoverRepository,
     private readonly client: HardcoverClientService,
-    private readonly appSettings: AppSettingsService,
   ) {}
 
-  async isFeatureEnabled(): Promise<boolean> {
-    return this.appSettings.isHardcoverEnabled();
-  }
-
-  async setFeatureEnabled(enabled: boolean): Promise<void> {
-    await this.appSettings.setHardcoverEnabled(enabled);
-    this.logger.log(`[hardcover.admin_toggle] [end] enabled=${enabled} - feature toggled`);
-  }
-
-  async getAdminSettings(): Promise<HardcoverAdminSettings> {
-    return { featureEnabled: await this.isFeatureEnabled() };
-  }
-
   async getSettings(userId: number): Promise<HardcoverSettings> {
-    const row = await this.repo.findSettings(userId);
-    if (!row) {
-      return {
-        tokenConfigured: false,
-        enabled: false,
-        autoSyncOnStatusChange: true,
-        autoSyncOnProgressUpdate: true,
-        autoSyncOnRatingChange: true,
-        privacySettingId: HARDCOVER_PRIVACY.PRIVATE,
-        lastSyncedAt: null,
-      };
-    }
+    const [row, hasSyncPermission] = await Promise.all([this.repo.findSettings(userId), this.repo.userHasHardcoverSyncPermission(userId)]);
+    const tokenConfigured = Boolean(row?.apiToken);
+    const enabled = row?.enabled ?? false;
+
     return {
-      tokenConfigured: true,
-      enabled: row.enabled,
-      autoSyncOnStatusChange: row.autoSyncOnStatusChange,
-      autoSyncOnProgressUpdate: row.autoSyncOnProgressUpdate,
-      autoSyncOnRatingChange: row.autoSyncOnRatingChange,
-      privacySettingId: row.privacySettingId,
-      lastSyncedAt: row.lastSyncedAt?.toISOString() ?? null,
+      tokenConfigured,
+      enabled,
+      effectiveEnabled: hasSyncPermission && tokenConfigured && enabled,
+      disabledReason: this.resolveDisabledReason({ hasSyncPermission, tokenConfigured, enabled }),
+      autoSyncOnStatusChange: row?.autoSyncOnStatusChange ?? true,
+      autoSyncOnProgressUpdate: row?.autoSyncOnProgressUpdate ?? true,
+      autoSyncOnRatingChange: row?.autoSyncOnRatingChange ?? true,
+      privacySettingId: row?.privacySettingId ?? HARDCOVER_PRIVACY.PRIVATE,
+      lastSyncedAt: row?.lastSyncedAt?.toISOString() ?? null,
     };
   }
 
@@ -113,7 +97,8 @@ export class HardcoverSettingsService {
   }
 
   async getTokenForUser(userId: number): Promise<string | null> {
-    const settings = await this.repo.findSettings(userId);
+    const [settings, hasSyncPermission] = await Promise.all([this.repo.findSettings(userId), this.repo.userHasHardcoverSyncPermission(userId)]);
+    if (!hasSyncPermission) return null;
     if (!settings || !settings.enabled) return null;
     return settings.apiToken;
   }
@@ -122,5 +107,16 @@ export class HardcoverSettingsService {
     if (!token) return token;
     const lower = token.toLowerCase();
     return lower.startsWith('bearer ') ? token.slice(7).trim() : token;
+  }
+
+  private resolveDisabledReason(input: {
+    hasSyncPermission: boolean;
+    tokenConfigured: boolean;
+    enabled: boolean;
+  }): HardcoverSyncDisabledReason | null {
+    if (!input.hasSyncPermission) return 'permission_denied';
+    if (!input.tokenConfigured) return 'missing_token';
+    if (!input.enabled) return 'user_disabled';
+    return null;
   }
 }

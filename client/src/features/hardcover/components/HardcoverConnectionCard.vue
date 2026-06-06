@@ -164,7 +164,7 @@ const privacyOptions = [
       <div class="flex items-center justify-between">
         <div>
           <p class="text-sm">Sync on progress update</p>
-          <p class="text-xs text-muted-foreground mt-0.5">Push reading progress and dates when a session is saved.</p>
+          <p class="text-xs text-muted-foreground mt-0.5">Push reading progress and dates when BookOrbit or KOReader progress changes.</p>
         </div>
         <ToggleSwitch v-model="form.autoSyncOnProgressUpdate" :disabled="!form.enabled" />
       </div>

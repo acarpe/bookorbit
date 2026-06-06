@@ -1,4 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
+import { Permission } from '@bookorbit/types';
 import { and, eq, inArray, ne, sql } from 'drizzle-orm';
 import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
 
@@ -53,6 +54,23 @@ export class HardcoverRepository {
     await this.db.delete(schema.hardcoverUserSettings).where(eq(schema.hardcoverUserSettings.userId, userId));
   }
 
+  async userHasHardcoverSyncPermission(userId: number): Promise<boolean> {
+    const [row] = await this.db
+      .select({
+        isSuperuser: schema.users.isSuperuser,
+        permissionName: schema.userPermissions.permissionName,
+      })
+      .from(schema.users)
+      .leftJoin(
+        schema.userPermissions,
+        and(eq(schema.userPermissions.userId, schema.users.id), eq(schema.userPermissions.permissionName, Permission.HardcoverSync)),
+      )
+      .where(and(eq(schema.users.id, userId), eq(schema.users.active, true)))
+      .limit(1);
+
+    return row?.isSuperuser === true || row?.permissionName === Permission.HardcoverSync;
+  }
+
   // ---- Book State ----
 
   async findBookState(userId: number, bookId: number): Promise<HardcoverBookState | undefined> {
@@ -89,6 +107,17 @@ export class HardcoverRepository {
   // ---- Books for sync ----
 
   async findSyncableBooks(userId: number): Promise<BookSyncData[]> {
+    return this.findSyncableBooksForUser(userId);
+  }
+
+  async findSyncableBook(userId: number, bookId: number): Promise<BookSyncData | null> {
+    const [row] = await this.findSyncableBooksForUser(userId, bookId);
+    return row ?? null;
+  }
+
+  private async findSyncableBooksForUser(userId: number, bookId?: number): Promise<BookSyncData[]> {
+    const bookFilter = bookId !== undefined ? eq(schema.books.id, bookId) : undefined;
+
     const maxProgressSq = this.db
       .select({
         bookId: schema.books.id,
@@ -97,6 +126,7 @@ export class HardcoverRepository {
       .from(schema.books)
       .innerJoin(schema.bookFiles, eq(schema.bookFiles.bookId, schema.books.id))
       .innerJoin(schema.readingProgress, and(eq(schema.readingProgress.bookFileId, schema.bookFiles.id), eq(schema.readingProgress.userId, userId)))
+      .where(bookFilter)
       .groupBy(schema.books.id)
       .as('max_progress_sq');
 
@@ -107,6 +137,7 @@ export class HardcoverRepository {
       })
       .from(schema.bookAuthors)
       .innerJoin(schema.authors, eq(schema.authors.id, schema.bookAuthors.authorId))
+      .where(bookId !== undefined ? eq(schema.bookAuthors.bookId, bookId) : undefined)
       .groupBy(schema.bookAuthors.bookId)
       .as('first_author_sq');
 
@@ -132,14 +163,10 @@ export class HardcoverRepository {
       .leftJoin(schema.bookMetadata, eq(schema.bookMetadata.bookId, schema.books.id))
       .leftJoin(schema.userBookRatings, and(eq(schema.userBookRatings.bookId, schema.books.id), eq(schema.userBookRatings.userId, userId)))
       .leftJoin(maxProgressSq, eq(maxProgressSq.bookId, schema.books.id))
-      .leftJoin(firstAuthorSq, eq(firstAuthorSq.bookId, schema.books.id));
+      .leftJoin(firstAuthorSq, eq(firstAuthorSq.bookId, schema.books.id))
+      .where(bookFilter);
 
     return rows as BookSyncData[];
-  }
-
-  async findSyncableBook(userId: number, bookId: number): Promise<BookSyncData | null> {
-    const rows = await this.findSyncableBooks(userId);
-    return rows.find((r) => r.bookId === bookId) ?? null;
   }
 
   async findBookIdByFileId(bookFileId: number): Promise<number | null> {

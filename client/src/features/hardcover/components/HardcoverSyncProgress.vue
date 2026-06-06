@@ -1,10 +1,10 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { RefreshCw, XCircle, Loader2 } from 'lucide-vue-next'
+import { AlertCircle, RefreshCw, XCircle, Loader2 } from 'lucide-vue-next'
 import { useHardcoverSync } from '../composables/useHardcoverSync'
 import { useHardcoverSettings } from '../composables/useHardcoverSettings'
 
-const { activeSyncStatus, syncing, isSyncing, syncProgress, pendingSummary, loadingPending, startSync, cancelSync } = useHardcoverSync()
+const { activeSyncStatus, syncing, isSyncing, syncProgress, pendingSummary, loadingPending, error, startSync, cancelSync } = useHardcoverSync()
 const { settings } = useHardcoverSettings()
 
 const progressLabel = computed(() => {
@@ -14,8 +14,21 @@ const progressLabel = computed(() => {
 })
 
 const hasPending = computed(() => pendingSummary.value.pendingBooks > 0)
-const syncButtonDisabled = computed(() => syncing.value || loadingPending.value || !hasPending.value)
-const syncButtonLabel = computed(() => (hasPending.value ? `Sync now (${pendingSummary.value.pendingBooks})` : 'Sync now'))
+const syncUnavailableReason = computed(() => {
+  switch (settings.value?.disabledReason) {
+    case 'permission_denied':
+      return 'You do not have permission to use Hardcover sync.'
+    case 'user_disabled':
+      return 'Sync is paused in your Hardcover settings.'
+    default:
+      return null
+  }
+})
+const syncButtonDisabled = computed(() => syncing.value || loadingPending.value || !hasPending.value || syncUnavailableReason.value !== null)
+const syncButtonLabel = computed(() => {
+  if (syncUnavailableReason.value) return 'Sync unavailable'
+  return hasPending.value ? `Sync now (${pendingSummary.value.pendingBooks})` : 'Sync now'
+})
 
 const lastSyncedLabel = computed(() => {
   const iso = settings.value?.lastSyncedAt
@@ -39,11 +52,21 @@ const lastSyncedLabel = computed(() => {
         <p class="text-xs text-muted-foreground mt-0.5">Push all your reading data to Hardcover now.</p>
         <p v-if="!isSyncing" class="text-xs text-muted-foreground mt-1">
           <template v-if="loadingPending">Checking pending items...</template>
-          <template v-else-if="hasPending">{{ pendingSummary.pendingBooks }} pending of {{ pendingSummary.totalBooks }} books.</template>
+          <template v-else-if="hasPending">
+            {{ pendingSummary.pendingBooks }} pending of {{ pendingSummary.totalBooks }} books.
+            <span v-if="syncUnavailableReason">{{ syncUnavailableReason }}</span>
+          </template>
+          <template v-else-if="syncUnavailableReason">{{ syncUnavailableReason }}</template>
           <template v-else-if="pendingSummary.totalBooks === 0">No eligible books to sync.</template>
           <template v-else>All books are already synced.</template>
         </p>
-        <p v-if="lastSyncedLabel && !isSyncing" class="text-xs text-muted-foreground mt-0.5">Last synced: {{ lastSyncedLabel }}</p>
+        <p v-if="lastSyncedLabel && !isSyncing" class="text-xs text-muted-foreground mt-0.5">
+          {{ syncUnavailableReason ? 'Last successful sync' : 'Last synced' }}: {{ lastSyncedLabel }}
+        </p>
+        <p v-if="error && !isSyncing" class="flex items-center gap-1 text-xs text-destructive mt-1">
+          <AlertCircle class="size-3.5" />
+          {{ error }}
+        </p>
       </div>
 
       <div class="flex items-center gap-2">

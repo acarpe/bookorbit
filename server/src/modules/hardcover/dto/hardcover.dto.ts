@@ -34,8 +34,3 @@ export class ValidateHardcoverTokenDto {
   @MaxLength(2048)
   token?: string;
 }
-
-export class SetHardcoverFeatureEnabledDto {
-  @IsBoolean()
-  enabled!: boolean;
-}

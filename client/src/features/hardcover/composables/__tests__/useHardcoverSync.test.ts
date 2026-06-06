@@ -33,6 +33,18 @@ const RUNNING_STATUS: HardcoverActiveSyncStatus = {
   syncedBooks: 3,
 }
 
+const SETTINGS: HardcoverSettings = {
+  tokenConfigured: true,
+  enabled: true,
+  effectiveEnabled: true,
+  disabledReason: null,
+  autoSyncOnStatusChange: true,
+  autoSyncOnProgressUpdate: true,
+  autoSyncOnRatingChange: true,
+  privacySettingId: 3,
+  lastSyncedAt: null,
+}
+
 async function loadComposable() {
   const { useHardcoverSync } = await import('../useHardcoverSync')
   return useHardcoverSync()
@@ -46,7 +58,7 @@ describe('useHardcoverSync', () => {
     mockStatus.mockResolvedValue(null)
     mockPendingSummary.mockResolvedValue({ totalBooks: 0, pendingBooks: 0 })
     mockStream.mockResolvedValue(undefined)
-    mockFetchSettings.mockResolvedValue(null as unknown as HardcoverSettings)
+    mockFetchSettings.mockResolvedValue(SETTINGS)
   })
 
   afterEach(() => {
@@ -73,6 +85,15 @@ describe('useHardcoverSync', () => {
     const c = await loadComposable()
     await c.startSync()
     expect(c.error.value).toBe('Server busy')
+  })
+
+  it('startSync does not mark a run active when the server reports no run', async () => {
+    mockStart.mockResolvedValue({ runId: 0 })
+    const c = await loadComposable()
+    await c.startSync()
+    expect(c.activeSyncStatus.value).toBeNull()
+    expect(c.error.value).toBe('Hardcover sync is not available right now')
+    expect(mockFetchSettings).toHaveBeenCalled()
   })
 
   it('cancelSync clears status and stops stream tracking', async () => {

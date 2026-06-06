@@ -89,6 +89,9 @@ type FindUserBookReadsResult = {
   user_book_reads: Array<{ id: number; started_at: string | null; finished_at: string | null; progress_pages: number | null }>;
 };
 
+export type HardcoverSyncBookResult = 'synced' | 'skipped' | 'failed';
+type HardcoverBookStateSnapshot = Awaited<ReturnType<HardcoverRepository['findBookState']>>;
+
 function toDateString(d: Date | null | undefined): string | null {
   if (!d) return null;
   return d instanceof Date ? d.toISOString().split('T')[0]! : null;
@@ -109,28 +112,31 @@ export class HardcoverSyncService {
     private readonly settingsService: HardcoverSettingsService,
   ) {}
 
-  async syncBook(userId: number, bookId: number): Promise<void> {
+  async syncBook(userId: number, bookId: number): Promise<HardcoverSyncBookResult> {
     const token = await this.settingsService.getTokenForUser(userId);
-    if (!token) return;
+    if (!token) return 'skipped';
 
     const book = await this.repo.findSyncableBook(userId, bookId);
-    if (!book) return;
+    if (!book) return 'skipped';
 
-    if (book.status === 'unread') return;
+    if (book.status === 'unread') return 'skipped';
 
-    await this.syncSingleBook(userId, token, book);
+    const state = await this.repo.findBookState(userId, book.bookId);
+    if (!this.hasChanges(book, state)) return 'skipped';
+
+    return this.syncSingleBook(userId, token, book, state);
   }
 
   async syncAll(userId: number): Promise<number> {
-    const token = await this.settingsService.getTokenForUser(userId);
-    if (!token) return 0;
-
     const existing = this.activeSyncs.get(userId);
     if (existing) {
       this.logger.warn(`[hardcover.sync_all] userId=${userId} runId=${existing.runId} - sync already running`);
       this.emitSyncStatus(userId, existing);
       return existing.runId;
     }
+
+    const token = await this.settingsService.getTokenForUser(userId);
+    if (!token) return 0;
 
     const books = await this.repo.findSyncableBooks(userId);
 
@@ -247,7 +253,7 @@ export class HardcoverSyncService {
         continue;
       }
 
-      const result = await this.syncSingleBook(userId, token, book);
+      const result = await this.syncSingleBook(userId, token, book, state);
       if (result === 'synced') synced++;
       else if (result === 'skipped') skipped++;
       else failed++;
@@ -279,7 +285,12 @@ export class HardcoverSyncService {
     this.emitSyncStatus(userId, activeStatus ?? null);
   }
 
-  private async syncSingleBook(userId: number, token: string, book: BookSyncData): Promise<'synced' | 'skipped' | 'failed'> {
+  private async syncSingleBook(
+    userId: number,
+    token: string,
+    book: BookSyncData,
+    initialState?: HardcoverBookStateSnapshot,
+  ): Promise<HardcoverSyncBookResult> {
     const startedAt = Date.now();
     const settings = await this.settingsService.getSettings(userId);
 
@@ -296,7 +307,7 @@ export class HardcoverSyncService {
 
     const match = await this.matchService.matchBook(userId, token, book);
     if (!match) {
-      const state = await this.repo.findBookState(userId, book.bookId);
+      const state = initialState ?? (await this.repo.findBookState(userId, book.bookId));
       await this.repo.upsertBookState({
         userId,
         bookId: book.bookId,
@@ -304,6 +315,9 @@ export class HardcoverSyncService {
         syncError: 'no_match',
         ...this.buildAttemptSnapshot(book),
       });
+      this.logger.warn(
+        `[hardcover.sync_book] [fail] userId=${userId} bookId=${book.bookId} durationMs=${Date.now() - startedAt} errorClass=MatchError error="no_match" - Hardcover book match not found`,
+      );
       return 'skipped';
     }
 
@@ -325,9 +339,10 @@ export class HardcoverSyncService {
       });
 
       const state = await this.repo.findBookState(userId, book.bookId);
+      const syncState = initialState ?? state;
       const startDate = toDateString(book.startedAt);
       const endDate = toDateString(book.finishedAt);
-      let hardcoverReadId: number | null = state?.hardcoverReadId ?? null;
+      let hardcoverReadId: number | null = syncState?.hardcoverReadId ?? null;
       let progressSynced = true;
 
       if (startDate || endDate || book.progress != null) {
@@ -355,6 +370,10 @@ export class HardcoverSyncService {
             progressPages,
             editionId: match.hardcoverEditionId ?? undefined,
           });
+
+          this.logger.log(
+            `[hardcover.sync_progress] [end] userId=${userId} bookId=${book.bookId} hardcoverBookId=${match.hardcoverBookId} hardcoverReadId=${hardcoverReadId} durationMs=${Date.now() - startedAt} progress=${book.progress} progressPages=${progressPages} - progress sent to Hardcover`,
+          );
         }
       }
 
@@ -544,6 +563,9 @@ export class HardcoverSyncService {
 
   private hasChanges(book: BookSyncData, state: Awaited<ReturnType<HardcoverRepository['findBookState']>>): boolean {
     if (!state?.lastSyncedAt) return true;
+    if (book.hardcoverMetadataId && state.syncError === 'no_match') return true;
+    const metadataHardcoverId = this.parseNumericHardcoverMetadataId(book.hardcoverMetadataId);
+    if (metadataHardcoverId !== null && metadataHardcoverId !== state.hardcoverBookId) return true;
     if (book.status !== state.lastSyncedStatus) return true;
     if (book.progress !== state.lastSyncedProgress) return true;
     if (book.rating !== state.lastSyncedRating) return true;
@@ -552,6 +574,12 @@ export class HardcoverSyncService {
     if (startDate !== state.lastSyncedStartedAt) return true;
     if (endDate !== state.lastSyncedFinishedAt) return true;
     return false;
+  }
+
+  private parseNumericHardcoverMetadataId(value: string | null | undefined): number | null {
+    if (!value) return null;
+    const id = parseInt(value, 10);
+    return isNaN(id) ? null : id;
   }
 
   private buildAttemptSnapshot(book: BookSyncData) {

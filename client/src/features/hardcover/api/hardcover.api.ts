@@ -1,6 +1,5 @@
 import { api } from '@/lib/api'
 import type {
-  HardcoverAdminSettings,
   HardcoverActiveSyncStatus,
   HardcoverSyncPendingSummary,
   HardcoverSettings,
@@ -96,19 +95,4 @@ export async function fetchHardcoverSyncPendingSummary(): Promise<HardcoverSyncP
   const res = await api(`${BASE}/sync/pending`)
   if (!res.ok) return { totalBooks: 0, pendingBooks: 0 }
   return res.json()
-}
-
-export async function fetchHardcoverAdminSettings(): Promise<HardcoverAdminSettings> {
-  const res = await api('/api/v1/admin/hardcover/settings')
-  if (!res.ok) throw new Error('Failed to fetch admin settings')
-  return res.json()
-}
-
-export async function setHardcoverFeatureEnabled(enabled: boolean): Promise<void> {
-  const res = await api('/api/v1/admin/hardcover/settings', {
-    method: 'PATCH',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ enabled }),
-  })
-  if (!res.ok) throw new Error('Failed to update Hardcover feature flag')
 }

@@ -1,3 +1,4 @@
+import { Logger } from '@nestjs/common';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 import { HardcoverSyncService } from './hardcover-sync.service';
@@ -54,6 +55,10 @@ const readingBook = {
 describe('HardcoverSyncService', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockRepo.findBookState.mockResolvedValue(undefined);
+    mockRepo.findBookStatesByBookIds.mockResolvedValue([]);
+    mockRepo.findSyncableBooks.mockResolvedValue([]);
+    mockRepo.findSyncableBook.mockResolvedValue(null);
     mockRepo.upsertBookState.mockResolvedValue({});
     mockRepo.updateLastSyncedAt.mockResolvedValue(undefined);
     mockSettingsService.getSettings.mockResolvedValue(defaultSettings);
@@ -76,16 +81,58 @@ describe('HardcoverSyncService', () => {
     it('does nothing for unread status', async () => {
       mockSettingsService.getTokenForUser.mockResolvedValue('tok');
       mockRepo.findSyncableBook.mockResolvedValue({ ...readingBook, status: 'unread' });
-      await makeService().syncBook(1, 1);
+      await expect(makeService().syncBook(1, 1)).resolves.toBe('skipped');
       expect(mockMatchService.matchBook).not.toHaveBeenCalled();
     });
 
+    it('skips when the local sync snapshot has no changes', async () => {
+      mockSettingsService.getTokenForUser.mockResolvedValue('tok');
+      mockRepo.findSyncableBook.mockResolvedValue(readingBook);
+      mockRepo.findBookState.mockResolvedValue({
+        lastSyncedAt: new Date('2024-02-01T00:00:00Z'),
+        lastSyncedStatus: 'reading',
+        lastSyncedProgress: 42,
+        lastSyncedRating: null,
+        lastSyncedStartedAt: '2024-01-01',
+        lastSyncedFinishedAt: null,
+      });
+
+      await expect(makeService().syncBook(1, 1)).resolves.toBe('skipped');
+
+      expect(mockMatchService.matchBook).not.toHaveBeenCalled();
+      expect(mockClient.query).not.toHaveBeenCalled();
+    });
+
+    it('retries an unchanged snapshot when a Hardcover metadata id was added after a failed match', async () => {
+      const warnSpy = vi.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
+      const bookWithMetadataId = { ...readingBook, hardcoverMetadataId: 'fyrebirds' };
+      mockSettingsService.getTokenForUser.mockResolvedValue('tok');
+      mockRepo.findSyncableBook.mockResolvedValue(bookWithMetadataId);
+      mockRepo.findBookState.mockResolvedValue({
+        hardcoverBookId: null,
+        syncError: 'no_match',
+        lastSyncedAt: new Date('2024-02-01T00:00:00Z'),
+        lastSyncedStatus: 'reading',
+        lastSyncedProgress: 42,
+        lastSyncedRating: null,
+        lastSyncedStartedAt: '2024-01-01',
+        lastSyncedFinishedAt: null,
+      });
+      mockMatchService.matchBook.mockResolvedValue(null);
+
+      await expect(makeService().syncBook(1, 1)).resolves.toBe('skipped');
+
+      expect(mockMatchService.matchBook).toHaveBeenCalledWith(1, 'tok', bookWithMetadataId);
+      warnSpy.mockRestore();
+    });
+
     it('stores no_match error when match fails', async () => {
+      const warnSpy = vi.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
       mockSettingsService.getTokenForUser.mockResolvedValue('tok');
       mockRepo.findSyncableBook.mockResolvedValue(readingBook);
       mockMatchService.matchBook.mockResolvedValue(null);
       mockRepo.findBookState.mockResolvedValue(null);
-      await makeService().syncBook(1, 1);
+      await expect(makeService().syncBook(1, 1)).resolves.toBe('skipped');
       expect(mockRepo.upsertBookState).toHaveBeenCalledWith(
         expect.objectContaining({
           syncError: 'no_match',
@@ -95,6 +142,9 @@ describe('HardcoverSyncService', () => {
           lastSyncedStartedAt: '2024-01-01',
         }),
       );
+      expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('[hardcover.sync_book] [fail] userId=1 bookId=1'));
+      expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('errorClass=MatchError error="no_match"'));
+      warnSpy.mockRestore();
     });
 
     it('syncs book successfully', async () => {
@@ -107,7 +157,7 @@ describe('HardcoverSyncService', () => {
         .mockResolvedValueOnce({ update_user_book: { user_book: { id: 55 }, error: null } })
         .mockResolvedValueOnce({ user_book_reads: [] })
         .mockResolvedValueOnce({ insert_user_book_read: { user_book_read: { id: 77 }, error: null } });
-      await makeService().syncBook(1, 1);
+      await expect(makeService().syncBook(1, 1)).resolves.toBe('synced');
       expect(mockRepo.upsertBookState).toHaveBeenCalledWith(
         expect.objectContaining({
           hardcoverUserBookId: 55,
@@ -146,6 +196,7 @@ describe('HardcoverSyncService', () => {
     });
 
     it('syncs progress to sibling unfinished reads to avoid page 0 in Hardcover UI', async () => {
+      const logSpy = vi.spyOn(Logger.prototype, 'log').mockImplementation(() => undefined);
       mockSettingsService.getTokenForUser.mockResolvedValue('tok');
       mockRepo.findSyncableBook.mockResolvedValue(readingBook);
       mockRepo.findBookState.mockResolvedValue({ hardcoverReadId: 900 });
@@ -171,6 +222,9 @@ describe('HardcoverSyncService', () => {
         expect.stringContaining('mutation UpdateUserBookRead'),
         expect.objectContaining({ id: 899, object: expect.objectContaining({ progress_pages: 126 }) }),
       );
+      expect(logSpy).toHaveBeenCalledWith(expect.stringContaining('[hardcover.sync_progress] [end] userId=1 bookId=1'));
+      expect(logSpy).toHaveBeenCalledWith(expect.stringContaining('progress=42 progressPages=126 - progress sent to Hardcover'));
+      logSpy.mockRestore();
     });
 
     it('keeps progress pending when edition pages are unavailable', async () => {

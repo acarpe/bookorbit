@@ -100,6 +100,22 @@ describe('HardcoverBookMatchService', () => {
     expect(result?.hardcoverBookId).toBe(77);
   });
 
+  it('matches by metadata slug when hardcoverMetadataId is not numeric', async () => {
+    mockRepo.findBookState.mockResolvedValue(undefined);
+    mockClient.query.mockResolvedValue({ books: [{ id: 686104, editions: [{ id: 30673405, pages: 382 }] }] });
+    const book = { ...baseBook, hardcoverMetadataId: 'fyrebirds', isbn13: null };
+
+    const result = await makeService().matchBook(1, 'tok', book);
+
+    expect(result).toEqual({ hardcoverBookId: 686104, hardcoverEditionId: 30673405, editionPages: 382, matchMethod: 'metadata_id' });
+    expect(mockClient.query).toHaveBeenCalledWith(
+      1,
+      'tok',
+      expect.stringContaining('query FindBookBySlug'),
+      expect.objectContaining({ slug: 'fyrebirds' }),
+    );
+  });
+
   it('falls back to isbn13 when metadata_id fails', async () => {
     mockRepo.findBookState.mockResolvedValue(undefined);
     mockClient.query.mockRejectedValueOnce(new Error('not found')).mockResolvedValueOnce({ books: [{ id: 88, editions: [{ id: 11 }] }] });

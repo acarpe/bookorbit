@@ -37,7 +37,7 @@ export const hardcoverBookState = pgTable(
     hardcoverEditionId: integer('hardcover_edition_id'),
     hardcoverUserBookId: integer('hardcover_user_book_id'),
     hardcoverReadId: integer('hardcover_read_id'),
-    matchMethod: varchar('match_method', { length: 10 }),
+    matchMethod: varchar('match_method', { length: 20 }),
     matchError: text('match_error'),
     lastSyncedAt: timestamp('last_synced_at', { withTimezone: true }),
     lastSyncedStatus: varchar('last_synced_status', { length: 20 }),

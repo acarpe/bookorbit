@@ -1,4 +1,5 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
+import { Permission } from '@bookorbit/types';
 
 import { HardcoverRepository } from './hardcover.repository';
 
@@ -37,6 +38,10 @@ function makeRepository() {
   const bookIdLimit = vi.fn().mockResolvedValue([{ bookId: 42 }]);
   const bookIdWhere = vi.fn().mockReturnValue({ limit: bookIdLimit });
   const bookIdFrom = vi.fn().mockReturnValue({ where: bookIdWhere });
+  const permissionLimit = vi.fn().mockResolvedValue([{ isSuperuser: false, permissionName: Permission.HardcoverSync }]);
+  const permissionWhere = vi.fn().mockReturnValue({ limit: permissionLimit });
+  const permissionLeftJoin = vi.fn().mockReturnValue({ where: permissionWhere });
+  const permissionFrom = vi.fn().mockReturnValue({ leftJoin: permissionLeftJoin });
 
   const db = {
     query: {
@@ -60,6 +65,8 @@ function makeRepository() {
     updateChain,
     bookIdLimit,
     bookIdWhere,
+    permissionLimit,
+    permissionFrom,
     settingsRow,
     bookStateRow,
   };
@@ -137,10 +144,13 @@ describe('HardcoverRepository', () => {
 
   it('findSyncableBook returns a book from findSyncableBooks', async () => {
     const { repo } = makeRepository();
-    vi.spyOn(repo, 'findSyncableBooks').mockResolvedValue([{ bookId: 42 } as any]);
+    const findSyncableBooksForUser = vi.spyOn(repo as any, 'findSyncableBooksForUser');
+    findSyncableBooksForUser.mockResolvedValueOnce([{ bookId: 42 }]).mockResolvedValueOnce([]);
 
     await expect(repo.findSyncableBook(7, 42)).resolves.toEqual({ bookId: 42 });
     await expect(repo.findSyncableBook(7, 99)).resolves.toBeNull();
+    expect(findSyncableBooksForUser).toHaveBeenNthCalledWith(1, 7, 42);
+    expect(findSyncableBooksForUser).toHaveBeenNthCalledWith(2, 7, 99);
   });
 
   it('findBookIdByFileId returns the first matching book id', async () => {
@@ -149,5 +159,28 @@ describe('HardcoverRepository', () => {
     await expect(repo.findBookIdByFileId(5)).resolves.toBe(42);
     expect(bookIdLimit).toHaveBeenCalledWith(1);
     expect(bookIdWhere).toHaveBeenCalledTimes(1);
+  });
+
+  it('userHasHardcoverSyncPermission returns true for a user with the permission', async () => {
+    const { repo, db, permissionFrom } = makeRepository();
+    db.select.mockReturnValueOnce({ from: permissionFrom });
+
+    await expect(repo.userHasHardcoverSyncPermission(7)).resolves.toBe(true);
+  });
+
+  it('userHasHardcoverSyncPermission returns true for a superuser', async () => {
+    const { repo, db, permissionFrom, permissionLimit } = makeRepository();
+    permissionLimit.mockResolvedValueOnce([{ isSuperuser: true, permissionName: null }]);
+    db.select.mockReturnValueOnce({ from: permissionFrom });
+
+    await expect(repo.userHasHardcoverSyncPermission(7)).resolves.toBe(true);
+  });
+
+  it('userHasHardcoverSyncPermission returns false without an active matching user permission row', async () => {
+    const { repo, db, permissionFrom, permissionLimit } = makeRepository();
+    permissionLimit.mockResolvedValueOnce([{ isSuperuser: false, permissionName: null }]);
+    db.select.mockReturnValueOnce({ from: permissionFrom });
+
+    await expect(repo.userHasHardcoverSyncPermission(7)).resolves.toBe(false);
   });
 });

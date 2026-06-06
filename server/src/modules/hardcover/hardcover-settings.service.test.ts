@@ -5,6 +5,7 @@ import { HardcoverSettingsService } from './hardcover-settings.service';
 
 const mockRepo = {
   findSettings: vi.fn(),
+  userHasHardcoverSyncPermission: vi.fn(),
   upsertSettings: vi.fn(),
   deleteSettings: vi.fn(),
 };
@@ -13,30 +14,14 @@ const mockClient = {
   query: vi.fn(),
 };
 
-const mockAppSettings = {
-  isHardcoverEnabled: vi.fn(),
-  setHardcoverEnabled: vi.fn(),
-};
-
 function makeService() {
-  return new HardcoverSettingsService(mockRepo as any, mockClient as any, mockAppSettings as any);
+  return new HardcoverSettingsService(mockRepo as any, mockClient as any);
 }
 
 describe('HardcoverSettingsService', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-  });
-
-  describe('isFeatureEnabled', () => {
-    it('returns true when enabled', async () => {
-      mockAppSettings.isHardcoverEnabled.mockResolvedValue(true);
-      expect(await makeService().isFeatureEnabled()).toBe(true);
-    });
-
-    it('returns false by default', async () => {
-      mockAppSettings.isHardcoverEnabled.mockResolvedValue(false);
-      expect(await makeService().isFeatureEnabled()).toBe(false);
-    });
+    mockRepo.userHasHardcoverSyncPermission.mockResolvedValue(true);
   });
 
   describe('getSettings', () => {
@@ -45,6 +30,8 @@ describe('HardcoverSettingsService', () => {
       const result = await makeService().getSettings(1);
       expect(result.tokenConfigured).toBe(false);
       expect(result.enabled).toBe(false);
+      expect(result.effectiveEnabled).toBe(false);
+      expect(result.disabledReason).toBe('missing_token');
       expect(result.privacySettingId).toBe(3);
     });
 
@@ -61,9 +48,47 @@ describe('HardcoverSettingsService', () => {
       const result = await makeService().getSettings(1);
       expect(result.tokenConfigured).toBe(true);
       expect(result.enabled).toBe(true);
+      expect(result.effectiveEnabled).toBe(true);
+      expect(result.disabledReason).toBeNull();
       expect(result.autoSyncOnProgressUpdate).toBe(false);
       expect((result as any).apiToken).toBeUndefined();
       expect(result.lastSyncedAt).toBeNull();
+    });
+
+    it('returns user disabled effective state when configured sync is paused', async () => {
+      mockRepo.findSettings.mockResolvedValue({
+        apiToken: 'secret',
+        enabled: false,
+        autoSyncOnStatusChange: true,
+        autoSyncOnProgressUpdate: true,
+        autoSyncOnRatingChange: true,
+        privacySettingId: 3,
+        lastSyncedAt: null,
+      });
+
+      const result = await makeService().getSettings(1);
+
+      expect(result.enabled).toBe(false);
+      expect(result.effectiveEnabled).toBe(false);
+      expect(result.disabledReason).toBe('user_disabled');
+    });
+
+    it('returns permission denied effective state when the user lacks Hardcover sync permission', async () => {
+      mockRepo.userHasHardcoverSyncPermission.mockResolvedValue(false);
+      mockRepo.findSettings.mockResolvedValue({
+        apiToken: 'secret',
+        enabled: true,
+        autoSyncOnStatusChange: true,
+        autoSyncOnProgressUpdate: true,
+        autoSyncOnRatingChange: true,
+        privacySettingId: 3,
+        lastSyncedAt: null,
+      });
+
+      const result = await makeService().getSettings(1);
+
+      expect(result.effectiveEnabled).toBe(false);
+      expect(result.disabledReason).toBe('permission_denied');
     });
 
     it('returns lastSyncedAt as ISO string when set', async () => {
@@ -196,6 +221,12 @@ describe('HardcoverSettingsService', () => {
   describe('getTokenForUser', () => {
     it('returns null when no settings', async () => {
       mockRepo.findSettings.mockResolvedValue(undefined);
+      expect(await makeService().getTokenForUser(1)).toBeNull();
+    });
+
+    it('returns null when the user lacks Hardcover sync permission', async () => {
+      mockRepo.userHasHardcoverSyncPermission.mockResolvedValue(false);
+      mockRepo.findSettings.mockResolvedValue({ apiToken: 'tok', enabled: true });
       expect(await makeService().getTokenForUser(1)).toBeNull();
     });
 

@@ -16,6 +16,7 @@ vi.mock('crypto', () => ({
   createHash: createHashMock,
 }));
 
+import { AchievementEventsService, ACHIEVEMENT_EVENT_BOOK_PROGRESS_CHANGED } from '../achievement/achievement-events.service';
 import { UserBookStatusService } from '../user-book-status/user-book-status.service';
 import { KoreaderChapterExtractorService } from './koreader-chapter-extractor.service';
 import { KoreaderChapterService } from './koreader-chapter.service';
@@ -73,6 +74,9 @@ describe('KoreaderService', () => {
   let mockUserBookStatusService: {
     autoUpdate: ReturnType<typeof vi.fn>;
   };
+  let mockAchievementEvents: {
+    emit: ReturnType<typeof vi.fn>;
+  };
 
   beforeEach(() => {
     vi.restoreAllMocks();
@@ -125,6 +129,10 @@ describe('KoreaderService', () => {
       autoUpdate: vi.fn(),
     };
 
+    mockAchievementEvents = {
+      emit: vi.fn(),
+    };
+
     mockRepo.deleteKoreaderUser.mockResolvedValue(undefined);
     mockRepo.updateKoreaderUser.mockResolvedValue(undefined);
     mockRepo.upsertDeviceProgress.mockResolvedValue(undefined);
@@ -143,6 +151,7 @@ describe('KoreaderService', () => {
       mockChapterService as unknown as KoreaderChapterService,
       mockChapterExtractor as unknown as KoreaderChapterExtractorService,
       mockUserBookStatusService as unknown as UserBookStatusService,
+      mockAchievementEvents as unknown as AchievementEventsService,
     );
   });
 
@@ -320,6 +329,16 @@ describe('KoreaderService', () => {
       });
       expect(mockRepo.upsertReadingProgress).toHaveBeenCalledWith(44, 12, 50);
       expect(mockUserBookStatusService.autoUpdate).toHaveBeenCalledWith(12, 55, 50);
+      expect(mockAchievementEvents.emit).toHaveBeenCalledWith(ACHIEVEMENT_EVENT_BOOK_PROGRESS_CHANGED, {
+        userId: 12,
+        bookId: 55,
+        bookFileId: 44,
+        progress: 50,
+        source: 'koreader',
+      });
+      expect(mockAchievementEvents.emit.mock.invocationCallOrder[0]!).toBeGreaterThan(
+        mockUserBookStatusService.autoUpdate.mock.invocationCallOrder[0]!,
+      );
       expect(result).toEqual({
         document: 'abcdef1234567890fedcba',
         timestamp: 1700000000,
@@ -339,6 +358,7 @@ describe('KoreaderService', () => {
       expect(mockRepo.upsertDeviceProgress).not.toHaveBeenCalled();
       expect(mockRepo.upsertReadingProgress).not.toHaveBeenCalled();
       expect(mockUserBookStatusService.autoUpdate).not.toHaveBeenCalled();
+      expect(mockAchievementEvents.emit).not.toHaveBeenCalled();
     });
 
     it('passes empty accessible library lists to hash resolution', async () => {
