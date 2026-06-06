@@ -29,21 +29,21 @@ describe('KoboAnalyticsService', () => {
         Id: '9aa9fefd-21e7-4974-8123-6a7fa58bd771',
         EventType: 'LeaveContent',
         Timestamp: '2026-06-01T00:37:36Z',
-        Metrics: { SecondsRead: 10, IdleTime: 4 },
+        Metrics: { SecondsRead: 10 },
         Attributes: { volumeid: '1', progress: '4' },
       },
       {
         Id: 'ca3fcb0b-3e16-440a-985e-b754cdf904d8',
         EventType: 'LeaveContent',
         Timestamp: '2026-06-01T00:38:13Z',
-        Metrics: { SecondsRead: 34, IdleTime: 6 },
+        Metrics: { SecondsRead: 34 },
         Attributes: { volumeid: '1', progress: '6' },
       },
       {
         Id: '21c140de-5341-4d6f-af0d-412b769d0135',
         EventType: 'LeaveContent',
         Timestamp: '2026-06-01T00:38:58Z',
-        Metrics: { SecondsRead: 4, IdleTime: 4 },
+        Metrics: { SecondsRead: 4 },
         Attributes: { volumeid: '1', progress: '6' },
       },
     ];
@@ -81,6 +81,171 @@ describe('KoboAnalyticsService', () => {
       expect.objectContaining({
         sessionId: '21c140de-5341-4d6f-af0d-412b769d0135',
         durationSeconds: 4,
+      }),
+      user,
+    );
+  });
+
+  it('pairs OpenContent and LeaveContent to save progress delta and active duration', async () => {
+    await makeService().ingest(
+      {
+        Events: [
+          {
+            Id: 'open-forward',
+            EventType: 'OpenContent',
+            Timestamp: '2026-06-06T18:20:01Z',
+            Metrics: {},
+            Attributes: { volumeid: '1', progress: '8' },
+          },
+          {
+            Id: 'leave-forward',
+            EventType: 'LeaveContent',
+            Timestamp: '2026-06-06T18:20:52Z',
+            Metrics: { SecondsRead: 52, IdleTime: 3 },
+            Attributes: { volumeid: '1', progress: '12' },
+          },
+          {
+            Id: 'open-backward',
+            EventType: 'OpenContent',
+            Timestamp: '2026-06-06T18:21:18Z',
+            Metrics: {},
+            Attributes: { volumeid: '1', progress: '12' },
+          },
+          {
+            Id: 'leave-backward',
+            EventType: 'LeaveContent',
+            Timestamp: '2026-06-06T18:21:44Z',
+            Metrics: { SecondsRead: 26, IdleTime: 2 },
+            Attributes: { volumeid: '1', progress: '10' },
+          },
+        ],
+      },
+      user,
+      device,
+    );
+
+    expect(readingSessionService.save).toHaveBeenCalledTimes(2);
+    expect(readingSessionService.save).toHaveBeenNthCalledWith(
+      1,
+      100,
+      {
+        sessionId: 'leave-forward',
+        startedAt: '2026-06-06T18:20:01.000Z',
+        endedAt: '2026-06-06T18:20:52.000Z',
+        durationSeconds: 49,
+        progressDelta: 4,
+        endProgress: 12,
+      },
+      user,
+    );
+    expect(readingSessionService.save).toHaveBeenNthCalledWith(
+      2,
+      100,
+      {
+        sessionId: 'leave-backward',
+        startedAt: '2026-06-06T18:21:18.000Z',
+        endedAt: '2026-06-06T18:21:44.000Z',
+        durationSeconds: 24,
+        progressDelta: -2,
+        endProgress: 10,
+      },
+      user,
+    );
+  });
+
+  it('pairs sessions independently by volumeid', async () => {
+    await makeService().ingest(
+      {
+        Events: [
+          {
+            Id: 'open-one',
+            EventType: 'OpenContent',
+            Timestamp: '2026-06-01T00:00:00Z',
+            Attributes: { volumeid: '1', progress: '1' },
+          },
+          {
+            Id: 'open-two',
+            EventType: 'OpenContent',
+            Timestamp: '2026-06-01T00:00:01Z',
+            Attributes: { volumeid: '2', progress: '20' },
+          },
+          {
+            Id: 'leave-one',
+            EventType: 'LeaveContent',
+            Timestamp: '2026-06-01T00:00:20Z',
+            Metrics: { SecondsRead: 12 },
+            Attributes: { volumeid: '1', progress: '3' },
+          },
+          {
+            Id: 'leave-two',
+            EventType: 'LeaveContent',
+            Timestamp: '2026-06-01T00:00:25Z',
+            Metrics: { SecondsRead: 12 },
+            Attributes: { volumeid: '2', progress: '25' },
+          },
+        ],
+      },
+      user,
+      device,
+    );
+
+    expect(readingSessionService.save).toHaveBeenNthCalledWith(1, 100, expect.objectContaining({ sessionId: 'leave-one', progressDelta: 2 }), user);
+    expect(readingSessionService.save).toHaveBeenNthCalledWith(2, 100, expect.objectContaining({ sessionId: 'leave-two', progressDelta: 5 }), user);
+  });
+
+  it('falls back to null progressDelta when the paired open progress is invalid', async () => {
+    await makeService().ingest(
+      {
+        Events: [
+          {
+            Id: 'open-bad-progress',
+            EventType: 'OpenContent',
+            Timestamp: '2026-06-01T00:00:00Z',
+            Attributes: { volumeid: '1', progress: 'bad' },
+          },
+          {
+            Id: 'leave-after-bad-progress',
+            EventType: 'LeaveContent',
+            Timestamp: '2026-06-01T00:00:20Z',
+            Metrics: { SecondsRead: 12 },
+            Attributes: { volumeid: '1', progress: '20' },
+          },
+        ],
+      },
+      user,
+      device,
+    );
+
+    expect(readingSessionService.save).toHaveBeenCalledWith(
+      100,
+      expect.objectContaining({ sessionId: 'leave-after-bad-progress', progressDelta: null, endProgress: 20 }),
+      user,
+    );
+  });
+
+  it('uses raw SecondsRead when IdleTime is invalid', async () => {
+    await makeService().ingest(
+      {
+        Events: [
+          {
+            Id: 'invalid-idle',
+            EventType: 'LeaveContent',
+            Timestamp: '2026-06-01T00:00:20Z',
+            Metrics: { SecondsRead: 20, IdleTime: '5' as never },
+            Attributes: { volumeid: '1', progress: '20' },
+          },
+        ],
+      },
+      user,
+      device,
+    );
+
+    expect(readingSessionService.save).toHaveBeenCalledWith(
+      100,
+      expect.objectContaining({
+        sessionId: 'invalid-idle',
+        startedAt: '2026-06-01T00:00:00.000Z',
+        durationSeconds: 20,
       }),
       user,
     );

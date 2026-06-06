@@ -10,12 +10,27 @@ import { KoboAnalyticsResolverService } from './kobo-analytics-resolver.service'
 
 const DEBUG_PAYLOAD_MAX_LENGTH = 4000;
 
-function parseKoboEndProgress(raw: string | undefined): number | null {
+type LeaveContentContext = {
+  progressDelta: number | null;
+  startedAtMs: number | null;
+};
+
+function parseKoboProgress(raw: unknown): number | null {
   if (raw == null) return null;
-  const trimmed = raw.trim();
-  if (trimmed === '') return null;
-  const value = Number.parseFloat(trimmed);
-  return Number.isFinite(value) ? value : null;
+  const value = typeof raw === 'number' ? raw : typeof raw === 'string' && raw.trim() !== '' ? Number(raw.trim()) : Number.NaN;
+  if (!Number.isFinite(value) || value < 0 || value > 100) return null;
+  return value;
+}
+
+function parseKoboDurationSeconds(metrics: KoboAnalyticsEvent['Metrics'] | undefined): number | null {
+  const secondsRead = metrics?.SecondsRead;
+  if (typeof secondsRead !== 'number' || !Number.isFinite(secondsRead) || secondsRead < 0) return null;
+
+  const idleTime = metrics?.IdleTime;
+  const activeSeconds =
+    typeof idleTime === 'number' && Number.isFinite(idleTime) && idleTime >= 0 ? Math.max(0, secondsRead - idleTime) : secondsRead;
+
+  return Math.floor(activeSeconds);
 }
 
 function formatAnalyticsPayload(value: unknown, maxLength = DEBUG_PAYLOAD_MAX_LENGTH): string {
@@ -48,13 +63,14 @@ export class KoboAnalyticsService {
   async ingest(body: KoboAnalyticsBody | null | undefined, user: RequestUser, device: KoboDeviceContext): Promise<void> {
     const events = this.normalizeEvents(body, user.id);
     this.logBatch(body, events, user.id, device.deviceId);
+    const leaveContentContexts = this.buildLeaveContentContexts(events);
 
     for (const ev of events) {
       if (ev.EventType !== 'LeaveContent') continue;
       try {
-        await this.handleLeaveContent(ev, user);
+        await this.handleLeaveContent(ev, user, leaveContentContexts.get(ev) ?? { progressDelta: null, startedAtMs: null });
       } catch (err) {
-        const message = err instanceof Error ? err.message : 'unknown error';
+        const message = sanitizeLogValue(err instanceof Error ? err.message : 'unknown error');
         this.logger.warn(
           `[kobo.analytics.session] [fail] userId=${user.id} eventId=${ev.Id} error="${message}" event="${formatAnalyticsPayload(ev, 800)}" - leave content ingest failed`,
         );
@@ -78,26 +94,23 @@ export class KoboAnalyticsService {
     );
   }
 
-  private async handleLeaveContent(ev: KoboAnalyticsEvent, user: RequestUser): Promise<void> {
-    const volumeid = ev.Attributes?.volumeid;
-    const seconds = ev.Metrics?.SecondsRead;
-    if (typeof volumeid !== 'string' || volumeid.length === 0 || typeof seconds !== 'number' || !Number.isFinite(seconds) || seconds < 0) {
+  private async handleLeaveContent(ev: KoboAnalyticsEvent, user: RequestUser, context: LeaveContentContext): Promise<void> {
+    const volumeid = this.extractVolumeId(ev);
+    const durationSeconds = parseKoboDurationSeconds(ev.Metrics);
+    if (volumeid === null || durationSeconds === null) {
       this.logger.debug(
         `[kobo.analytics.session] [ignore] malformed LeaveContent userId=${user.id} eventId=${ev.Id} event="${formatAnalyticsPayload(ev, 800)}"`,
       );
       return;
     }
 
-    const trimmedVolumeId = volumeid.trim();
-    const bookId = await this.bookIdentityService.resolveBookIdByEntitlementId(user.id, trimmedVolumeId);
+    const bookId = await this.bookIdentityService.resolveBookIdByEntitlementId(user.id, volumeid);
     if (bookId === null) {
       this.logger.debug(
         `[kobo.analytics.session] [ignore] invalid volumeid userId=${user.id} eventId=${ev.Id} volumeid="${sanitizeLogValue(volumeid)}" event="${formatAnalyticsPayload(ev, 800)}"`,
       );
       return;
     }
-
-    const durationSeconds = Math.floor(seconds);
 
     const resolved = await this.resolver.resolveBookFileId(user.id, bookId);
     if (resolved.kind !== 'resolved') {
@@ -113,7 +126,10 @@ export class KoboAnalyticsService {
       return;
     }
 
-    const startedAt = new Date(endedAt.getTime() - durationSeconds * 1000);
+    const startedAt =
+      context.startedAtMs !== null && context.startedAtMs <= endedAt.getTime()
+        ? new Date(context.startedAtMs)
+        : new Date(endedAt.getTime() - durationSeconds * 1000);
 
     await this.readingSessionService.save(
       resolved.bookFileId,
@@ -122,10 +138,77 @@ export class KoboAnalyticsService {
         startedAt: startedAt.toISOString(),
         endedAt: endedAt.toISOString(),
         durationSeconds,
-        progressDelta: null,
-        endProgress: parseKoboEndProgress(ev.Attributes?.progress),
+        progressDelta: context.progressDelta,
+        endProgress: parseKoboProgress(ev.Attributes?.progress),
       },
       user,
     );
+  }
+
+  private buildLeaveContentContexts(events: KoboAnalyticsEvent[]): Map<KoboAnalyticsEvent, LeaveContentContext> {
+    const latestOpenByVolumeId = new Map<string, KoboAnalyticsEvent>();
+    const leaveContentContexts = new Map<KoboAnalyticsEvent, LeaveContentContext>();
+
+    for (const ev of this.sortEventsByTimestamp(events)) {
+      const volumeid = this.extractVolumeId(ev);
+      if (volumeid === null) continue;
+
+      if (ev.EventType === 'OpenContent') {
+        latestOpenByVolumeId.set(volumeid, ev);
+        continue;
+      }
+
+      if (ev.EventType !== 'LeaveContent') continue;
+
+      const openEvent = latestOpenByVolumeId.get(volumeid);
+      leaveContentContexts.set(ev, {
+        progressDelta: this.calculateProgressDelta(openEvent, ev),
+        startedAtMs: openEvent ? this.parseTimestampMs(openEvent.Timestamp) : null,
+      });
+      latestOpenByVolumeId.delete(volumeid);
+    }
+
+    return leaveContentContexts;
+  }
+
+  private calculateProgressDelta(openEvent: KoboAnalyticsEvent | undefined, leaveEvent: KoboAnalyticsEvent): number | null {
+    if (!openEvent) return null;
+
+    const startProgress = parseKoboProgress(openEvent.Attributes?.progress);
+    const endProgress = parseKoboProgress(leaveEvent.Attributes?.progress);
+    if (startProgress === null || endProgress === null) return null;
+
+    return Number((endProgress - startProgress).toFixed(4));
+  }
+
+  private extractVolumeId(ev: KoboAnalyticsEvent): string | null {
+    const volumeid = ev.Attributes?.volumeid;
+    if (typeof volumeid !== 'string') return null;
+
+    const trimmed = volumeid.trim();
+    return trimmed.length > 0 ? trimmed : null;
+  }
+
+  private sortEventsByTimestamp(events: KoboAnalyticsEvent[]): KoboAnalyticsEvent[] {
+    return events
+      .map((event, index) => ({
+        event,
+        index,
+        timestampMs: this.parseTimestampMs(event.Timestamp),
+      }))
+      .sort((a, b) => {
+        if (a.timestampMs === null && b.timestampMs === null) return a.index - b.index;
+        if (a.timestampMs === null) return 1;
+        if (b.timestampMs === null) return -1;
+        return a.timestampMs - b.timestampMs || a.index - b.index;
+      })
+      .map(({ event }) => event);
+  }
+
+  private parseTimestampMs(value: unknown): number | null {
+    if (typeof value !== 'string') return null;
+
+    const timestampMs = Date.parse(value);
+    return Number.isNaN(timestampMs) ? null : timestampMs;
   }
 }

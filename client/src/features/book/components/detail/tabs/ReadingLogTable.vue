@@ -57,6 +57,12 @@ function formatDateCompact(iso: string): string {
   })
 }
 
+function formatProgressDelta(progressDelta: number | null): string {
+  if (progressDelta == null) return '-'
+  const prefix = progressDelta > 0 ? '+' : ''
+  return `${prefix}${progressDelta.toFixed(1)}%`
+}
+
 function handleDeleteClick(sessionId: number) {
   if (confirmDeleteId.value === sessionId) {
     emit('deleteSession', sessionId)
@@ -146,7 +152,7 @@ const SORTABLE_COLS = [
               class="px-2 py-2.5 whitespace-nowrap sm:px-4 sm:py-3"
               :class="session.progressDelta != null && session.progressDelta > 0 ? 'text-green-600' : 'text-muted-foreground'"
             >
-              {{ session.progressDelta != null ? `+${session.progressDelta.toFixed(1)}%` : '-' }}
+              {{ formatProgressDelta(session.progressDelta) }}
             </td>
             <td class="px-2 py-2.5 text-foreground whitespace-nowrap sm:px-4 sm:py-3">
               {{ session.endProgress != null ? `${session.endProgress.toFixed(1)}%` : '-' }}

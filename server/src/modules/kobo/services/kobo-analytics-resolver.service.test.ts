@@ -2,10 +2,11 @@ import { KoboAnalyticsResolverService } from './kobo-analytics-resolver.service'
 
 function makeSelectChain(rows: unknown[]) {
   const limit = vi.fn().mockResolvedValue(rows);
-  const where = vi.fn().mockReturnValue({ limit });
+  const orderBy = vi.fn().mockReturnValue({ limit });
+  const where = vi.fn().mockReturnValue({ orderBy, limit });
   const innerJoin = vi.fn().mockReturnValue({ where });
   const from = vi.fn().mockReturnValue({ innerJoin, where });
-  return { from, where, limit };
+  return { from, where, orderBy, limit };
 }
 
 function makeDb() {

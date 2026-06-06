@@ -95,6 +95,12 @@ describe('ReadingLogTable', () => {
     expect(wrapper.text()).toContain('+5.5%')
   })
 
+  it('shows negative progress delta without a + prefix', () => {
+    const wrapper = mountTable({ sessions: [makeSession({ progressDelta: -6 })] })
+    expect(wrapper.text()).toContain('-6.0%')
+    expect(wrapper.text()).not.toContain('+-6.0%')
+  })
+
   it('shows "-" for null progressDelta', () => {
     const wrapper = mountTable({ sessions: [makeSession({ progressDelta: null })] })
     expect(wrapper.find('tbody').text()).toContain('-')
