@@ -3,7 +3,7 @@ import type { MockedFunction } from 'vitest';
 import { access, readdir, rm, stat } from 'fs/promises';
 
 import type { RequestUser } from '../../common/types/request-user';
-import { AUDIO_BOOK_FILE_WRITE_FIELDS, MetadataProviderKey, Permission, type BookQuery } from '@bookorbit/types';
+import { AUDIO_BOOK_FILE_WRITE_FIELDS, MetadataProviderKey, Permission, type BookQuery, type MetadataFetchDiagnostics } from '@bookorbit/types';
 import { extractEpubMetadata } from '../metadata/lib/epub';
 import { extractAudioMetadata } from '../metadata/extractors/audio.extractor';
 import { extractCbzMetadata, extractCbrMetadata, extractCb7Metadata } from '../metadata/lib/cbz-metadata';
@@ -84,6 +84,21 @@ function makeUser(overrides?: Partial<RequestUser>): RequestUser {
     ...overrides,
 
     contentFilters: EMPTY_CONTENT_FILTER_RULES,
+  };
+}
+
+function makeMetadataFetchDiagnostics(overrides: Partial<MetadataFetchDiagnostics> = {}): MetadataFetchDiagnostics {
+  return {
+    reason: null,
+    activeProviders: [],
+    fieldRuleProviders: [],
+    disabledFieldRuleProviders: [],
+    enabledUnreferencedProviders: [],
+    throttledProviders: [],
+    candidateProviders: [],
+    candidateCount: 0,
+    resolvedFieldCount: 0,
+    ...overrides,
   };
 }
 
@@ -823,12 +838,20 @@ describe('BookService', () => {
         authorRows: [{ id: 1, name: 'Author One', sortName: null }],
         genreRows: [],
       });
-      pipeline.runWithSources.mockResolvedValue({ resolved: { title: 'New Title' }, sources: {}, providerIds: {} });
+      pipeline.runWithSources.mockResolvedValue({
+        resolved: { title: 'New Title' },
+        sources: {},
+        providerIds: {},
+        diagnostics: makeMetadataFetchDiagnostics({ resolvedFieldCount: 1 }),
+      });
       const updateSpy = vi.spyOn(service, 'updateMetadata');
 
       const result = await service.refreshMetadata(1, true, user);
 
-      expect(result).toEqual({ title: 'New Title' });
+      expect(result).toEqual({
+        metadata: { title: 'New Title' },
+        diagnostics: makeMetadataFetchDiagnostics({ resolvedFieldCount: 1 }),
+      });
       expect(libraryService.verifyUserAccess).toHaveBeenCalledWith(user.id, 7, false);
       expect(pipeline.runWithSources).toHaveBeenCalledWith(
         {
@@ -914,14 +937,18 @@ describe('BookService', () => {
           [MetadataProviderKey.GOOGLE]: 'g-id',
           [MetadataProviderKey.OPEN_LIBRARY]: 'ol-id',
         },
+        diagnostics: makeMetadataFetchDiagnostics({ resolvedFieldCount: 1 }),
       });
 
       const result = await service.refreshMetadata(1, true, user);
 
       expect(result).toEqual({
-        title: 'Resolved',
-        googleBooksId: 'g-id',
-        openLibraryId: 'ol-id',
+        metadata: {
+          title: 'Resolved',
+          googleBooksId: 'g-id',
+          openLibraryId: 'ol-id',
+        },
+        diagnostics: makeMetadataFetchDiagnostics({ resolvedFieldCount: 3 }),
       });
     });
 
@@ -946,23 +973,27 @@ describe('BookService', () => {
         },
         sources: {},
         providerIds: {},
+        diagnostics: makeMetadataFetchDiagnostics({ resolvedFieldCount: 5 }),
       });
 
       const result = await service.refreshMetadata(1, true, user);
 
       expect(result).toEqual({
-        title: 'Resolved',
-        audioMetadata: {
-          narrators: ['Narrator One'],
-          durationSeconds: 3600,
-          abridged: true,
-          chapters: [{ title: 'Chapter 1', startMs: 0 }],
+        metadata: {
+          title: 'Resolved',
+          audioMetadata: {
+            narrators: ['Narrator One'],
+            durationSeconds: 3600,
+            abridged: true,
+            chapters: [{ title: 'Chapter 1', startMs: 0 }],
+          },
         },
+        diagnostics: makeMetadataFetchDiagnostics({ resolvedFieldCount: 2 }),
       });
-      expect((result as Record<string, unknown>).narrators).toBeUndefined();
-      expect((result as Record<string, unknown>).duration).toBeUndefined();
-      expect((result as Record<string, unknown>).abridged).toBeUndefined();
-      expect((result as Record<string, unknown>).chapters).toBeUndefined();
+      expect((result.metadata as Record<string, unknown>).narrators).toBeUndefined();
+      expect((result.metadata as Record<string, unknown>).duration).toBeUndefined();
+      expect((result.metadata as Record<string, unknown>).abridged).toBeUndefined();
+      expect((result.metadata as Record<string, unknown>).chapters).toBeUndefined();
     });
 
     it('refreshMetadata persists provider ids returned by pipeline', async () => {

@@ -49,6 +49,7 @@ describe('MetadataFetchPipeline', () => {
   let providerConfig: Mocked<ProviderConfigService>;
   let resolver: Mocked<MetadataPreferenceResolver>;
   let registry: Mocked<ProviderRegistry>;
+  let throttleTracker: Mocked<Pick<ProviderThrottleTracker, 'isThrottled'>>;
   let pipeline: MetadataFetchPipeline;
 
   beforeEach(() => {
@@ -74,8 +75,15 @@ describe('MetadataFetchPipeline', () => {
       all: vi.fn(),
     } as unknown as Mocked<ProviderRegistry>;
 
-    const throttleTracker = { isThrottled: vi.fn().mockReturnValue(false) } as unknown as ProviderThrottleTracker;
-    pipeline = new MetadataFetchPipeline(fetchService, preferencesService, resolver, registry, throttleTracker, providerConfig);
+    throttleTracker = { isThrottled: vi.fn().mockReturnValue(false) };
+    pipeline = new MetadataFetchPipeline(
+      fetchService,
+      preferencesService,
+      resolver,
+      registry,
+      throttleTracker as ProviderThrottleTracker,
+      providerConfig,
+    );
   });
 
   it('derives enabled provider keys from active fields, filters unknown providers, and de-duplicates keys', async () => {
@@ -137,6 +145,108 @@ describe('MetadataFetchPipeline', () => {
     await pipeline.run({ title: 'Query' }, {});
 
     expect(fetchService.search).toHaveBeenCalledWith({ title: 'Query' }, [MetadataProviderKey.KOBO]);
+  });
+
+  it('returns diagnostics when field rules only reference disabled providers', async () => {
+    const global = createPreferences();
+
+    providerConfig.getConfig.mockResolvedValue(
+      makeProviderConfig({
+        google: { enabled: false, apiKey: '' },
+        openLibrary: { enabled: false },
+      }),
+    );
+    preferencesService.getGlobal.mockResolvedValue(global);
+    resolver.resolve.mockReturnValue(global);
+    resolver.withForwardCompatibility.mockReturnValue(global);
+    registry.all.mockReturnValue([
+      { key: MetadataProviderKey.GOOGLE },
+      { key: MetadataProviderKey.OPEN_LIBRARY },
+      { key: MetadataProviderKey.KOBO },
+    ] as never);
+
+    const { resolved, diagnostics } = await pipeline.runWithSources({ title: 'Query' }, {});
+
+    expect(resolved).toEqual({});
+    expect(fetchService.search).not.toHaveBeenCalled();
+    expect(diagnostics).toMatchObject({
+      reason: 'no_active_providers',
+      activeProviders: [],
+      fieldRuleProviders: [MetadataProviderKey.GOOGLE, MetadataProviderKey.OPEN_LIBRARY],
+      disabledFieldRuleProviders: [MetadataProviderKey.GOOGLE, MetadataProviderKey.OPEN_LIBRARY],
+      enabledUnreferencedProviders: [MetadataProviderKey.KOBO],
+      throttledProviders: [],
+      candidateProviders: [],
+      candidateCount: 0,
+      resolvedFieldCount: 0,
+    });
+  });
+
+  it('returns diagnostics when selected providers are throttled', async () => {
+    const global = createPreferences((fields) => {
+      fields.title = {
+        enabled: true,
+        providers: [MetadataProviderKey.GOOGLE],
+        mergeStrategy: 'overwriteIfProvided',
+      };
+    });
+
+    preferencesService.getGlobal.mockResolvedValue(global);
+    resolver.resolve.mockReturnValue(global);
+    resolver.withForwardCompatibility.mockReturnValue(global);
+    registry.all.mockReturnValue([{ key: MetadataProviderKey.GOOGLE }] as never);
+    throttleTracker.isThrottled.mockReturnValue(true);
+
+    const { diagnostics } = await pipeline.runWithSources({ title: 'Query' }, {});
+
+    expect(fetchService.search).not.toHaveBeenCalled();
+    expect(diagnostics.reason).toBe('providers_throttled');
+    expect(diagnostics.throttledProviders).toEqual([MetadataProviderKey.GOOGLE]);
+  });
+
+  it('returns diagnostics when active providers return no candidates', async () => {
+    const global = createPreferences((fields) => {
+      fields.title = {
+        enabled: true,
+        providers: [MetadataProviderKey.GOOGLE],
+        mergeStrategy: 'overwriteIfProvided',
+      };
+    });
+
+    preferencesService.getGlobal.mockResolvedValue(global);
+    resolver.resolve.mockReturnValue(global);
+    resolver.withForwardCompatibility.mockReturnValue(global);
+    registry.all.mockReturnValue([{ key: MetadataProviderKey.GOOGLE }] as never);
+    fetchService.search.mockReturnValue(of() as never);
+
+    const { diagnostics } = await pipeline.runWithSources({ title: 'Query' }, {});
+
+    expect(diagnostics.reason).toBe('no_candidates');
+    expect(diagnostics.activeProviders).toEqual([MetadataProviderKey.GOOGLE]);
+    expect(diagnostics.candidateCount).toBe(0);
+  });
+
+  it('returns diagnostics when candidates do not resolve any fields', async () => {
+    const global = createPreferences((fields) => {
+      fields.title = {
+        enabled: true,
+        providers: [MetadataProviderKey.GOOGLE],
+        mergeStrategy: 'fillMissing',
+      };
+    });
+
+    preferencesService.getGlobal.mockResolvedValue(global);
+    resolver.resolve.mockReturnValue(global);
+    resolver.withForwardCompatibility.mockReturnValue(global);
+    registry.all.mockReturnValue([{ key: MetadataProviderKey.GOOGLE }] as never);
+    fetchService.search.mockReturnValue(of(candidate(MetadataProviderKey.GOOGLE, 'g1', { title: 'Fetched Title' })));
+
+    const { resolved, diagnostics } = await pipeline.runWithSources({ title: 'Query' }, { title: 'Existing Title' });
+
+    expect(resolved).toEqual({});
+    expect(diagnostics.reason).toBe('no_resolved_fields');
+    expect(diagnostics.candidateProviders).toEqual([MetadataProviderKey.GOOGLE]);
+    expect(diagnostics.candidateCount).toBe(1);
   });
 
   it('applies fillMissing without overwriting existing fields and records sources', async () => {

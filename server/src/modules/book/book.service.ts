@@ -36,11 +36,14 @@ import {
 import type {
   AudiobookChapter,
   BookKoboState,
+  BookMetadataRefreshPreviewFields,
+  BookMetadataRefreshPreviewResponse,
   BookMetadataLockField,
   BookQuery,
   BookWriteAndRenameResult,
   BooksPage,
   FileRenameResult,
+  MetadataFetchDiagnostics,
   MetadataField,
   ReadStatus,
   UserBookStatus,
@@ -307,6 +310,66 @@ export class BookService {
     if (providerIds[MetadataProviderKey.KOBO]) dto.koboId = providerIds[MetadataProviderKey.KOBO];
     if (providerIds[MetadataProviderKey.COMICVINE]) dto.comicvineId = providerIds[MetadataProviderKey.COMICVINE];
     if (providerIds[MetadataProviderKey.RANOBEDB]) dto.ranobedbId = providerIds[MetadataProviderKey.RANOBEDB];
+  }
+
+  private buildMetadataRefreshPreview(
+    resolved: ResolvedMetadataFields,
+    providerIds: Partial<Record<MetadataProviderKey, string>>,
+  ): BookMetadataRefreshPreviewFields {
+    const r = resolved as Record<string, unknown>;
+    const preview: BookMetadataRefreshPreviewFields = {};
+
+    if (r.title !== undefined) preview.title = r.title as string | null;
+    if (r.subtitle !== undefined) preview.subtitle = r.subtitle as string | null;
+    if (r.description !== undefined) preview.description = r.description as string | null;
+    if (r.authors !== undefined) preview.authors = r.authors as string[];
+    if (r.genres !== undefined) preview.genres = r.genres as string[];
+    if (r.publisher !== undefined) preview.publisher = r.publisher as string | null;
+    if (r.publishedYear !== undefined) preview.publishedYear = r.publishedYear as number | null;
+    if (r.language !== undefined) preview.language = r.language as string | null;
+    if (r.pageCount !== undefined) preview.pageCount = r.pageCount as number | null;
+    if (r.seriesName !== undefined) preview.seriesName = r.seriesName as string | null;
+    if (r.seriesIndex !== undefined) preview.seriesIndex = r.seriesIndex as number | null;
+    if (r.coverUrl !== undefined) preview.coverUrl = r.coverUrl as string;
+    if (r.comicMetadata !== undefined) preview.comicMetadata = r.comicMetadata as BookMetadataRefreshPreviewFields['comicMetadata'];
+
+    if (r.narrators !== undefined || r.duration !== undefined || r.abridged !== undefined || r.chapters !== undefined) {
+      preview.audioMetadata = {};
+      if (r.narrators !== undefined) preview.audioMetadata.narrators = r.narrators as string[];
+      if (r.duration !== undefined) preview.audioMetadata.durationSeconds = r.duration as number | null;
+      if (r.abridged !== undefined) preview.audioMetadata.abridged = r.abridged as boolean | null;
+      if (r.chapters !== undefined) preview.audioMetadata.chapters = r.chapters as AudiobookChapter[];
+    }
+
+    this.applyResolvedProviderIds(preview, providerIds);
+    return preview;
+  }
+
+  private buildMetadataRefreshPreviewDiagnostics(
+    metadata: BookMetadataRefreshPreviewFields,
+    diagnostics?: MetadataFetchDiagnostics,
+  ): MetadataFetchDiagnostics {
+    const resolvedFieldCount = Object.keys(metadata).length;
+    const base = diagnostics ?? this.emptyMetadataFetchDiagnostics();
+    return {
+      ...base,
+      resolvedFieldCount,
+      reason: resolvedFieldCount > 0 ? null : base.reason,
+    };
+  }
+
+  private emptyMetadataFetchDiagnostics(): MetadataFetchDiagnostics {
+    return {
+      reason: 'no_active_providers',
+      activeProviders: [],
+      fieldRuleProviders: [],
+      disabledFieldRuleProviders: [],
+      enabledUnreferencedProviders: [],
+      throttledProviders: [],
+      candidateProviders: [],
+      candidateCount: 0,
+      resolvedFieldCount: 0,
+    };
   }
 
   async verifyBookAccess(bookId: number, user: RequestUser): Promise<void> {
@@ -2049,7 +2112,7 @@ export class BookService {
     };
   }
 
-  async refreshMetadata(id: number, preview: boolean, user: RequestUser): Promise<BookDetailDto | ResolvedMetadataFields> {
+  async refreshMetadata(id: number, preview: boolean, user: RequestUser): Promise<BookDetailDto | BookMetadataRefreshPreviewResponse> {
     const event = 'book.refresh_metadata';
     const startedAt = Date.now();
     this.logger.log(`[${event}] [start] bookId=${id} userId=${user.id} preview=${preview} - refresh metadata started`);
@@ -2089,48 +2152,19 @@ export class BookService {
         abridged: meta?.abridged ?? undefined,
       };
 
-      const { resolved, providerIds: resolvedProviderIds } = await this.pipeline.runWithSources(searchParams, existingFields, book.books.libraryId);
+      const {
+        resolved,
+        providerIds: resolvedProviderIds,
+        diagnostics,
+      } = await this.pipeline.runWithSources(searchParams, existingFields, book.books.libraryId);
 
       if (preview) {
-        const previewResult: ResolvedMetadataFields & {
-          googleBooksId?: string;
-          goodreadsId?: string;
-          amazonId?: string;
-          hardcoverId?: string;
-          openLibraryId?: string;
-          itunesId?: string;
-          audibleId?: string;
-          koboId?: string;
-          comicvineId?: string;
-          ranobedbId?: string;
-          audioMetadata?: {
-            narrators?: string[];
-            durationSeconds?: number | null;
-            abridged?: boolean | null;
-            chapters?: AudiobookChapter[];
-          };
-        } = { ...resolved };
-        if (
-          previewResult.narrators !== undefined ||
-          previewResult.duration !== undefined ||
-          previewResult.abridged !== undefined ||
-          previewResult.chapters !== undefined
-        ) {
-          previewResult.audioMetadata = {};
-          if (previewResult.narrators !== undefined) previewResult.audioMetadata.narrators = previewResult.narrators as string[];
-          if (previewResult.duration !== undefined) previewResult.audioMetadata.durationSeconds = previewResult.duration as number | null;
-          if (previewResult.abridged !== undefined) previewResult.audioMetadata.abridged = previewResult.abridged as boolean | null;
-          if (previewResult.chapters !== undefined) previewResult.audioMetadata.chapters = previewResult.chapters as AudiobookChapter[];
-          delete (previewResult as Record<string, unknown>).narrators;
-          delete (previewResult as Record<string, unknown>).duration;
-          delete (previewResult as Record<string, unknown>).abridged;
-          delete (previewResult as Record<string, unknown>).chapters;
-        }
-        this.applyResolvedProviderIds(previewResult, resolvedProviderIds);
+        const previewResult = this.buildMetadataRefreshPreview(resolved, resolvedProviderIds);
+        const previewDiagnostics = this.buildMetadataRefreshPreviewDiagnostics(previewResult, diagnostics);
         this.logger.log(
-          `[${event}] [end] bookId=${id} preview=true durationMs=${Date.now() - startedAt} resolvedFields=${Object.keys(previewResult).length} - refresh metadata completed`,
+          `[${event}] [end] bookId=${id} preview=true durationMs=${Date.now() - startedAt} resolvedFields=${previewDiagnostics.resolvedFieldCount} emptyReason=${previewDiagnostics.reason ?? 'none'} - refresh metadata completed`,
         );
-        return previewResult;
+        return { metadata: previewResult, diagnostics: previewDiagnostics };
       }
 
       const {

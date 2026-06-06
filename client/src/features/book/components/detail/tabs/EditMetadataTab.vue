@@ -37,6 +37,9 @@ import { usePublisherSearch, useSeriesNameSearch, useLanguageSearch } from '../.
 import InputWithSuggestions from '@/components/ui/InputWithSuggestions.vue'
 import { RATING_STARS, getRatingStarClass } from '@/features/book/lib/rating-stars'
 import { buildFileMetadataPatch } from '@/features/book/lib/file-metadata-patch'
+import { metadataRefreshEmptyMessage } from '@/features/book/lib/metadata-refresh-feedback'
+
+const AUTO_FILL_EMPTY_TOAST_DURATION_MS = 10_000
 
 const props = defineProps<{ book: BookDetail }>()
 const emit = defineEmits<{
@@ -426,11 +429,12 @@ function buildPreviewPatch(preview: MetadataRefreshPreview): MetadataPatch {
 }
 
 async function autoFill() {
-  const preview = await previewRefresh(props.book.id)
-  if (!preview) return
+  const result = await previewRefresh(props.book.id)
+  if (!result) return
 
+  const preview = result.metadata
   if (Object.keys(preview).length === 0) {
-    toast.info('No new metadata found')
+    toast.info(metadataRefreshEmptyMessage(result.diagnostics, props.book), { closeButton: true, duration: AUTO_FILL_EMPTY_TOAST_DURATION_MS })
     return
   }
 

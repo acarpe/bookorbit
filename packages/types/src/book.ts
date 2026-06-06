@@ -1,4 +1,4 @@
-import type { MetadataProviderKey } from "./metadata-fetch";
+import type { MetadataFetchDiagnostics, MetadataProviderKey } from "./metadata-fetch";
 import type { BookMetadataLockField } from "./metadata-lock";
 import type { AudiobookChapter, NarratorRef } from "./audiobook";
 import type { ComicMetadataFields } from "./metadata-fetch";
@@ -136,6 +136,43 @@ export type BookMetadataSaveResult = {
   book: BookDetail;
   write: WriteResult | null;
   libraryAutoWriteEnabled: boolean;
+};
+
+export type BookMetadataRefreshPreviewFields = {
+  title?: string | null;
+  subtitle?: string | null;
+  description?: string | null;
+  authors?: string[];
+  genres?: string[];
+  publisher?: string | null;
+  publishedYear?: number | null;
+  language?: string | null;
+  pageCount?: number | null;
+  seriesName?: string | null;
+  seriesIndex?: number | null;
+  coverUrl?: string;
+  googleBooksId?: string | null;
+  goodreadsId?: string | null;
+  amazonId?: string | null;
+  hardcoverId?: string | null;
+  openLibraryId?: string | null;
+  itunesId?: string | null;
+  audibleId?: string | null;
+  koboId?: string | null;
+  comicvineId?: string | null;
+  ranobedbId?: string | null;
+  audioMetadata?: {
+    narrators?: string[];
+    durationSeconds?: number | null;
+    abridged?: boolean | null;
+    chapters?: AudiobookChapter[];
+  };
+  comicMetadata?: ComicMetadataFields;
+};
+
+export type BookMetadataRefreshPreviewResponse = {
+  metadata: BookMetadataRefreshPreviewFields;
+  diagnostics: MetadataFetchDiagnostics;
 };
 
 export type BookKoboReadingState = {

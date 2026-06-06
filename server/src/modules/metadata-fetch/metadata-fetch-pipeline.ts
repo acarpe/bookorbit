@@ -4,6 +4,7 @@ import {
   ComicMetadataFields,
   FieldPreference,
   MetadataCandidate,
+  MetadataFetchDiagnostics,
   MetadataFetchPreferences,
   MetadataField,
   MetadataProviderKey,
@@ -26,6 +27,11 @@ export type ResolvedMetadataFields = Partial<Record<MetadataField, string | stri
   comicMetadata?: ComicMetadataFields;
 };
 type ResolvedProviderIds = Partial<Record<MetadataProviderKey, string>>;
+
+type ProviderSelectionDiagnostics = Pick<
+  MetadataFetchDiagnostics,
+  'activeProviders' | 'fieldRuleProviders' | 'disabledFieldRuleProviders' | 'enabledUnreferencedProviders' | 'throttledProviders'
+>;
 
 @Injectable()
 export class MetadataFetchPipeline {
@@ -53,7 +59,12 @@ export class MetadataFetchPipeline {
     params: MetadataSearchParams,
     existingFields: Partial<Record<MetadataField, unknown>>,
     libraryId?: number,
-  ): Promise<{ resolved: ResolvedMetadataFields; sources: Record<string, string>; providerIds: ResolvedProviderIds }> {
+  ): Promise<{
+    resolved: ResolvedMetadataFields;
+    sources: Record<string, string>;
+    providerIds: ResolvedProviderIds;
+    diagnostics: MetadataFetchDiagnostics;
+  }> {
     return this.runInternal(params, existingFields, libraryId);
   }
 
@@ -61,46 +72,108 @@ export class MetadataFetchPipeline {
     params: MetadataSearchParams,
     existingFields: Partial<Record<MetadataField, unknown>>,
     libraryId?: number,
-  ): Promise<{ resolved: ResolvedMetadataFields; sources: Record<string, string>; providerIds: ResolvedProviderIds }> {
+  ): Promise<{
+    resolved: ResolvedMetadataFields;
+    sources: Record<string, string>;
+    providerIds: ResolvedProviderIds;
+    diagnostics: MetadataFetchDiagnostics;
+  }> {
     const [global, providerConfig] = await Promise.all([this.preferencesService.getGlobal(), this.providerConfig.getConfig()]);
     const overrides = libraryId ? (await this.preferencesService.getForLibrary(libraryId, global)).overrides : null;
     const registeredKeys = this.registry.all().map((p) => p.key) as MetadataProviderKey[];
     const preferences: MetadataFetchPreferences = this.resolver.withForwardCompatibility(this.resolver.resolve(global, overrides), registeredKeys);
 
-    const enabledProviders = this.deriveProviderSet(preferences, registeredKeys, providerConfig);
-    const candidates = await firstValueFrom(this.fetchService.search(params, enabledProviders).pipe(toArray()), {
-      defaultValue: [] as MetadataCandidate[],
-    });
+    const providerSelection = this.deriveProviderSet(preferences, registeredKeys, providerConfig);
+    const candidates = providerSelection.activeProviders.length
+      ? await firstValueFrom(this.fetchService.search(params, providerSelection.activeProviders).pipe(toArray()), {
+          defaultValue: [] as MetadataCandidate[],
+        })
+      : [];
 
     const byProvider = new Map<string, MetadataCandidate>();
     for (const c of candidates) {
       if (!byProvider.has(c.provider)) byProvider.set(c.provider, c);
     }
-    return this.applyPreferences(preferences, byProvider, existingFields);
+    const { resolved, sources, providerIds } = this.applyPreferences(preferences, byProvider, existingFields);
+    const diagnostics = this.buildDiagnostics(providerSelection, candidates, resolved);
+    return { resolved, sources, providerIds, diagnostics };
   }
 
-  private deriveProviderSet(preferences: MetadataFetchPreferences, registeredKeys: MetadataProviderKey[], providerConfig: ProviderConfigurations) {
+  private deriveProviderSet(
+    preferences: MetadataFetchPreferences,
+    registeredKeys: MetadataProviderKey[],
+    providerConfig: ProviderConfigurations,
+  ): ProviderSelectionDiagnostics {
     const registered = new Set(registeredKeys);
-    const keys = new Set<MetadataProviderKey>();
+    const fieldRuleProviders = new Set<MetadataProviderKey>();
+    const configuredFieldRuleProviders = new Set<MetadataProviderKey>();
+    const disabledFieldRuleProviders = new Set<MetadataProviderKey>();
 
     for (const [, fieldPreference] of Object.entries(preferences.fields) as [MetadataField, FieldPreference][]) {
       if (!fieldPreference.enabled) continue;
-      fieldPreference.providers
-        .filter((providerKey) => registered.has(providerKey) && providerConfig[providerKey]?.enabled !== false)
-        .forEach((providerKey) => keys.add(providerKey));
+      for (const providerKey of fieldPreference.providers) {
+        if (!registered.has(providerKey)) continue;
+        fieldRuleProviders.add(providerKey);
+        if (providerConfig[providerKey]?.enabled === false) {
+          disabledFieldRuleProviders.add(providerKey);
+        } else {
+          configuredFieldRuleProviders.add(providerKey);
+        }
+      }
     }
 
-    const active: MetadataProviderKey[] = [];
-    for (const key of keys) {
+    const activeProviders: MetadataProviderKey[] = [];
+    const throttledProviders: MetadataProviderKey[] = [];
+    for (const key of configuredFieldRuleProviders) {
       if (this.throttleTracker.isThrottled(key)) {
+        throttledProviders.push(key);
         this.logger.warn(
           `[metadata_fetch.pipeline_provider] [fail] provider=${key} durationMs=0 errorClass=ProviderThrottleError error="provider is in cooldown" - provider skipped`,
         );
       } else {
-        active.push(key);
+        activeProviders.push(key);
       }
     }
-    return active;
+
+    const enabledUnreferencedProviders = registeredKeys.filter(
+      (providerKey) => providerConfig[providerKey]?.enabled !== false && !fieldRuleProviders.has(providerKey),
+    );
+
+    return {
+      activeProviders,
+      fieldRuleProviders: [...fieldRuleProviders],
+      disabledFieldRuleProviders: [...disabledFieldRuleProviders],
+      enabledUnreferencedProviders,
+      throttledProviders,
+    };
+  }
+
+  private buildDiagnostics(
+    providerSelection: ProviderSelectionDiagnostics,
+    candidates: MetadataCandidate[],
+    resolved: ResolvedMetadataFields,
+  ): MetadataFetchDiagnostics {
+    const candidateProviders = [...new Set(candidates.map((candidate) => candidate.provider))];
+    const resolvedFieldCount = Object.keys(resolved).length;
+
+    let reason: MetadataFetchDiagnostics['reason'] = null;
+    if (resolvedFieldCount === 0) {
+      if (providerSelection.activeProviders.length === 0) {
+        reason = providerSelection.throttledProviders.length > 0 ? 'providers_throttled' : 'no_active_providers';
+      } else if (candidates.length === 0) {
+        reason = 'no_candidates';
+      } else {
+        reason = 'no_resolved_fields';
+      }
+    }
+
+    return {
+      ...providerSelection,
+      candidateProviders,
+      candidateCount: candidates.length,
+      resolvedFieldCount,
+      reason,
+    };
   }
 
   private applyPreferences(
