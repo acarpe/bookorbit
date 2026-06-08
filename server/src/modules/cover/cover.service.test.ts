@@ -288,15 +288,15 @@ describe('CoverService', () => {
 
     it('rejects localhost and private hosts', async () => {
       const service = createProxyService();
-      await expect(service.proxyImage('http://127.0.0.1/cover.jpg')).rejects.toThrow('URL host is not allowed');
-      await expect(service.proxyImage('https://localhost/cover.jpg')).rejects.toThrow('URL host is not allowed');
+      await expect(service.proxyImage('http://127.0.0.1/cover.jpg')).rejects.toThrow('URL resolves to a private or local address');
+      await expect(service.proxyImage('https://localhost/cover.jpg')).rejects.toThrow('URL resolves to a private or local address');
     });
 
     it('rejects domains that resolve to private addresses', async () => {
       const service = createProxyService();
       lookupMock.mockResolvedValueOnce([{ address: '10.0.0.7', family: 4 } as LookupAddress]);
 
-      await expect(service.proxyImage('https://internal.example.com/cover.jpg')).rejects.toThrow('URL host is not allowed');
+      await expect(service.proxyImage('https://internal.example.com/cover.jpg')).rejects.toThrow('URL resolves to a private or local address');
     });
 
     it('rejects non-image responses', async () => {
@@ -374,13 +374,13 @@ describe('CoverService', () => {
         ['100.127.255.255', 'CGN upper bound'],
       ])('rejects IPv4 literal %s (%s)', async (ip) => {
         const service = createProxyService();
-        await expect(service.proxyImage(`http://${ip}/cover.jpg`)).rejects.toThrow('URL host is not allowed');
+        await expect(service.proxyImage(`http://${ip}/cover.jpg`)).rejects.toThrow('URL resolves to a private or local address');
         expect(fetchMock).not.toHaveBeenCalled();
       });
 
       it('rejects multicast IPv4 address', async () => {
         const service = createProxyService();
-        await expect(service.proxyImage('http://224.0.0.1/cover.jpg')).rejects.toThrow('URL host is not allowed');
+        await expect(service.proxyImage('http://224.0.0.1/cover.jpg')).rejects.toThrow('URL resolves to a private or local address');
       });
 
       it.each([
@@ -390,7 +390,7 @@ describe('CoverService', () => {
         ['fe80::1', 'link-local'],
       ])('rejects IPv6 literal %s (%s)', async (ip) => {
         const service = createProxyService();
-        await expect(service.proxyImage(`http://[${ip}]/cover.jpg`)).rejects.toThrow('URL host is not allowed');
+        await expect(service.proxyImage(`http://[${ip}]/cover.jpg`)).rejects.toThrow('URL resolves to a private or local address');
         expect(fetchMock).not.toHaveBeenCalled();
       });
 
@@ -398,17 +398,17 @@ describe('CoverService', () => {
         const service = createProxyService();
         lookupMock.mockResolvedValueOnce([{ address: '::ffff:10.0.0.1', family: 6 } as LookupAddress]);
 
-        await expect(service.proxyImage('https://sneaky.example.com/cover.jpg')).rejects.toThrow('URL host is not allowed');
+        await expect(service.proxyImage('https://sneaky.example.com/cover.jpg')).rejects.toThrow('URL resolves to a private or local address');
       });
 
       it('rejects .localhost domains', async () => {
         const service = createProxyService();
-        await expect(service.proxyImage('http://evil.localhost/cover.jpg')).rejects.toThrow('URL host is not allowed');
+        await expect(service.proxyImage('http://evil.localhost/cover.jpg')).rejects.toThrow('URL resolves to a private or local address');
       });
 
       it('rejects .local domains', async () => {
         const service = createProxyService();
-        await expect(service.proxyImage('http://printer.local/cover.jpg')).rejects.toThrow('URL host is not allowed');
+        await expect(service.proxyImage('http://printer.local/cover.jpg')).rejects.toThrow('URL resolves to a private or local address');
       });
 
       it('rejects when DNS resolves to mixed private+public', async () => {
@@ -418,14 +418,14 @@ describe('CoverService', () => {
           { address: '10.0.0.1', family: 4 },
         ] as LookupAddress[]);
 
-        await expect(service.proxyImage('https://mixed.example.com/cover.jpg')).rejects.toThrow('URL host is not allowed');
+        await expect(service.proxyImage('https://mixed.example.com/cover.jpg')).rejects.toThrow('URL resolves to a private or local address');
       });
 
       it('rejects redirect to private host', async () => {
         const service = createProxyService();
         fetchMock.mockResolvedValueOnce(makeRedirectResponse('http://10.0.0.1/internal'));
 
-        await expect(service.proxyImage('https://covers.example.com/start')).rejects.toThrow('URL host is not allowed');
+        await expect(service.proxyImage('https://covers.example.com/start')).rejects.toThrow('URL resolves to a private or local address');
       });
     });
   });
