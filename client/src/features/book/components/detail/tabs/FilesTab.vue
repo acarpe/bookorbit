@@ -128,6 +128,60 @@ const writeLogOpen = ref(false)
 const writeLog = ref<WriteLogEntry[]>([])
 const writeLogLoading = ref(false)
 
+// Modals
+const renameFileTarget = ref<BookDetailFile | null>(null)
+const renameInput = ref('')
+const renaming = ref(false)
+
+const deleteFileTarget = ref<BookDetailFile | null>(null)
+const deletingFile = ref(false)
+
+function openRenameModal(file: BookDetailFile) {
+  renameFileTarget.value = file
+  renameInput.value = file.filename ?? ''
+}
+
+async function submitRename() {
+  if (!renameFileTarget.value || renaming.value || !renameInput.value.trim()) return
+  renaming.value = true
+  try {
+    const res = await api(`/api/v1/books/files/${renameFileTarget.value.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ filename: renameInput.value.trim() }),
+    })
+    if (!res.ok) throw new Error('Failed to rename file')
+    // We can emit an event or just reload since we don't have a direct refetch prop.
+    window.location.reload()
+  } catch (err) {
+    alert(err instanceof Error ? err.message : String(err))
+  } finally {
+    renaming.value = false
+    renameFileTarget.value = null
+  }
+}
+
+function openDeleteModal(file: BookDetailFile) {
+  deleteFileTarget.value = file
+}
+
+async function confirmDelete() {
+  if (!deleteFileTarget.value || deletingFile.value) return
+  deletingFile.value = true
+  try {
+    const res = await api(`/api/v1/books/files/${deleteFileTarget.value.id}`, {
+      method: 'DELETE',
+    })
+    if (!res.ok) throw new Error('Failed to delete file')
+    window.location.reload()
+  } catch (err) {
+    alert(err instanceof Error ? err.message : String(err))
+  } finally {
+    deletingFile.value = false
+    deleteFileTarget.value = null
+  }
+}
+
 watch(
   () => props.book.id,
   () => {
@@ -319,6 +373,28 @@ async function toggleWriteLog() {
             </TooltipTrigger>
             <TooltipContent>Download</TooltipContent>
           </Tooltip>
+
+          <DropdownMenu>
+            <DropdownMenuTrigger as-child>
+              <button
+                class="flex items-center justify-center h-7 w-7 rounded border border-input bg-background hover:bg-muted transition-colors text-muted-foreground hover:text-foreground"
+                title="More actions"
+              >
+                <MoreVertical class="size-3.5" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem v-if="hasPermission('library_edit_metadata')" @click="openRenameModal(file)"> Rename </DropdownMenuItem>
+
+              <DropdownMenuItem
+                v-if="hasPermission('library_delete_books')"
+                class="text-destructive focus:text-destructive"
+                @click="openDeleteModal(file)"
+              >
+                Delete
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
 
         <!-- Mobile actions -->
@@ -348,6 +424,19 @@ async function toggleWriteLog() {
               <Download class="mr-2 size-4" />
               Download
             </DropdownMenuItem>
+            <DropdownMenuItem v-if="hasPermission('library_edit_metadata')" @click="openRenameModal(file)">
+              <Pencil class="mr-2 size-4" />
+              Rename
+            </DropdownMenuItem>
+
+            <DropdownMenuItem
+              v-if="hasPermission('library_delete_books')"
+              class="text-destructive focus:text-destructive"
+              @click="openDeleteModal(file)"
+            >
+              <Trash2 class="mr-2 size-4" />
+              Delete
+            </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
@@ -359,6 +448,72 @@ async function toggleWriteLog() {
       </div>
       <p class="text-base md:text-sm font-semibold md:font-medium">No files attached</p>
       <p class="text-sm md:text-xs text-muted-foreground/90 mt-1">This book has no associated files.</p>
+    </div>
+
+    <!-- Rename Modal -->
+    <div
+      v-if="renameFileTarget"
+      class="fixed inset-0 z-[70] flex items-end justify-center md:items-center md:px-4"
+      @click.self="renameFileTarget = null"
+    >
+      <button class="absolute inset-0 bg-black/45" @click="renameFileTarget = null" />
+      <div class="relative w-full rounded-t-lg border border-border bg-card p-4 shadow-xl md:max-w-md md:rounded-lg md:p-5">
+        <p class="text-base font-semibold text-foreground">Rename File</p>
+        <p class="mt-1 text-sm text-muted-foreground">Rename the physical file on disk.</p>
+        <div class="mt-4">
+          <input
+            v-model="renameInput"
+            class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-1"
+            placeholder="New filename"
+            @keyup.enter="submitRename"
+          />
+        </div>
+        <div class="mt-4 flex items-center justify-end gap-2">
+          <button
+            class="rounded-md border border-border px-3 py-2 text-sm text-foreground hover:bg-muted transition-colors"
+            @click="renameFileTarget = null"
+          >
+            Cancel
+          </button>
+          <button
+            class="rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50 transition-colors"
+            :disabled="renaming"
+            @click="submitRename"
+          >
+            {{ renaming ? 'Saving...' : 'Save' }}
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Delete Modal -->
+    <div
+      v-if="deleteFileTarget"
+      class="fixed inset-0 z-[70] flex items-end justify-center md:items-center md:px-4"
+      @click.self="deleteFileTarget = null"
+    >
+      <button class="absolute inset-0 bg-black/45" @click="deleteFileTarget = null" />
+      <div class="relative w-full rounded-t-lg border border-border bg-card p-4 shadow-xl md:max-w-md md:rounded-lg md:p-5">
+        <p class="text-base font-semibold text-foreground">Delete file?</p>
+        <p class="mt-1 text-sm text-muted-foreground">
+          Are you sure you want to delete "{{ deleteFileTarget.filename }}"? This action cannot be undone.
+        </p>
+        <div class="mt-4 flex items-center justify-end gap-2">
+          <button
+            class="rounded-md border border-border px-3 py-2 text-sm text-foreground hover:bg-muted transition-colors"
+            @click="deleteFileTarget = null"
+          >
+            Cancel
+          </button>
+          <button
+            class="rounded-md bg-destructive px-3 py-2 text-sm font-medium text-destructive-foreground hover:bg-destructive/90 disabled:opacity-50 transition-colors"
+            :disabled="deletingFile"
+            @click="confirmDelete"
+          >
+            {{ deletingFile ? 'Deleting...' : 'Delete' }}
+          </button>
+        </div>
+      </div>
     </div>
   </div>
 </template>
