@@ -122,6 +122,7 @@ export class FileRenameRepository {
         absolutePath: bookFiles.absolutePath,
         relPath: bookFiles.relPath,
         role: bookFiles.role,
+        format: bookFiles.format,
       })
       .from(bookFiles)
       .where(eq(bookFiles.bookId, bookId))
