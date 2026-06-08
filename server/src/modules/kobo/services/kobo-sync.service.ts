@@ -129,13 +129,11 @@ export class KoboSyncService {
   }
 
   async invalidateSnapshot(userId: number) {
+    const start = Date.now();
     const snapshot = await this.db.query.koboLibrarySnapshots.findFirst({
       where: eq(schema.koboLibrarySnapshots.userId, userId),
     });
-    if (!snapshot) {
-      this.logger.debug(`[kobo.snapshot] invalidate skipped userId=${userId} reason=no_snapshot`);
-      return;
-    }
+    if (!snapshot) return;
 
     const resetRows = await this.db
       .update(schema.koboSnapshotBooks)
@@ -144,7 +142,7 @@ export class KoboSyncService {
       .returning({ bookId: schema.koboSnapshotBooks.bookId });
 
     this.logger.debug(
-      `[kobo.snapshot] invalidated userId=${userId} snapshotId=${snapshot.id} resetSyncedCount=${resetRows.length} bookIds=${resetRows.map((row) => row.bookId).join(',') || 'none'}`,
+      `[kobo.snapshot.invalidate] [end] userId=${userId} snapshotId=${snapshot.id} durationMs=${Date.now() - start} resetSyncedCount=${resetRows.length} - snapshot invalidated`,
     );
   }
 
