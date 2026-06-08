@@ -19,6 +19,27 @@ function epub3Opf(metadataBody: string): string {
 </package>`;
 }
 
+function epub2OpfFull(parts: { metadata?: string; manifest?: string; guide?: string }): string {
+  return `<?xml version="1.0" encoding="utf-8"?>
+<package xmlns="http://www.idpf.org/2007/opf" version="2.0">
+  <metadata xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:opf="http://www.idpf.org/2007/opf">
+    ${parts.metadata ?? ''}
+  </metadata>
+  ${parts.manifest != null ? `<manifest>${parts.manifest}</manifest>` : ''}
+  ${parts.guide != null ? `<guide>${parts.guide}</guide>` : ''}
+</package>`;
+}
+
+function epub3OpfFull(parts: { metadata?: string; manifest?: string }): string {
+  return `<?xml version="1.0" encoding="utf-8"?>
+<package xmlns="http://www.idpf.org/2007/opf" version="3.0">
+  <metadata xmlns:dc="http://purl.org/dc/elements/1.1/">
+    ${parts.metadata ?? ''}
+  </metadata>
+  ${parts.manifest != null ? `<manifest>${parts.manifest}</manifest>` : ''}
+</package>`;
+}
+
 describe('parseOpf', () => {
   describe('title', () => {
     it('parses a single title', () => {
@@ -305,6 +326,14 @@ describe('parseOpf', () => {
       const r = parseOpf(epub2Opf(''));
       expect(r.tags).toHaveLength(0);
     });
+
+    it('parses bookorbit:tags from an EPUB3 property meta with a JSON array value', () => {
+      const xml = epub3Opf(`
+        <meta property="bookorbit:tags">["Science Fiction", "Classic"]</meta>
+      `);
+      const r = parseOpf(xml);
+      expect(r.tags).toEqual(['Science Fiction', 'Classic']);
+    });
   });
 
   describe('provider identifiers', () => {
@@ -433,6 +462,92 @@ describe('parseOpf', () => {
       const r = parseOpf('<package/>');
       expect(r.title).toBeNull();
       expect(r.authors).toHaveLength(0);
+    });
+  });
+
+  describe('coverHref', () => {
+    it('returns null when no guide, manifest cover-image, or calibre cover meta is present', () => {
+      const r = parseOpf(epub2Opf('<dc:title>No Cover</dc:title>'));
+      expect(r.coverHref).toBeNull();
+    });
+
+    it('extracts href from EPUB2 guide reference with type="cover"', () => {
+      const xml = epub2OpfFull({
+        metadata: '<dc:title>Test</dc:title>',
+        guide: '<reference type="cover" title="Cover" href="cover.jpg"/>',
+      });
+      expect(parseOpf(xml).coverHref).toBe('cover.jpg');
+    });
+
+    it('is case-insensitive for the guide reference type attribute', () => {
+      const xml = epub2OpfFull({
+        guide: '<reference type="Cover" href="COVER.JPG"/>',
+      });
+      expect(parseOpf(xml).coverHref).toBe('COVER.JPG');
+    });
+
+    it('ignores guide references whose type is not "cover"', () => {
+      const xml = epub2OpfFull({
+        guide: '<reference type="toc" href="toc.html"/>',
+      });
+      expect(parseOpf(xml).coverHref).toBeNull();
+    });
+
+    it('skips guide references with an empty href and continues to next source', () => {
+      const xml = epub2OpfFull({
+        guide: '<reference type="cover" href=""/>',
+        manifest: '<item id="cover-img" href="images/cover.jpg" media-type="image/jpeg" properties="cover-image"/>',
+      });
+      expect(parseOpf(xml).coverHref).toBe('images/cover.jpg');
+    });
+
+    it('extracts href from EPUB3 manifest item with properties="cover-image"', () => {
+      const xml = epub3OpfFull({
+        manifest: '<item id="cover-img" href="images/cover.jpg" media-type="image/jpeg" properties="cover-image"/>',
+      });
+      expect(parseOpf(xml).coverHref).toBe('images/cover.jpg');
+    });
+
+    it('extracts href when "cover-image" is one of multiple space-separated manifest item properties', () => {
+      const xml = epub3OpfFull({
+        manifest: '<item id="cover-img" href="cover.png" media-type="image/png" properties="cover-image mathml"/>',
+      });
+      expect(parseOpf(xml).coverHref).toBe('cover.png');
+    });
+
+    it('resolves Calibre meta name="cover" through manifest item id lookup', () => {
+      const xml = epub2OpfFull({
+        metadata: '<meta name="cover" content="cover-image-id"/>',
+        manifest: '<item id="cover-image-id" href="images/cover.jpg" media-type="image/jpeg"/>',
+      });
+      expect(parseOpf(xml).coverHref).toBe('images/cover.jpg');
+    });
+
+    it('returns null when Calibre cover meta points to a manifest item id that does not exist', () => {
+      const xml = epub2OpfFull({
+        metadata: '<meta name="cover" content="missing-id"/>',
+        manifest: '<item id="other-id" href="other.jpg" media-type="image/jpeg"/>',
+      });
+      expect(parseOpf(xml).coverHref).toBeNull();
+    });
+
+    it('guide reference takes priority over EPUB3 manifest cover-image', () => {
+      const xml = epub2OpfFull({
+        manifest: '<item id="cover-img" href="manifest-cover.jpg" media-type="image/jpeg" properties="cover-image"/>',
+        guide: '<reference type="cover" href="guide-cover.jpg"/>',
+      });
+      expect(parseOpf(xml).coverHref).toBe('guide-cover.jpg');
+    });
+
+    it('manifest cover-image takes priority over Calibre meta lookup', () => {
+      const xml = epub3OpfFull({
+        metadata: '<meta name="cover" content="calibre-img"/>',
+        manifest: `
+          <item id="calibre-img" href="calibre-cover.jpg" media-type="image/jpeg"/>
+          <item id="epub3-cover" href="epub3-cover.jpg" media-type="image/jpeg" properties="cover-image"/>
+        `,
+      });
+      expect(parseOpf(xml).coverHref).toBe('epub3-cover.jpg');
     });
   });
 });

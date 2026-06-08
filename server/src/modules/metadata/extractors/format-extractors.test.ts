@@ -233,6 +233,52 @@ describe('metadata format extractors', () => {
     await expect(new OpfFormatExtractor().extract('/books/empty.opf')).resolves.toBeNull();
   });
 
+  it('opf extractor resolves guide cover href relative to the OPF directory and passes buffer as cover', async () => {
+    const coverBytes = Buffer.from([0xff, 0xd8, 0xff, 0xe0]);
+    mockReadFile
+      .mockResolvedValueOnce(
+        `
+        <package xmlns="http://www.idpf.org/2007/opf" version="2.0">
+          <metadata xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:opf="http://www.idpf.org/2007/opf">
+            <dc:title>Cover Test</dc:title>
+          </metadata>
+          <guide>
+            <reference type="cover" title="Cover" href="cover.jpg"/>
+          </guide>
+        </package>
+      ` as any,
+      )
+      .mockResolvedValueOnce(coverBytes as any);
+
+    const result = await new OpfFormatExtractor().extract('/books/metadata.opf');
+
+    expect(result?.cover).toEqual(coverBytes);
+    expect(mockReadFile).toHaveBeenNthCalledWith(1, '/books/metadata.opf', 'utf8');
+    expect(mockReadFile).toHaveBeenNthCalledWith(2, '/books/cover.jpg');
+  });
+
+  it('opf extractor returns null cover when the guide cover image file cannot be read', async () => {
+    mockReadFile
+      .mockResolvedValueOnce(
+        `
+        <package xmlns="http://www.idpf.org/2007/opf" version="2.0">
+          <metadata xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:opf="http://www.idpf.org/2007/opf">
+            <dc:title>Missing Cover</dc:title>
+          </metadata>
+          <guide>
+            <reference type="cover" href="missing.jpg"/>
+          </guide>
+        </package>
+      ` as any,
+      )
+      .mockRejectedValueOnce(Object.assign(new Error('ENOENT: no such file'), { code: 'ENOENT' }));
+
+    const result = await new OpfFormatExtractor().extract('/books/metadata.opf');
+
+    expect(result?.cover).toBeNull();
+    expect(result?.title).toBe('Missing Cover');
+  });
+
   it('fb2 extractor maps parsed metadata and nulls cover when extraction fails', async () => {
     mockParseFb2File.mockResolvedValue({
       title: 'Roadside Picnic',

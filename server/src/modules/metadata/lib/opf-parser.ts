@@ -24,13 +24,14 @@ export interface ParsedOpf {
   ranobedbId: string | null;
   koboId: string | null;
   itunesId: string | null;
+  coverHref: string | null;
 }
 
 const parser = new XMLParser({
   ignoreAttributes: false,
   attributeNamePrefix: '@_',
   removeNSPrefix: true,
-  isArray: (name) => ['creator', 'identifier', 'subject', 'title', 'meta', 'item'].includes(name),
+  isArray: (name) => ['creator', 'identifier', 'subject', 'title', 'meta', 'item', 'reference'].includes(name),
   textNodeName: '#text',
   allowBooleanAttributes: true,
   parseTagValue: false, // keep all values as strings — prevents leading-zero loss on ISBNs and numeric year conversion
@@ -305,6 +306,58 @@ export function parseOpf(xml: string): ParsedOpf {
   const rawDate = toArray(metadata['date'])[0];
   const publishedYear = rawDate ? parseYear(getText(rawDate)) : null;
 
+  // ── Cover href (for sidecar OPFs linking to a sibling image file) ──────────
+  // Priority 1: EPUB2 <guide><reference type="cover" href="..."/>
+  // Priority 2: EPUB3 <manifest><item properties="cover-image" href="..."/>
+  // Priority 3: Calibre <meta name="cover" content="manifest-item-id"/> -> manifest lookup
+  let coverHref: string | null = null;
+
+  const guide = (pkg['guide'] ?? {}) as Record<string, unknown>;
+  for (const ref of toArray(guide['reference'])) {
+    const ro = (typeof ref === 'object' && ref !== null ? ref : {}) as Record<string, unknown>;
+    const type = ((ro['@_type'] as string | undefined) ?? '').toLowerCase().trim();
+    if (type === 'cover') {
+      const href = ((ro['@_href'] as string | undefined) ?? '').trim();
+      if (href) {
+        coverHref = href;
+        break;
+      }
+    }
+  }
+
+  const manifest = (pkg['manifest'] ?? {}) as Record<string, unknown>;
+  const manifestItems = toArray(manifest['item']);
+
+  if (!coverHref) {
+    for (const item of manifestItems) {
+      const io = (typeof item === 'object' && item !== null ? item : {}) as Record<string, unknown>;
+      const props = ((io['@_properties'] as string | undefined) ?? '').split(/\s+/);
+      if (props.includes('cover-image')) {
+        const href = ((io['@_href'] as string | undefined) ?? '').trim();
+        if (href) {
+          coverHref = href;
+          break;
+        }
+      }
+    }
+  }
+
+  if (!coverHref) {
+    const coverItemId = namedMeta('cover');
+    if (coverItemId) {
+      for (const item of manifestItems) {
+        const io = (typeof item === 'object' && item !== null ? item : {}) as Record<string, unknown>;
+        if ((io['@_id'] as string | undefined) === coverItemId) {
+          const href = ((io['@_href'] as string | undefined) ?? '').trim();
+          if (href) {
+            coverHref = href;
+            break;
+          }
+        }
+      }
+    }
+  }
+
   return {
     title: title || null,
     subtitle: subtitle || null,
@@ -329,5 +382,6 @@ export function parseOpf(xml: string): ParsedOpf {
     ranobedbId,
     koboId,
     itunesId,
+    coverHref,
   };
 }
