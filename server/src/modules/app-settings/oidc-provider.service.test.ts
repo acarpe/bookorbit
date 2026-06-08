@@ -1,11 +1,15 @@
 import { BadRequestException, ConflictException, Logger, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 
-vi.mock('../../common/utils/ssrf.utils', () => ({
-  ensureSafeUrl: vi.fn().mockImplementation((url: string) => Promise.resolve(new URL(url.replace(/\/$/, '')))),
-}));
+vi.mock('../../common/utils/ssrf.utils', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../common/utils/ssrf.utils')>();
+  return {
+    ...actual,
+    ensureSafeUrl: vi.fn().mockImplementation((url: string) => Promise.resolve(new URL(url.replace(/\/$/, '')))),
+  };
+});
 
-import { ensureSafeUrl } from '../../common/utils/ssrf.utils';
+import { ensureSafeUrl, PrivateAddressException } from '../../common/utils/ssrf.utils';
 import { OidcProviderRepository } from './oidc-provider.repository';
 import { OidcProviderService } from './oidc-provider.service';
 
@@ -205,6 +209,21 @@ describe('OidcProviderService', () => {
       await prodService.testConnection('https://kc.example.com/realms/main');
       expect(vi.mocked(ensureSafeUrl)).toHaveBeenCalledWith('https://kc.example.com/realms/main', { allowLocal: true, allowPrivate: true });
       vi.unstubAllGlobals();
+    });
+
+    it('re-throws PrivateAddressException as BadRequestException with OIDC_ALLOW_LOCAL_ISSUERS hint', async () => {
+      vi.mocked(ensureSafeUrl).mockRejectedValueOnce(new PrivateAddressException());
+      const err = await service.testConnection('https://192.168.1.50/realms/main').catch((e) => e);
+      expect(err).toBeInstanceOf(BadRequestException);
+      expect(err.getResponse()).toMatchObject({
+        message: expect.stringContaining('OIDC_ALLOW_LOCAL_ISSUERS=true'),
+      });
+    });
+
+    it('re-throws non-PrivateAddress BadRequestException as-is', async () => {
+      const original = new BadRequestException('Invalid URL');
+      vi.mocked(ensureSafeUrl).mockRejectedValueOnce(original);
+      await expect(service.testConnection('https://bad-url')).rejects.toBe(original);
     });
   });
 });

@@ -4,6 +4,12 @@ import { isIP } from 'net';
 
 const SAFE_PROTOCOLS = new Set(['http:', 'https:']);
 
+export class PrivateAddressException extends BadRequestException {
+  constructor() {
+    super('URL resolves to a private or local address');
+  }
+}
+
 export interface SafeRemoteHostOptions {
   allowLocal?: boolean;
   allowPrivate?: boolean;
@@ -34,7 +40,7 @@ export async function ensureSafeRemoteHost(hostname: string, options?: SafeRemot
 
   if (normalizedHost === 'localhost' || normalizedHost.endsWith('.localhost') || normalizedHost.endsWith('.local')) {
     if (!options?.allowLocal && !options?.allowPrivate) {
-      throw new BadRequestException('URL host is not allowed');
+      throw new PrivateAddressException();
     }
     return; // explicitly local host, allowed when local/private override is enabled
   }
@@ -45,7 +51,7 @@ export async function ensureSafeRemoteHost(hostname: string, options?: SafeRemot
   const ipFamily = isIP(bareHost);
   if (ipFamily > 0) {
     if (isPrivateOrLocalAddress(bareHost) && !options?.allowPrivate) {
-      throw new BadRequestException('URL host is not allowed');
+      throw new PrivateAddressException();
     }
     return;
   }
@@ -59,7 +65,7 @@ export async function ensureSafeRemoteHost(hostname: string, options?: SafeRemot
 
   if (resolved.length === 0) throw new BadRequestException('Unable to resolve URL host');
   if (resolved.some((entry) => isPrivateOrLocalAddress(entry.address)) && !options?.allowPrivate) {
-    throw new BadRequestException('URL host is not allowed');
+    throw new PrivateAddressException();
   }
 }
 
