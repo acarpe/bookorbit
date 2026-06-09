@@ -656,7 +656,8 @@ const isNearBookmark = computed(() => audioBookmarks.bookmarks.value.some((b) =>
 // ── Keyboard shortcuts ────────────────────────────────────────────────────────
 
 function handleKey(e: KeyboardEvent) {
-  if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return
+  const target = (e.composedPath?.()[0] || e.target) as HTMLElement | null
+  if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement || target?.isContentEditable) return
   if (showChapters.value || showSettings.value || showSleepTimer.value || showSpeedPicker.value) return
   if (e.key === ' ' || e.key === 'k') {
     e.preventDefault()

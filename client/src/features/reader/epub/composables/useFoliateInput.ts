@@ -208,7 +208,7 @@ export function useFoliateInput(
   }
 
   function handleKeydown(e: KeyboardEvent) {
-    const target = e.target as HTMLElement
+    const target = (e.composedPath?.()[0] || e.target) as HTMLElement | null
     if (target?.tagName === 'INPUT' || target?.tagName === 'TEXTAREA' || target?.isContentEditable) return
     const view = getViewEl()
     if (!view) return

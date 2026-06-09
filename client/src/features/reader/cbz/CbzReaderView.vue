@@ -434,7 +434,8 @@ function onWheel(e: WheelEvent) {
 
 // ── Keyboard ───────────────────────────────────────────────────────────────────
 function onKeyDown(e: KeyboardEvent) {
-  if ((e.target as HTMLElement).tagName === 'INPUT') return
+  const target = (e.composedPath?.()[0] || e.target) as HTMLElement | null
+  if (target?.tagName === 'INPUT') return
   const isRtl = direction.value === 'rtl'
 
   switch (e.key) {
