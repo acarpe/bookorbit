@@ -10,6 +10,7 @@ import { useReaderSettings } from '../shared/composables/useReaderSettings'
 import { useThemeStore, ACCENT_OPTIONS } from '@/stores/theme'
 import type { PdfReaderSettings } from '@bookorbit/types'
 import { getIsDark, lookupAccentHex } from './pdf-viewer-utils'
+import { ArrowLeft } from 'lucide-vue-next'
 
 const props = defineProps<{ bookId: number; fileId: number; peekMode?: boolean }>()
 const route = useRoute()
@@ -189,6 +190,17 @@ onUnmounted(() => {
 
 <template>
   <div class="fixed inset-0 flex flex-col">
+    <!-- Floating Back Button (FAB) -->
+    <div class="pointer-events-none absolute bottom-6 left-6 z-50 flex">
+      <button
+        class="pointer-events-auto flex h-12 w-12 items-center justify-center rounded-full bg-background/95 text-foreground shadow-lg border border-border backdrop-blur-md transition-transform hover:scale-105 active:scale-95"
+        @click="router.back()"
+        aria-label="Go back"
+      >
+        <ArrowLeft :size="22" />
+      </button>
+    </div>
+
     <div v-if="props.peekMode" class="pointer-events-none absolute left-0 right-0 top-3 z-50 flex justify-center">
       <div class="pointer-events-auto flex h-8 items-center gap-2 rounded-md border border-primary/30 bg-background/95 px-2 text-primary shadow-sm">
         <span class="text-xs font-medium">Peeking</span>
