@@ -524,7 +524,9 @@ function handleCoverChanged(source: 'extracted' | 'custom' | null) {
       <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 min-h-8">
         <p v-if="combinedError" class="text-sm text-destructive">{{ combinedError }}</p>
         <span v-else class="hidden sm:inline" />
-        <div class="flex items-center justify-start gap-2 overflow-x-auto no-scrollbar -mx-4 px-4 sm:mx-0 sm:px-0 py-0.5">
+        <div
+          class="flex items-center justify-start gap-2 overflow-x-auto sm:flex-wrap sm:overflow-visible no-scrollbar -mx-4 px-4 sm:mx-0 sm:px-0 py-0.5"
+        >
           <Tooltip>
             <TooltipTrigger as-child>
               <button
@@ -564,8 +566,7 @@ function handleCoverChanged(source: 'extracted' | 'custom' | null) {
             @click="searchOpen = true"
           >
             <Sparkles class="size-3.5" />
-            <span class="lg:hidden">Search</span>
-            <span class="hidden lg:inline">Search online</span>
+            <span class="hidden sm:inline">Search</span>
           </button>
 
           <Tooltip>
@@ -577,7 +578,7 @@ function handleCoverChanged(source: 'extracted' | 'custom' | null) {
               >
                 <Loader2 v-if="autoFilling" class="size-3.5 animate-spin" />
                 <RefreshCw v-else class="size-3.5" />
-                Auto-fill
+                <span class="hidden sm:inline">Auto-fill</span>
               </button>
             </TooltipTrigger>
             <TooltipContent>{{
@@ -615,15 +616,16 @@ function handleCoverChanged(source: 'extracted' | 'custom' | null) {
             <TooltipContent>Unlock all fields</TooltipContent>
           </Tooltip>
 
-          <div class="hidden lg:flex flex-none w-px h-4 bg-border mx-0.5" />
+          <div class="flex-none w-px h-4 bg-border mx-0.5" />
 
           <button
-            class="flex items-center gap-1.5 h-8 px-2.5 sm:px-3 rounded-lg border border-input bg-background text-sm hover:bg-muted transition-colors disabled:opacity-40"
+            class="flex items-center justify-center h-8 px-2.5 rounded-lg border border-input bg-background text-sm hover:bg-muted transition-colors disabled:opacity-40"
+            title="Cancel"
+            aria-label="Cancel"
             :disabled="!hasPendingChanges || saving || writingAndRenaming"
             @click="handleReset"
           >
             <X class="size-3.5" />
-            Cancel
           </button>
           <button
             class="flex items-center gap-1.5 h-8 px-2.5 sm:px-3 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors disabled:opacity-40"
@@ -632,7 +634,7 @@ function handleCoverChanged(source: 'extracted' | 'custom' | null) {
           >
             <Loader2 v-if="saving" class="size-3.5 animate-spin" />
             <Check v-else class="size-3.5" />
-            {{ saving ? 'Saving...' : 'Save' }}
+            <span class="hidden sm:inline">{{ saving ? 'Saving...' : 'Save' }}</span>
           </button>
           <Popover v-if="fileWriteEnabledForBook">
             <PopoverTrigger as-child>
