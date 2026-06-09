@@ -12,6 +12,7 @@ import {
   MoreHorizontal,
   Pencil,
   RotateCcw,
+  Send,
   Star,
   Trash2,
   TriangleAlert,
@@ -37,6 +38,7 @@ import { usePermissions } from '@/features/auth/composables/usePermissions'
 import { useDeleteBook } from '@/features/book/composables/useDeleteBook'
 import { useMetadataLocks } from '@/features/book/composables/useMetadataLocks'
 import DeleteBookDialog from '@/features/book/components/DeleteBookDialog.vue'
+import SendBookDialog from '@/features/email/components/SendBookDialog.vue'
 import AddToCollectionSheet from '@/features/collection/components/AddToCollectionSheet.vue'
 import MetadataScoreBadge from '@/features/metadata-score/components/MetadataScoreBadge.vue'
 import MetadataScoreBreakdown from '@/features/metadata-score/components/MetadataScoreBreakdown.vue'
@@ -84,6 +86,7 @@ const moreMenuOpen = ref(false)
 const mobileMoreMenuOpen = ref(false)
 const readMenuOpen = ref(false)
 const mobileReadMenuOpen = ref(false)
+const showSendDialog = ref(false)
 
 const { weights: scoreWeights, fetchWeights } = useMetadataScoreWeights()
 const { bookProgress: koreaderBookProgress, fetchBookProgress: fetchKoreaderProgress } = useKoreaderBookProgress()
@@ -746,6 +749,12 @@ function handleDeleteFromMenu() {
   promptDelete(props.book.id)
 }
 
+function handleSendFromMenu() {
+  moreMenuOpen.value = false
+  mobileMoreMenuOpen.value = false
+  showSendDialog.value = true
+}
+
 function handleCoverLoad(ratio: number | null) {
   coverLoaded.value = true
   coverFailed.value = false
@@ -1133,14 +1142,27 @@ watch(
       >
         <Library class="size-3.5" />
       </button>
-      <Popover v-if="hasPermission('library_delete_books')" :open="mobileMoreMenuOpen" @update:open="(v) => (mobileMoreMenuOpen = v)">
+      <Popover
+        v-if="hasPermission('library_delete_books') || hasPermission('email_send')"
+        :open="mobileMoreMenuOpen"
+        @update:open="(v) => (mobileMoreMenuOpen = v)"
+      >
         <PopoverTrigger as-child>
           <button class="flex items-center justify-center h-9 w-9 rounded-md border border-input bg-background hover:bg-muted transition-colors">
             <MoreHorizontal class="size-3.5" />
           </button>
         </PopoverTrigger>
-        <PopoverContent class="w-36 p-1" align="end">
+        <PopoverContent class="w-44 p-1" align="end">
           <button
+            v-if="hasPermission('email_send')"
+            class="flex w-full items-center gap-2 px-2 py-1.5 rounded text-sm text-foreground hover:bg-muted transition-colors"
+            @click="handleSendFromMenu"
+          >
+            <Send class="size-3.5" />
+            Send via Email
+          </button>
+          <button
+            v-if="hasPermission('library_delete_books')"
             class="flex w-full items-center gap-2 px-2 py-1.5 rounded text-sm text-destructive hover:bg-destructive/10 transition-colors"
             @click="handleDeleteFromMenu"
           >
@@ -1271,7 +1293,11 @@ watch(
             >
               <Library class="size-3.5" />
             </button>
-            <Popover v-if="hasPermission('library_delete_books')" :open="moreMenuOpen" @update:open="(v) => (moreMenuOpen = v)">
+            <Popover
+              v-if="hasPermission('library_delete_books') || hasPermission('email_send')"
+              :open="moreMenuOpen"
+              @update:open="(v) => (moreMenuOpen = v)"
+            >
               <PopoverTrigger as-child>
                 <button
                   class="flex flex-1 items-center justify-center h-9 rounded-md border border-input bg-background text-sm hover:bg-muted transition-colors"
@@ -1279,8 +1305,17 @@ watch(
                   <MoreHorizontal class="size-3.5" />
                 </button>
               </PopoverTrigger>
-              <PopoverContent class="w-36 p-1" align="end">
+              <PopoverContent class="w-40 p-1" align="end">
                 <button
+                  v-if="hasPermission('email_send')"
+                  class="flex w-full items-center gap-2 px-2 py-1.5 rounded text-sm text-foreground hover:bg-muted transition-colors"
+                  @click="handleSendFromMenu"
+                >
+                  <Send class="size-3.5" />
+                  Send via Email
+                </button>
+                <button
+                  v-if="hasPermission('library_delete_books')"
                   class="flex w-full items-center gap-2 px-2 py-1.5 rounded text-sm text-destructive hover:bg-destructive/10 transition-colors"
                   @click="handleDeleteFromMenu"
                 >
@@ -1756,6 +1791,8 @@ watch(
     @update:open="addToCollectionOpen = $event"
     @done="void loadSupplemental()"
   />
+
+  <SendBookDialog v-model:open="showSendDialog" :book-ids="[book.id]" :book-title="book.title ?? undefined" :book-files="book.files" />
 
   <DeleteBookDialog :open="deleteBookId !== null" :deleting="deletingBook" @confirm="confirmDelete" @cancel="cancelDelete" />
 
