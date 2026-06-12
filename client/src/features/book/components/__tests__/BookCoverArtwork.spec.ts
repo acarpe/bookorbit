@@ -138,7 +138,27 @@ describe('BookCoverArtwork', () => {
 
     await wrapper.setProps({ resetKey: 'retry-1' })
     expect(wrapper.find('img[alt="Dune cover"]').exists()).toBe(true)
-    expect(wrapper.find('[data-testid="placeholder"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="placeholder"]').exists()).toBe(false)
+  })
+
+  it('shows a neutral skeleton, not the placeholder, while a real cover is loading', () => {
+    const wrapper = mountArtwork({ hasCover: true })
+
+    expect(wrapper.find('[data-testid="placeholder"]').exists()).toBe(false)
+    expect(wrapper.find('img[alt="Dune cover"]').exists()).toBe(true)
+    const skeleton = wrapper.find('.animate-pulse')
+    expect(skeleton.exists()).toBe(true)
+    expect(skeleton.classes()).toContain('opacity-100')
+  })
+
+  it('hides the skeleton once the cover has loaded and never shows a placeholder', async () => {
+    const wrapper = mountArtwork({ hasCover: true })
+
+    await triggerMainImageLoad(wrapper, 600, 900)
+
+    expect(wrapper.find('[data-testid="placeholder"]').exists()).toBe(false)
+    const skeleton = wrapper.find('.animate-pulse')
+    expect(skeleton.classes()).toContain('opacity-0')
   })
 
   it('does not render the fitted spine layer when spine is disabled', async () => {
