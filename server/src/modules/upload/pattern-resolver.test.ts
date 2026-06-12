@@ -2,6 +2,7 @@ import {
   applyModifier,
   DEFAULT_DOWNLOAD_PATTERN,
   DEFAULT_UPLOAD_PATTERN_BOOK_PER_FILE,
+  DEFAULT_UPLOAD_PATTERN_BOOK_PER_FOLDER,
   EXAMPLE_PATTERN_METADATA,
   replacePlaceholders,
   resolveDownloadFilename,
@@ -549,6 +550,12 @@ describe('DEFAULT_UPLOAD_PATTERN_BOOK_PER_FILE', () => {
     expect(resolveUploadPath(P, { title: 'Untitled', originalFilename: 'untitled', extension: 'epub' }, 'epub')).toBe('Unknown Author/Untitled.epub');
   });
 
+  it('no title: falls back to original filename', () => {
+    expect(resolveUploadPath(P, { authors: '', title: '', originalFilename: 'original-stem', extension: 'epub' }, 'epub')).toBe(
+      'Unknown Author/original-stem.epub',
+    );
+  });
+
   it('multiple authors: uses only the first', () => {
     expect(resolveUploadPath(P, MULTI_AUTHOR, 'epub')).toBe('Bruce Sterling/Sprawl/01. Neuromancer (1984).epub');
   });
@@ -563,6 +570,26 @@ describe('DEFAULT_UPLOAD_PATTERN_BOOK_PER_FILE', () => {
 
   it('different file extension is appended correctly', () => {
     expect(resolveUploadPath(P, PARTIAL, 'pdf')).toBe('Andy Weir/Project Hail Mary (2021).pdf');
+  });
+
+  it('passes validatePattern', () => {
+    expect(validatePattern(P)).toBe(true);
+  });
+});
+
+// ── DEFAULT_UPLOAD_PATTERN_BOOK_PER_FOLDER integration ───────────────────────
+
+describe('DEFAULT_UPLOAD_PATTERN_BOOK_PER_FOLDER', () => {
+  const P = DEFAULT_UPLOAD_PATTERN_BOOK_PER_FOLDER;
+
+  it('full metadata: author / series / index. title (year) / index. title (year)', () => {
+    expect(resolveUploadPath(P, FULL, 'epub')).toBe('William Gibson/Sprawl/01. Neuromancer (1984)/01. Neuromancer (1984).epub');
+  });
+
+  it('no title: falls back to original filename in folder and file segments', () => {
+    expect(resolveUploadPath(P, { authors: '', title: '', originalFilename: 'original-stem', extension: 'epub' }, 'epub')).toBe(
+      'Unknown Author/original-stem/original-stem.epub',
+    );
   });
 
   it('passes validatePattern', () => {
