@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { BookOpen, ExternalLink } from 'lucide-vue-next'
+import { BookOpen, BookText } from 'lucide-vue-next'
 import ToggleSwitch from '@/components/ui/ToggleSwitch.vue'
 import { useDisplaySettings, type BookThumbnailClickAction } from '@/composables/useDisplaySettings'
 import { useSeriesCollapsePreference } from '@/features/book/composables/useSeriesCollapsePreference'
@@ -12,7 +12,7 @@ const globalCollapseEnabled = computed(() => prefs.value?.global ?? false)
 
 const THUMBNAIL_CLICK_OPTIONS: { id: BookThumbnailClickAction; label: string; hint: string; icon: typeof BookOpen }[] = [
   { id: 'reader', label: 'Read first', hint: 'Open the reader when a readable file exists', icon: BookOpen },
-  { id: 'details', label: 'Open details', hint: 'Go to the book details page from grid and list thumbnails', icon: ExternalLink },
+  { id: 'details', label: 'Open details', hint: 'Go to the book details page from grid and list thumbnails', icon: BookText },
 ]
 
 async function handleGlobalCollapseToggle(value: boolean) {

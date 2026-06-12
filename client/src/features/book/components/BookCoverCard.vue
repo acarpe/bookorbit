@@ -6,10 +6,10 @@ import { computed, inject, ref, watch, onMounted, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
   BookOpen,
+  BookText,
   Check,
   Download,
   Eye,
-  ExternalLink,
   FolderPlus,
   Image,
   Lock,
@@ -255,6 +255,21 @@ function handleSecondaryLabelClick(event: MouseEvent) {
 }
 
 const isPrimaryClickAvailable = computed(() => thumbnailClickAction.value === 'details' || (primaryFile.value != null && !isMissing.value))
+const showPrimaryOverlayAction = computed(() => thumbnailClickAction.value === 'details' || (primaryFile.value != null && !isMissing.value))
+const primaryOverlayActionIcon = computed(() => {
+  if (thumbnailClickAction.value === 'details') return BookText
+  return isAudiobook.value ? Play : BookOpen
+})
+const primaryOverlayActionIconClass = computed(() => (thumbnailClickAction.value !== 'details' && isAudiobook.value ? 'ml-[2cqi]' : ''))
+
+function handlePrimaryOverlayAction() {
+  if (thumbnailClickAction.value === 'details') {
+    openBookDetails()
+    return
+  }
+
+  if (primaryFile.value && !isMissing.value) openFile(primaryFile.value)
+}
 
 function handleCardClick(event: MouseEvent) {
   const target = event.target
@@ -509,15 +524,16 @@ const secondaryLabelText = computed(() => resolveBookLabel(gridCardSecondaryLabe
               </button>
             </div>
 
-            <!-- Center: Play/Read button -->
+            <!-- Center: primary thumbnail action -->
             <div class="flex-1 flex items-center justify-center">
               <button
-                v-if="primaryFile && !isMissing"
+                v-if="showPrimaryOverlayAction"
+                data-testid="grid-card-primary-action"
                 class="size-[30cqi] flex items-center justify-center rounded-full bg-primary text-white shadow-2xl transition-all duration-300 scale-75 hover:scale-110 active:scale-90"
                 :class="[showMobileOverlay || 'group-hover:scale-100', showMobileOverlay ? 'scale-100' : '']"
-                @click.stop="openFile(primaryFile)"
+                @click.stop="handlePrimaryOverlayAction"
               >
-                <component :is="isAudiobook ? Play : BookOpen" class="size-[16cqi]" :class="{ 'ml-[2cqi]': isAudiobook }" />
+                <component :is="primaryOverlayActionIcon" class="size-[16cqi]" :class="primaryOverlayActionIconClass" />
               </button>
             </div>
 
@@ -593,7 +609,7 @@ const secondaryLabelText = computed(() => resolveBookLabel(gridCardSecondaryLabe
                   </DropdownMenuSub>
 
                   <DropdownMenuItem @click="openBookDetails">
-                    <ExternalLink class="size-4 mr-2" />
+                    <BookText class="size-4 mr-2" />
                     Book Details
                   </DropdownMenuItem>
                   <DropdownMenuSeparator v-if="hasPermission('library_edit_metadata')" />
@@ -727,7 +743,7 @@ const secondaryLabelText = computed(() => resolveBookLabel(gridCardSecondaryLabe
             </DropdownMenuSub>
 
             <DropdownMenuItem @click="openBookDetails">
-              <ExternalLink class="size-4 mr-2" />
+              <BookText class="size-4 mr-2" />
               Book Details
             </DropdownMenuItem>
             <DropdownMenuSeparator v-if="hasPermission('library_edit_metadata')" />

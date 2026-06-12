@@ -203,6 +203,16 @@ describe('BookCoverCard — present state', () => {
     expect(routerPushMock).not.toHaveBeenCalledWith(expect.objectContaining({ name: 'reader' }))
   })
 
+  it('opens book details from the primary overlay action when thumbnail clicks prefer details', async () => {
+    thumbnailClickAction.value = 'details'
+    const wrapper = mountCard(presentBook)
+
+    await wrapper.get('[data-testid="grid-card-primary-action"]').trigger('click')
+
+    expect(routerPushMock).toHaveBeenCalledWith({ name: 'book-detail', params: { bookId: 2 } })
+    expect(routerPushMock).not.toHaveBeenCalledWith(expect.objectContaining({ name: 'reader' }))
+  })
+
   it('opens book details for missing books when thumbnail clicks prefer details', async () => {
     thumbnailClickAction.value = 'details'
     const wrapper = mountCard(missingBook)
