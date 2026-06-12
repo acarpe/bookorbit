@@ -44,7 +44,7 @@ const emit = defineEmits<{
   error: []
 }>()
 
-const { bookCoverDisplayMode } = useDisplaySettings()
+const { bookCoverDisplayMode, bookSpineOverlay } = useDisplaySettings()
 const injectedAspectRatio = inject(COVER_ASPECT_RATIO_KEY, ref(DEFAULT_COVER_ASPECT_RATIO))
 
 const loaded = ref(false)
@@ -63,7 +63,13 @@ const slotRatio = computed(() => coverAspectRatioValue(String(frameAspectRatio.v
 const canRenderImage = computed(() => props.hasCover && props.src !== null && props.src !== '' && !failed.value)
 const showBlurredBackdrop = computed(() => effectiveMode.value === 'blurred-fit' && canRenderImage.value && loaded.value)
 const useNaturalFrame = computed(() => effectiveMode.value === 'natural-bottom' && canRenderImage.value && loaded.value)
-const showSpineLayer = computed(() => props.spine && canRenderImage.value && loaded.value)
+const spineMode = computed(() => (props.spine ? (bookSpineOverlay?.value ?? 'off') : 'off'))
+// In blurred-fit the image is letterboxed inside the full slot, so the spine
+// layer must be fitted to the image rectangle. Until the ratio is known that
+// fit can't be computed, so hold the layer back rather than let it span the
+// whole slot and overflow the artwork.
+const spineRatioReady = computed(() => effectiveMode.value !== 'blurred-fit' || (imageRatio.value !== null && imageRatio.value > 0))
+const showSpineLayer = computed(() => spineMode.value !== 'off' && canRenderImage.value && loaded.value && spineRatioReady.value)
 
 const frameStyle = computed(() => {
   if (useNaturalFrame.value) return fittedCoverFrameStyle(imageRatio.value, slotRatio.value, 'bottom')
@@ -164,7 +170,7 @@ function handleImageError() {
         @load="handleImageLoad"
         @error="handleImageError"
       />
-      <span v-if="showSpineLayer" class="book-cover-spine-layer absolute inset-0 z-[3]" :style="spineStyle" />
+      <span v-if="showSpineLayer" class="book-cover-spine-layer absolute inset-0 z-[3]" :data-cover-spine="spineMode" :style="spineStyle" />
     </span>
   </template>
   <span

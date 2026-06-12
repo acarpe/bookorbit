@@ -492,7 +492,7 @@ watch(
                   :frame-aspect-ratio="leadCoverFrameAspectRatios[i] ?? PORTRAIT_STACK_FRAME_ASPECT_RATIO"
                   loading="lazy"
                   decoding="async"
-                  :spine="false"
+                  :spine="true"
                   @load="handleLeadCoverLoad(bookId, $event)"
                   @error="handleLeadCoverError(bookId)"
                 />

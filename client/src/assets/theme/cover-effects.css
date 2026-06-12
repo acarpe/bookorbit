@@ -76,9 +76,21 @@
 }
 
 .book-cover-spine-layer {
+  --book-cover-spine-opacity: 0;
+  --book-cover-spine-width: 6%;
   pointer-events: none;
   border-radius: inherit;
   overflow: hidden;
+}
+
+.book-cover-spine-layer[data-cover-spine='subtle'] {
+  --book-cover-spine-opacity: 0.7;
+  --book-cover-spine-width: 6%;
+}
+
+.book-cover-spine-layer[data-cover-spine='strong'] {
+  --book-cover-spine-opacity: 1;
+  --book-cover-spine-width: 8%;
 }
 
 .book-cover-surface::before,

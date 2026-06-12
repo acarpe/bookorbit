@@ -7,7 +7,7 @@ import { clearCoverLoadCache } from '@/features/book/lib/cover-load-cache'
 import { useDisplaySettings } from '@/composables/useDisplaySettings'
 import BookCoverArtwork from '../BookCoverArtwork.vue'
 
-const { bookCoverDisplayMode } = useDisplaySettings()
+const { bookCoverDisplayMode, bookSpineOverlay } = useDisplaySettings()
 
 function mountArtwork(
   options: {
@@ -58,10 +58,12 @@ async function triggerMainImageLoad(wrapper: ReturnType<typeof mountArtwork>, na
 
 beforeEach(() => {
   clearCoverLoadCache()
+  bookSpineOverlay.value = 'off'
 })
 
 afterEach(() => {
   bookCoverDisplayMode.value = 'blurred-fit'
+  bookSpineOverlay.value = 'off'
 })
 
 describe('BookCoverArtwork', () => {
@@ -73,6 +75,7 @@ describe('BookCoverArtwork', () => {
   })
 
   it('renders blurred-fit covers with an object-contain image and backdrop after load', async () => {
+    bookSpineOverlay.value = 'strong'
     const wrapper = mountArtwork({ mode: 'blurred-fit' })
 
     const image = await triggerMainImageLoad(wrapper, 600, 900)
@@ -169,6 +172,33 @@ describe('BookCoverArtwork', () => {
     expect(wrapper.find('.book-cover-spine-layer').exists()).toBe(false)
   })
 
+  it('tags the spine layer with the active overlay mode so it works without a surface ancestor', async () => {
+    bookSpineOverlay.value = 'subtle'
+    const wrapper = mountArtwork({ mode: 'blurred-fit' })
+
+    await triggerMainImageLoad(wrapper, 600, 900)
+
+    expect(wrapper.find('.book-cover-spine-layer').attributes('data-cover-spine')).toBe('subtle')
+  })
+
+  it('withholds the blurred-fit spine layer until the image ratio is known so it cannot overflow the cover', async () => {
+    bookSpineOverlay.value = 'strong'
+    const wrapper = mountArtwork({ mode: 'blurred-fit' })
+
+    await triggerMainImageLoad(wrapper, 0, 0)
+
+    expect(wrapper.find('.book-cover-spine-layer').exists()).toBe(false)
+  })
+
+  it('still renders the spine layer for full-bleed modes when the ratio is unknown', async () => {
+    bookSpineOverlay.value = 'strong'
+    const wrapper = mountArtwork({ mode: 'fill-crop' })
+
+    await triggerMainImageLoad(wrapper, 0, 0)
+
+    expect(wrapper.find('.book-cover-spine-layer').exists()).toBe(true)
+  })
+
   describe('cover load cache (anti-flicker)', () => {
     it('shows the skeleton and fade-in for a cover that has never loaded', () => {
       const wrapper = mountArtwork({ src: '/fresh-cover.jpg' })
@@ -188,7 +218,7 @@ describe('BookCoverArtwork', () => {
 
       expect(image.classes()).toContain('opacity-100')
       expect(image.classes()).not.toContain('transition-opacity')
-      expect(second.find('.animate-pulse').exists()).toBe(false)
+      expect(second.find('.animate-pulse').classes()).toContain('opacity-0')
     })
 
     it('restores instantly when src changes to an already-loaded cover', async () => {
@@ -201,7 +231,7 @@ describe('BookCoverArtwork', () => {
       await wrapper.setProps({ src: '/warm.jpg' })
       const image = wrapper.find('img[alt="Dune cover"]')
       expect(image.classes()).toContain('opacity-100')
-      expect(wrapper.find('.animate-pulse').exists()).toBe(false)
+      expect(wrapper.find('.animate-pulse').classes()).toContain('opacity-0')
     })
 
     it('still shows the skeleton when src changes to an unseen cover', async () => {
