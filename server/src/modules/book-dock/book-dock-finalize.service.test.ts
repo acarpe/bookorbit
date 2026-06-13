@@ -43,6 +43,7 @@ function makeService() {
     saveExtractedCoverBytes: vi.fn().mockResolvedValue(undefined),
     replaceAuthors: vi.fn().mockResolvedValue(undefined),
     replaceGenres: vi.fn().mockResolvedValue(undefined),
+    replaceNarrators: vi.fn().mockResolvedValue(undefined),
   };
   const validator = {
     validateFormat: vi.fn(),
@@ -679,6 +680,165 @@ describe('BookDockFinalizeService', () => {
     expect(metadataService.downloadAndSaveCover).toHaveBeenCalledWith('https://covers.example/1.jpg', 20);
     expect(metadataService.saveExtractedCoverBytes).not.toHaveBeenCalled();
     expect(mockReadFile).not.toHaveBeenCalled();
+  });
+
+  it('applyMetadata persists duration, chapters and narrators extracted from the audiobook', async () => {
+    const { service, db, metadataService } = makeService();
+    const updateChain = {
+      set: vi.fn(),
+      where: vi.fn().mockResolvedValue(undefined),
+    };
+    updateChain.set.mockReturnValue(updateChain);
+    db.update.mockReturnValue(updateChain);
+
+    await (service as any).applyMetadata(
+      30,
+      makeRow({
+        format: 'm4b',
+        fileName: 'book.m4b',
+        selectedMetadata: null,
+        coverPath: null,
+        embeddedMetadata: {
+          title: 'Artificial Condition',
+          authors: ['Martha Wells'],
+          narrators: ['Kevin R. Free'],
+          durationSeconds: 12218,
+          chapters: [
+            { title: 'Chapter 1', startMs: 0 },
+            { title: 'Chapter 2', startMs: 804850 },
+          ],
+        } as BookDockMetadata,
+      }),
+    );
+
+    expect(updateChain.set).toHaveBeenCalledWith(
+      expect.objectContaining({
+        durationSeconds: 12218,
+        chapters: [
+          { title: 'Chapter 1', startMs: 0 },
+          { title: 'Chapter 2', startMs: 804850 },
+        ],
+      }),
+    );
+    expect(metadataService.replaceAuthors).toHaveBeenCalledWith(30, [{ name: 'Martha Wells', sortName: null }]);
+    expect(metadataService.replaceNarrators).toHaveBeenCalledWith(30, [{ name: 'Kevin R. Free', sortName: null }]);
+  });
+
+  it('applyMetadata keeps audio facts from embeddedMetadata even when scalar fields were edited', async () => {
+    const { service, db, metadataService } = makeService();
+    const updateChain = {
+      set: vi.fn(),
+      where: vi.fn().mockResolvedValue(undefined),
+    };
+    updateChain.set.mockReturnValue(updateChain);
+    db.update.mockReturnValue(updateChain);
+
+    await (service as any).applyMetadata(
+      31,
+      makeRow({
+        format: 'm4b',
+        selectedMetadata: { title: 'Edited Title' } as BookDockMetadata,
+        coverPath: null,
+        embeddedMetadata: {
+          title: 'Original Title',
+          durationSeconds: 555,
+          narrators: ['Reader One'],
+          chapters: [{ title: 'Intro', startMs: 10 }],
+        } as BookDockMetadata,
+      }),
+    );
+
+    expect(updateChain.set).toHaveBeenCalledWith(
+      expect.objectContaining({
+        title: 'Edited Title',
+        durationSeconds: 555,
+        chapters: [{ title: 'Intro', startMs: 10 }],
+      }),
+    );
+    expect(metadataService.replaceNarrators).toHaveBeenCalledWith(31, [{ name: 'Reader One', sortName: null }]);
+  });
+
+  it('applyMetadata omits audio fields and skips narrators when none were extracted', async () => {
+    const { service, db, metadataService } = makeService();
+    const updateChain = {
+      set: vi.fn(),
+      where: vi.fn().mockResolvedValue(undefined),
+    };
+    updateChain.set.mockReturnValue(updateChain);
+    db.update.mockReturnValue(updateChain);
+
+    await (service as any).applyMetadata(
+      32,
+      makeRow({
+        selectedMetadata: null,
+        coverPath: null,
+        embeddedMetadata: { title: 'Just a Book' } as BookDockMetadata,
+      }),
+    );
+
+    const patch = updateChain.set.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(patch).not.toHaveProperty('durationSeconds');
+    expect(patch).not.toHaveProperty('chapters');
+    expect(metadataService.replaceNarrators).not.toHaveBeenCalled();
+  });
+
+  it('applyMetadata sanitizes malformed chapters and drops non-positive duration before persisting', async () => {
+    const { service, db, metadataService } = makeService();
+    const updateChain = {
+      set: vi.fn(),
+      where: vi.fn().mockResolvedValue(undefined),
+    };
+    updateChain.set.mockReturnValue(updateChain);
+    db.update.mockReturnValue(updateChain);
+
+    await (service as any).applyMetadata(
+      33,
+      makeRow({
+        selectedMetadata: null,
+        coverPath: null,
+        embeddedMetadata: {
+          durationSeconds: 0,
+          chapters: [
+            { title: 'Good', startMs: 1000 },
+            { title: 'NoStart' },
+            { title: 'Negative', startMs: -5 },
+            { startMs: 2000 },
+            'garbage',
+            { title: 'Stringy', startMs: '3000.7' },
+          ],
+        } as unknown as BookDockMetadata,
+      }),
+    );
+
+    const patch = updateChain.set.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(patch).not.toHaveProperty('durationSeconds');
+    expect(patch.chapters).toEqual([
+      { title: 'Good', startMs: 1000 },
+      { title: '', startMs: 2000 },
+      { title: 'Stringy', startMs: 3001 },
+    ]);
+    expect(metadataService.replaceNarrators).not.toHaveBeenCalled();
+  });
+
+  it('applyMetadata coerces a string-typed duration into a rounded integer', async () => {
+    const { service, db } = makeService();
+    const updateChain = {
+      set: vi.fn(),
+      where: vi.fn().mockResolvedValue(undefined),
+    };
+    updateChain.set.mockReturnValue(updateChain);
+    db.update.mockReturnValue(updateChain);
+
+    await (service as any).applyMetadata(
+      34,
+      makeRow({
+        selectedMetadata: null,
+        coverPath: null,
+        embeddedMetadata: { durationSeconds: '999.6' } as unknown as BookDockMetadata,
+      }),
+    );
+
+    expect(updateChain.set).toHaveBeenCalledWith(expect.objectContaining({ durationSeconds: 1000 }));
   });
 
   it('applyMetadata falls back to extracted cover bytes when cover download is unavailable', async () => {

@@ -1,3 +1,5 @@
+import type { AudiobookChapter } from "./audiobook";
+
 export type BookDockFileStatus = "pending" | "extracting" | "fetching" | "ready" | "error";
 export type BookDockAutoFinalizeMetadataMode = "safe_merge" | "fetched_only" | "embedded_only";
 
@@ -5,6 +7,7 @@ export interface BookDockMetadata {
   title?: string;
   subtitle?: string;
   authors?: string[];
+  narrators?: string[];
   description?: string;
   publisher?: string;
   publishedYear?: number;
@@ -16,6 +19,8 @@ export interface BookDockMetadata {
   seriesIndex?: number;
   genres?: string[];
   coverUrl?: string;
+  durationSeconds?: number;
+  chapters?: AudiobookChapter[];
 }
 
 export interface BookDockFile {

@@ -3,11 +3,13 @@ import { mkdir, writeFile } from 'fs/promises';
 import { join } from 'path';
 
 import type { BookDockMetadata } from '@bookorbit/types';
+import { isAudioFormat } from '@bookorbit/types';
 import { extractEpubMetadata } from '../metadata/lib/epub';
 import { extractCbzMetadata, extractCbrMetadata, extractCb7Metadata } from '../metadata/lib/cbz-metadata';
 import { parseFb2File } from '../metadata/lib/fb2-parser';
 import { parseMobiFile } from '../metadata/lib/mobi-parser';
 import { parsePdfFile, type PdfParsed, type PdfParseWarning } from '../metadata/lib/pdf-parser';
+import { extractAudioMetadata, type AudioExtractResult } from '../metadata/extractors/audio.extractor';
 import { extractCover, generateThumbnail, imageExt } from '../metadata/lib/cover';
 import { detectComicContainerFormat } from '../../common/comic-format-detect';
 import { sanitizeLogValue } from '../../common/utils/log-sanitize.utils';
@@ -30,6 +32,10 @@ export class BookDockMetadataService {
         const parsedPdf = await this.extractPdfData(absolutePath, true);
         metadata = this.toPdfMetadata(parsedPdf);
         coverBytes = parsedPdf?.coverBuffer ?? null;
+      } else if (isAudioFormat(format)) {
+        const audio = await extractAudioMetadata(absolutePath);
+        metadata = this.toAudioMetadata(audio);
+        coverBytes = audio.coverBytes;
       } else {
         [metadata, coverBytes] = await Promise.all([this.extractMetadata(absolutePath, format), extractCover(absolutePath, format)]);
       }
@@ -170,6 +176,24 @@ export class BookDockMetadataService {
       extractCover,
       onWarning: (warning) => this.logPdfParseWarning(warning),
     });
+  }
+
+  private toAudioMetadata(audio: AudioExtractResult): BookDockMetadata {
+    return {
+      title: audio.title ?? undefined,
+      subtitle: audio.subtitle ?? undefined,
+      description: audio.description ?? undefined,
+      publisher: audio.publisher ?? undefined,
+      publishedYear: audio.publishedYear ?? undefined,
+      language: audio.language ?? undefined,
+      seriesName: audio.seriesName ?? undefined,
+      seriesIndex: audio.seriesIndex ?? undefined,
+      authors: audio.authors.length > 0 ? audio.authors.map((a) => a.name) : undefined,
+      narrators: audio.narrators.length > 0 ? audio.narrators : undefined,
+      genres: audio.genres.length > 0 ? audio.genres : undefined,
+      durationSeconds: audio.durationSeconds ?? undefined,
+      chapters: audio.chapters.length > 0 ? audio.chapters : undefined,
+    };
   }
 
   private toPdfMetadata(parsed: PdfParsed | null): BookDockMetadata {

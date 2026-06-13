@@ -4,7 +4,13 @@ import { access as fsAccess, readFile, stat, unlink } from 'fs/promises';
 import { and, eq, inArray, or, sql } from 'drizzle-orm';
 import { NodePgDatabase } from 'drizzle-orm/node-postgres';
 
-import type { BookDockAutoFinalizeMetadataMode, BookDockFinalizeFileResult, BookDockFinalizeResult, BookDockMetadata } from '@bookorbit/types';
+import type {
+  AudiobookChapter,
+  BookDockAutoFinalizeMetadataMode,
+  BookDockFinalizeFileResult,
+  BookDockFinalizeResult,
+  BookDockMetadata,
+} from '@bookorbit/types';
 import { NotificationType, resolveUploadPath } from '@bookorbit/types';
 import { NotificationService } from '../notification/notification.service';
 import { SeriesIdentityService } from '../../common/services/series-identity.service';
@@ -551,6 +557,7 @@ export class BookDockFinalizeService implements OnModuleInit {
 
   private async applyMetadata(bookId: number, row: BookDockFileRow): Promise<void> {
     const meta = normalizeFinalizeMetadata(row.selectedMetadata ?? row.embeddedMetadata);
+    const audio = resolveAudioFinalizeFields(row.embeddedMetadata ?? row.selectedMetadata);
     let selectedCoverApplied = false;
 
     const selectedCoverUrl = meta.coverUrl;
@@ -583,7 +590,10 @@ export class BookDockFinalizeService implements OnModuleInit {
     };
     const patch = (await this.seriesIdentity?.resolveMetadataPatch(scalarFields)) ?? scalarFields;
 
-    await this.db.update(bookMetadata).set(patch).where(eq(bookMetadata.bookId, bookId));
+    await this.db
+      .update(bookMetadata)
+      .set({ ...patch, ...buildAudioMetadataPatch(audio) })
+      .where(eq(bookMetadata.bookId, bookId));
 
     if (meta.authors.length > 0) {
       await this.metadataService.replaceAuthors(
@@ -594,6 +604,13 @@ export class BookDockFinalizeService implements OnModuleInit {
 
     if (meta.genres.length > 0) {
       await this.metadataService.replaceGenres(bookId, meta.genres);
+    }
+
+    if (audio.narrators.length > 0) {
+      await this.metadataService.replaceNarrators(
+        bookId,
+        audio.narrators.map((name) => ({ name, sortName: null })),
+      );
     }
   }
 
@@ -720,6 +737,52 @@ function normalizeFinalizeMetadata(meta: BookDockMetadata | null | undefined): N
     genres: normalizeStringArray(meta?.genres, 200),
     coverUrl: normalizeText(meta?.coverUrl),
   };
+}
+
+type AudioFinalizeFields = {
+  durationSeconds: number | null;
+  chapters: AudiobookChapter[] | null;
+  narrators: string[];
+};
+
+function resolveAudioFinalizeFields(meta: BookDockMetadata | null | undefined): AudioFinalizeFields {
+  return {
+    durationSeconds: normalizeDurationSeconds(meta?.durationSeconds),
+    chapters: normalizeChapters(meta?.chapters),
+    narrators: normalizeStringArray(meta?.narrators, 500),
+  };
+}
+
+function buildAudioMetadataPatch(audio: AudioFinalizeFields): { durationSeconds?: number; chapters?: AudiobookChapter[] } {
+  const patch: { durationSeconds?: number; chapters?: AudiobookChapter[] } = {};
+  if (audio.durationSeconds !== null) patch.durationSeconds = audio.durationSeconds;
+  if (audio.chapters !== null) patch.chapters = audio.chapters;
+  return patch;
+}
+
+function normalizeDurationSeconds(value: unknown): number | null {
+  const parsed = typeof value === 'number' ? value : typeof value === 'string' ? Number.parseFloat(value.trim()) : NaN;
+  if (!Number.isFinite(parsed) || parsed <= 0) return null;
+  return Math.round(parsed);
+}
+
+function normalizeChapters(value: unknown): AudiobookChapter[] | null {
+  if (!Array.isArray(value)) return null;
+  const chapters: AudiobookChapter[] = [];
+  for (const item of value) {
+    if (!item || typeof item !== 'object') continue;
+    const candidate = item as { title?: unknown; startMs?: unknown };
+    const startMs =
+      typeof candidate.startMs === 'number'
+        ? candidate.startMs
+        : typeof candidate.startMs === 'string'
+          ? Number.parseFloat(candidate.startMs.trim())
+          : NaN;
+    if (!Number.isFinite(startMs) || startMs < 0) continue;
+    const title = typeof candidate.title === 'string' ? candidate.title : '';
+    chapters.push({ title, startMs: Math.round(startMs) });
+  }
+  return chapters.length > 0 ? chapters : null;
 }
 
 function resolveFinalizeErrorMessage(error: unknown): string {
