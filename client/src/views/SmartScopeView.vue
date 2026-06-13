@@ -23,7 +23,6 @@ import ViewHeader from '@/components/ViewHeader.vue'
 import SmartScopeEditorPanel from '@/features/smart-scope/components/SmartScopeEditorPanel.vue'
 import SelectionActionBar from '@/components/SelectionActionBar.vue'
 import AddToCollectionSheet from '@/features/collection/components/AddToCollectionSheet.vue'
-import BulkUpdateTagsDialog from '@/features/book/components/BulkUpdateTagsDialog.vue'
 import BulkEditMetadataDialog from '@/features/book/components/BulkEditMetadataDialog.vue'
 import MetadataExportDialog from '@/features/book/components/MetadataExportDialog.vue'
 import SendBookDialog from '@/features/email/components/SendBookDialog.vue'
@@ -202,18 +201,17 @@ const {
   handleDownloadFiles,
   handleBulkSetStatus,
   handleBulkSetRating,
-  handleBulkUpdateTags,
   handleBulkSetField,
   handleBulkSetMetadataLock,
   handleDeleteSelected,
   addToCollectionOpen,
-  bulkTagsOpen,
   bulkEditOpen,
   sendBookOpen,
   quickViewBookId,
   quickViewOpen,
   handleBookAction,
   handleTableBookUpdate,
+  handleEditIndividually,
 } = useBookTableShell({
   books,
 })
@@ -384,11 +382,11 @@ watch(smartScopeId, async () => {
     @export-metadata="openMetadataExport"
     @add-to-collection="addToCollectionOpen = true"
     @edit="handleEditSelected"
+    @edit-individually="handleEditIndividually"
     @refresh-metadata="handleBulkRefreshMetadata"
     @re-extract-cover="handleBulkReExtractCover"
     @set-status="handleBulkSetStatus"
     @set-rating="handleBulkSetRating"
-    @edit-tags="bulkTagsOpen = true"
     @set-field="handleBulkSetField"
     @lock-metadata="handleBulkSetMetadataLock"
     @delete="handleDeleteSelected"
@@ -413,8 +411,6 @@ watch(smartScopeId, async () => {
     @update:open="addToCollectionOpen = $event"
     @done="exitSelectionMode"
   />
-  <BulkUpdateTagsDialog :open="bulkTagsOpen" :book-count="selectedCount" @update:open="bulkTagsOpen = $event" @confirm="handleBulkUpdateTags" />
-
   <BulkEditMetadataDialog
     :open="bulkEditOpen"
     :book-count="bulkEditCount"

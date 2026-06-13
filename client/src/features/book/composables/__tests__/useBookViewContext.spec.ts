@@ -84,7 +84,7 @@ describe('useBookViewContext', () => {
       makeBook(5002),
     ])
     const total = ref(5002)
-    const loadMore = vi.fn(async () => {})
+    const loadMore = vi.fn<() => Promise<void>>(async () => {})
 
     const Harness = defineComponent({
       setup() {

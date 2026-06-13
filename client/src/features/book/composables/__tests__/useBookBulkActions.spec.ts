@@ -326,28 +326,6 @@ describe('useBookBulkActions', () => {
     expect(mocks.toastSuccess).toHaveBeenCalledWith('Rated 500 books 4/5')
   })
 
-  it('sends bulk tag updates using query selection payloads', async () => {
-    mocks.api.mockResolvedValue({ ok: true })
-    const selectedIds = ref(new Set<number>())
-    const querySelection = ref<QuerySelectionState | null>(makeQuerySelection())
-
-    const { handleBulkUpdateTags } = useBookBulkActions(selectedIds, vi.fn(), undefined, undefined, querySelection)
-
-    await handleBulkUpdateTags('add', ['favorite'])
-
-    expect(mocks.api).toHaveBeenCalledWith(
-      '/api/v1/books/bulk-update-tags',
-      expect.objectContaining({
-        body: JSON.stringify({
-          query: { libraryId: 5, filter: { type: 'group', join: 'AND', rules: [] }, q: 'space opera' },
-          mode: 'add',
-          tags: ['favorite'],
-        }),
-      }),
-    )
-    expect(mocks.toastSuccess).toHaveBeenCalledWith('Added tags to 500 books')
-  })
-
   it('sends bulk field updates using query selection payloads', async () => {
     mocks.api.mockResolvedValue({ ok: true })
     const selectedIds = ref(new Set<number>())

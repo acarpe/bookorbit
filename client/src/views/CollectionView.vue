@@ -12,7 +12,6 @@ import BookQuickView from '@/features/book/components/BookQuickView.vue'
 import ViewHeader from '@/components/ViewHeader.vue'
 import SelectionActionBar from '@/components/SelectionActionBar.vue'
 import AddToCollectionSheet from '@/features/collection/components/AddToCollectionSheet.vue'
-import BulkUpdateTagsDialog from '@/features/book/components/BulkUpdateTagsDialog.vue'
 import BulkEditMetadataDialog from '@/features/book/components/BulkEditMetadataDialog.vue'
 import MetadataExportDialog from '@/features/book/components/MetadataExportDialog.vue'
 import EditCollectionDialog from '@/features/collection/components/EditCollectionDialog.vue'
@@ -195,18 +194,17 @@ const {
   handleDownloadFiles,
   handleBulkSetStatus,
   handleBulkSetRating,
-  handleBulkUpdateTags,
   handleBulkSetField,
   handleBulkSetMetadataLock,
   handleDeleteSelected,
   addToCollectionOpen,
-  bulkTagsOpen,
   bulkEditOpen,
   sendBookOpen,
   quickViewBookId,
   quickViewOpen,
   handleBookAction,
   handleTableBookUpdate,
+  handleEditIndividually,
 } = useBookTableShell({
   books,
 })
@@ -365,11 +363,11 @@ watch(collectionId, async () => {
     @add-to-collection="addToCollectionOpen = true"
     @remove-from-collection="handleRemoveFromCollection"
     @edit="handleEditSelected"
+    @edit-individually="handleEditIndividually"
     @refresh-metadata="handleBulkRefreshMetadata"
     @re-extract-cover="handleBulkReExtractCover"
     @set-status="handleBulkSetStatus"
     @set-rating="handleBulkSetRating"
-    @edit-tags="bulkTagsOpen = true"
     @set-field="handleBulkSetField"
     @lock-metadata="handleBulkSetMetadataLock"
     @delete="handleDeleteSelected"
@@ -394,8 +392,6 @@ watch(collectionId, async () => {
     @update:open="addToCollectionOpen = $event"
     @done="exitSelectionMode"
   />
-  <BulkUpdateTagsDialog :open="bulkTagsOpen" :book-count="selectedCount" @update:open="bulkTagsOpen = $event" @confirm="handleBulkUpdateTags" />
-
   <BulkEditMetadataDialog
     :open="bulkEditOpen"
     :book-count="bulkEditCount"

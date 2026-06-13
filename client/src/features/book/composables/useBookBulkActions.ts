@@ -19,8 +19,30 @@ import { useBookRefreshFeedback } from './useBookRefreshFeedback'
 import { detectChangedColumns, mergeBookCardWithDetail } from '@/features/book/lib/book-card-mapper'
 
 export type ExportScope = 'primary' | 'all' | 'audio'
-export type BulkEditableField = 'seriesName' | 'publisher' | 'language' | 'publishedYear' | 'authors' | 'genres' | 'tags' | 'narrators'
+
+export const BULK_EDITABLE_ARRAY_FIELDS = ['authors', 'genres', 'tags', 'narrators'] as const
+export const BULK_EDITABLE_SCALAR_FIELDS = ['seriesName', 'publisher', 'language', 'publishedYear'] as const
+
+export type BulkEditableArrayField = (typeof BULK_EDITABLE_ARRAY_FIELDS)[number]
+export type BulkEditableScalarField = (typeof BULK_EDITABLE_SCALAR_FIELDS)[number]
+export type BulkEditableField = BulkEditableArrayField | BulkEditableScalarField
 export type BulkEditableValue = string | number | string[] | null
+
+export const BULK_EDITABLE_FIELD_LABELS: Record<BulkEditableField, string> = {
+  seriesName: 'Series',
+  publisher: 'Publisher',
+  language: 'Language',
+  publishedYear: 'Year',
+  authors: 'Authors',
+  genres: 'Genres',
+  tags: 'Tags',
+  narrators: 'Narrators',
+}
+
+export const BULK_EDITABLE_FIELD_OPTIONS: { value: BulkEditableField; label: string }[] = [
+  ...BULK_EDITABLE_SCALAR_FIELDS,
+  ...BULK_EDITABLE_ARRAY_FIELDS,
+].map((value) => ({ value, label: BULK_EDITABLE_FIELD_LABELS[value] }))
 const BULK_FIELD_LOCK_FIELD: Record<BulkEditableField, BookMetadataLockField> = {
   seriesName: 'seriesName',
   publisher: 'publisher',
@@ -296,23 +318,6 @@ export function useBookBulkActions(
     toast.success(label)
   }
 
-  async function handleBulkUpdateTags(mode: 'add' | 'remove' | 'replace', tags: string[]) {
-    if (!hasSelection()) return
-    const ids = querySelection?.value ? [] : [...selectedIds.value]
-    const res = await api('/api/v1/books/bulk-update-tags', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ...getSelectionPayload(), mode, tags }),
-    })
-    if (!res.ok) {
-      toast.error('Failed to update tags')
-      return
-    }
-    const verb = mode === 'add' ? 'Added tags to' : mode === 'remove' ? 'Removed tags from' : 'Replaced tags on'
-    const count = querySelection?.value ? querySelection.value.total : ids.length
-    toast.success(`${verb} ${count} book${count === 1 ? '' : 's'}`)
-  }
-
   async function handleBulkSetField(field: BulkEditableField, value: BulkEditableValue) {
     if (!hasSelection()) return
     const ids = querySelection?.value ? [] : [...selectedIds.value]
@@ -415,7 +420,6 @@ export function useBookBulkActions(
     handleDownloadFiles,
     handleBulkSetStatus,
     handleBulkSetRating,
-    handleBulkUpdateTags,
     handleBulkSetField,
     handleBulkSetMetadataLock,
     handleDeleteSelected,

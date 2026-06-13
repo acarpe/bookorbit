@@ -8,6 +8,14 @@ import { useGenreSearch, useTagSearch } from '@/features/book/composables/useTag
 import { useNarratorSearch } from '@/features/book/composables/useNarratorSearch'
 import { usePublisherSearch, useSeriesNameSearch, useLanguageSearch } from '@/features/book/composables/useMetadataFieldSearch'
 import type { BulkEditFields, ArrayMode } from '@/features/book/composables/useBulkEditMetadata'
+import {
+  BULK_EDITABLE_ARRAY_FIELDS,
+  BULK_EDITABLE_SCALAR_FIELDS,
+  BULK_EDITABLE_FIELD_LABELS,
+  type BulkEditableArrayField,
+  type BulkEditableScalarField,
+  type BulkEditableField,
+} from '@/features/book/composables/useBookBulkActions'
 
 type UIArrayMode = ArrayMode | 'clear'
 
@@ -22,23 +30,14 @@ const emit = defineEmits<{
   confirm: [fields: BulkEditFields]
 }>()
 
-const ARRAY_FIELDS = ['authors', 'genres', 'tags', 'narrators'] as const
-const SCALAR_FIELDS = ['seriesName', 'publisher', 'language', 'publishedYear'] as const
+const ARRAY_FIELDS = BULK_EDITABLE_ARRAY_FIELDS
+const SCALAR_FIELDS = BULK_EDITABLE_SCALAR_FIELDS
 
-type ArrayFieldKey = (typeof ARRAY_FIELDS)[number]
-type ScalarFieldKey = (typeof SCALAR_FIELDS)[number]
-type FieldKey = ArrayFieldKey | ScalarFieldKey
+type ArrayFieldKey = BulkEditableArrayField
+type ScalarFieldKey = BulkEditableScalarField
+type FieldKey = BulkEditableField
 
-const FIELD_LABELS: Record<FieldKey, string> = {
-  authors: 'Authors',
-  genres: 'Genres',
-  tags: 'Tags',
-  narrators: 'Narrators',
-  seriesName: 'Series',
-  publisher: 'Publisher',
-  language: 'Language',
-  publishedYear: 'Year',
-}
+const FIELD_LABELS = BULK_EDITABLE_FIELD_LABELS
 
 const MODE_LABELS: Record<UIArrayMode, string> = {
   add: 'Add',
