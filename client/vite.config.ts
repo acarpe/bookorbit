@@ -33,7 +33,6 @@ export default defineConfig({
         display: 'standalone',
         start_url: '/',
         scope: '/',
-        orientation: 'any',
         icons: [
           {
             src: 'pwa-64x64.png',
