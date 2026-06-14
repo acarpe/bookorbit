@@ -614,9 +614,9 @@ watch(
       />
     </section>
 
-    <main class="flex-1 min-h-0 overflow-y-auto pr-2">
+    <!-- Desktop filters panel rendered outside <main> so it stays anchored when the list is scrolled -->
+    <div v-if="filtersOpen && !mobileControlsExpanded" class="pr-2">
       <AuthorFilters
-        v-if="filtersOpen && !mobileControlsExpanded"
         v-model:library-id="libraryId"
         v-model:has-photo="hasPhoto"
         v-model:min-book-count="minBookCount"
@@ -626,7 +626,9 @@ watch(
         @clear="clearFilters"
         @close="closeFiltersPanel"
       />
+    </div>
 
+    <main class="flex-1 min-h-0 overflow-y-auto pr-2">
       <div v-if="error" class="mb-3 rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive">
         {{ error }}
       </div>

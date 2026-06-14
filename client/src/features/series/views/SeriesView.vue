@@ -450,10 +450,9 @@ watch(seriesGridGap, (value) => {
       />
     </section>
 
-    <main class="flex-1 min-h-0 overflow-y-auto pr-2">
-      <!-- Desktop filters panel -->
+    <!-- Desktop filters panel rendered outside <main> so it stays anchored when the list is scrolled -->
+    <div v-if="filtersOpen && !mobileControlsExpanded" class="pr-2">
       <SeriesFilters
-        v-if="filtersOpen && !mobileControlsExpanded"
         :library-id="libraryId"
         :libraries="libraries"
         :completion-status="completionStatus"
@@ -464,7 +463,9 @@ watch(seriesGridGap, (value) => {
         @clear="clearFilters"
         @close="closeFiltersPanel"
       />
+    </div>
 
+    <main class="flex-1 min-h-0 overflow-y-auto pr-2">
       <!-- Grid -->
       <div
         class="series-grid grid"

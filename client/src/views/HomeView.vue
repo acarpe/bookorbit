@@ -756,6 +756,67 @@ async function handleToggleCollapse() {
       </div>
     </section>
 
+    <!-- Filter builder panel rendered outside <main> so it stays anchored when the list is scrolled -->
+    <div v-if="filterOpen && !libraryNotFound" class="mb-4 p-3 rounded-md border border-border bg-card">
+      <div class="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <span class="text-xs font-medium text-muted-foreground sm:shrink-0">Filter rules</span>
+        <div class="flex w-full flex-wrap items-center gap-1.5 sm:w-auto sm:flex-nowrap">
+          <Tooltip>
+            <TooltipTrigger as-child>
+              <button
+                v-if="activeFilterCount > 0"
+                @click="saveAsSmartScopeOpen = true"
+                class="flex min-h-7 items-center gap-1.5 rounded-md border border-input bg-background px-3 py-1 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+              >
+                <Telescope :size="13" />
+                <span class="hidden sm:inline whitespace-nowrap">Save as Smart Scope</span>
+                <span class="sm:hidden whitespace-nowrap">Save Scope</span>
+              </button>
+            </TooltipTrigger>
+            <TooltipContent>Save this filter as a named Smart Scope</TooltipContent>
+          </Tooltip>
+          <Tooltip>
+            <TooltipTrigger as-child>
+              <button
+                v-if="activeFilterCount > 0"
+                @click="saveFilter"
+                class="flex min-h-7 items-center gap-1.5 rounded-md border px-3 py-1 text-xs font-medium transition-colors whitespace-nowrap"
+                :class="
+                  isFilterSaved
+                    ? 'border-primary/40 text-primary bg-primary/8'
+                    : 'border-input text-muted-foreground bg-background hover:text-foreground hover:bg-muted'
+                "
+              >
+                <BookmarkCheck v-if="isFilterSaved" :size="13" />
+                <Bookmark v-else :size="13" />
+                {{ isFilterSaved ? 'Saved' : 'Save filter' }}
+              </button>
+            </TooltipTrigger>
+            <TooltipContent>{{ isFilterSaved ? 'Filter saved' : 'Save filter for this library' }}</TooltipContent>
+          </Tooltip>
+          <Tooltip>
+            <TooltipTrigger as-child>
+              <button
+                v-if="hasSavedFilter"
+                @click="forgetSavedFilter"
+                class="h-6 w-6 flex items-center justify-center rounded text-muted-foreground/70 hover:text-destructive hover:bg-destructive/10 transition-colors"
+              >
+                <X :size="11" />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent>Remove saved filter</TooltipContent>
+          </Tooltip>
+          <button
+            class="min-h-7 whitespace-nowrap rounded-md border border-input px-2.5 py-1 text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+            @click="closeFilterPanel"
+          >
+            Close
+          </button>
+        </div>
+      </div>
+      <BookFilterBuilder v-model="filter" />
+    </div>
+
     <main :class="effectiveViewMode === 'table' ? 'flex-1 min-h-0 flex flex-col overflow-hidden' : 'flex-1 min-h-0 overflow-y-auto'">
       <EntityNotFound v-if="libraryNotFound" entity="Library" />
 
@@ -763,67 +824,6 @@ async function handleToggleCollapse() {
         <div v-if="error" class="text-sm text-destructive mb-4">{{ error }}</div>
 
         <ScanProgressBar :progress="scanProgress" class="mb-3" />
-
-        <!-- Filter builder panel -->
-        <div v-if="filterOpen" class="mb-4 p-3 rounded-md border border-border bg-card">
-          <div class="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-            <span class="text-xs font-medium text-muted-foreground sm:shrink-0">Filter rules</span>
-            <div class="flex w-full flex-wrap items-center gap-1.5 sm:w-auto sm:flex-nowrap">
-              <Tooltip>
-                <TooltipTrigger as-child>
-                  <button
-                    v-if="activeFilterCount > 0"
-                    @click="saveAsSmartScopeOpen = true"
-                    class="flex min-h-7 items-center gap-1.5 rounded-md border border-input bg-background px-3 py-1 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-                  >
-                    <Telescope :size="13" />
-                    <span class="hidden sm:inline whitespace-nowrap">Save as Smart Scope</span>
-                    <span class="sm:hidden whitespace-nowrap">Save Scope</span>
-                  </button>
-                </TooltipTrigger>
-                <TooltipContent>Save this filter as a named Smart Scope</TooltipContent>
-              </Tooltip>
-              <Tooltip>
-                <TooltipTrigger as-child>
-                  <button
-                    v-if="activeFilterCount > 0"
-                    @click="saveFilter"
-                    class="flex min-h-7 items-center gap-1.5 rounded-md border px-3 py-1 text-xs font-medium transition-colors whitespace-nowrap"
-                    :class="
-                      isFilterSaved
-                        ? 'border-primary/40 text-primary bg-primary/8'
-                        : 'border-input text-muted-foreground bg-background hover:text-foreground hover:bg-muted'
-                    "
-                  >
-                    <BookmarkCheck v-if="isFilterSaved" :size="13" />
-                    <Bookmark v-else :size="13" />
-                    {{ isFilterSaved ? 'Saved' : 'Save filter' }}
-                  </button>
-                </TooltipTrigger>
-                <TooltipContent>{{ isFilterSaved ? 'Filter saved' : 'Save filter for this library' }}</TooltipContent>
-              </Tooltip>
-              <Tooltip>
-                <TooltipTrigger as-child>
-                  <button
-                    v-if="hasSavedFilter"
-                    @click="forgetSavedFilter"
-                    class="h-6 w-6 flex items-center justify-center rounded text-muted-foreground/70 hover:text-destructive hover:bg-destructive/10 transition-colors"
-                  >
-                    <X :size="11" />
-                  </button>
-                </TooltipTrigger>
-                <TooltipContent>Remove saved filter</TooltipContent>
-              </Tooltip>
-              <button
-                class="min-h-7 whitespace-nowrap rounded-md border border-input px-2.5 py-1 text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-                @click="closeFilterPanel"
-              >
-                Close
-              </button>
-            </div>
-          </div>
-          <BookFilterBuilder v-model="filter" />
-        </div>
 
         <!-- Empty state: no matches with filters -->
         <div
