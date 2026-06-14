@@ -1,5 +1,5 @@
 import { IsArray, IsBoolean, IsInt, IsNumber, IsOptional, IsString, Max, MaxLength, Min, ValidateNested } from 'class-validator';
-import { Type } from 'class-transformer';
+import { Transform, Type } from 'class-transformer';
 
 export class AudiobookChapterDto {
   @IsString() title!: string;
@@ -35,7 +35,8 @@ export class UpdateBookMetadataDto {
   @IsOptional() @IsString() @MaxLength(500) publisher?: string | null;
   @IsOptional() @IsInt() @Min(1000) @Max(2200) publishedYear?: number | null;
   @IsOptional() @IsString() @MaxLength(100) language?: string | null;
-  @IsOptional() @IsInt() @Min(1) pageCount?: number | null;
+  // A provider page count of 0 (e.g. Google Books returns 0 when unknown) means "unknown"; normalize it to null instead of rejecting it (issue #329).
+  @IsOptional() @Transform(({ value }) => (value === 0 ? null : value)) @IsInt() @Min(1) pageCount?: number | null;
   @IsOptional() @IsString() @MaxLength(500) seriesName?: string | null;
   @IsOptional() @IsNumber() seriesIndex?: number | null;
   @IsOptional() @IsString() @MaxLength(10) isbn10?: string | null;

@@ -188,6 +188,49 @@ describe('useMetadataEditor', () => {
     })
   })
 
+  it('normalizes a zero page count to null in the save payload', async () => {
+    const book = makeBook({ pageCount: 320 })
+    apiMock.mockResolvedValue({ ok: true, json: async () => book })
+
+    const { form, load, save } = useMetadataEditor()
+    load(book)
+    form.pageCount = 0
+    await save(book.id, [])
+
+    const [, req] = apiMock.mock.calls[0] as [string, RequestInit]
+    const { metadata } = JSON.parse(String(req.body)) as { metadata: Record<string, unknown> }
+    expect(metadata.pageCount).toBeNull()
+  })
+
+  it('sends a positive page count change unchanged', async () => {
+    const book = makeBook({ pageCount: null })
+    apiMock.mockResolvedValue({ ok: true, json: async () => book })
+
+    const { form, load, save } = useMetadataEditor()
+    load(book)
+    form.pageCount = 250
+    await save(book.id, [])
+
+    const [, req] = apiMock.mock.calls[0] as [string, RequestInit]
+    const { metadata } = JSON.parse(String(req.body)) as { metadata: Record<string, unknown> }
+    expect(metadata.pageCount).toBe(250)
+  })
+
+  it('omits an unchanged page count when a zero normalizes to the existing null', async () => {
+    const book = makeBook({ pageCount: null })
+    apiMock.mockResolvedValue({ ok: true, json: async () => book })
+
+    const { form, load, save } = useMetadataEditor()
+    load(book)
+    form.pageCount = 0
+    await save(book.id, [])
+
+    const [url, req] = apiMock.mock.calls[0] as [string, RequestInit]
+    const { metadata } = JSON.parse(String(req.body)) as { metadata: Record<string, unknown> }
+    expect(metadata).not.toHaveProperty('pageCount')
+    expect(url).toBe('/api/v1/books/1/metadata-and-locks')
+  })
+
   it('can save lock-only changes through the atomic endpoint without metadata fields', async () => {
     const book = makeBook()
     apiMock.mockResolvedValue({ ok: true, json: async () => ({ ...book, lockedFields: ['title'] }) })
@@ -202,5 +245,30 @@ describe('useMetadataEditor', () => {
       metadata: {},
       lockedFields: ['title'],
     })
+  })
+
+  it('reset restores the loaded snapshot and clears the dirty flag', () => {
+    const book = makeBook({ title: 'Original Title' })
+
+    const { form, load, reset, isDirty } = useMetadataEditor()
+    load(book)
+    form.title = 'Changed Title'
+    expect(isDirty.value).toBe(true)
+
+    reset()
+    expect(form.title).toBe('Original Title')
+    expect(isDirty.value).toBe(false)
+  })
+
+  it('captures an error message when the save request fails', async () => {
+    const book = makeBook()
+    apiMock.mockResolvedValue({ ok: false, status: 400 })
+
+    const { load, save, error } = useMetadataEditor()
+    load(book)
+    const result = await save(book.id, [])
+
+    expect(result).toBeNull()
+    expect(error.value).toBe('HTTP 400')
   })
 })

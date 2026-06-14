@@ -174,6 +174,27 @@ describe('Book DTO validation', () => {
     expect((await errorsFor(UpdateBookMetadataDto, { isbn10: '12345678901' })).length).toBeGreaterThan(0);
   });
 
+  it('normalizes a zero page count to null and validates other page count values', async () => {
+    // A provider can return a page count of 0 (issue #329); it must normalize to null instead of failing validation.
+    const zeroed = plainToInstance(UpdateBookMetadataDto, { pageCount: 0 });
+    expect((await validate(zeroed)).length).toBe(0);
+    expect(zeroed.pageCount).toBeNull();
+
+    const valid = plainToInstance(UpdateBookMetadataDto, { pageCount: 320 });
+    expect((await validate(valid)).length).toBe(0);
+    expect(valid.pageCount).toBe(320);
+
+    expect((await errorsFor(UpdateBookMetadataDto, { pageCount: null })).length).toBe(0);
+    expect((await errorsFor(UpdateBookMetadataDto, { pageCount: -5 })).length).toBeGreaterThan(0);
+    expect((await errorsFor(UpdateBookMetadataDto, { pageCount: 12.5 })).length).toBeGreaterThan(0);
+  });
+
+  it('validates nested comicMetadata fields', async () => {
+    expect((await errorsFor(UpdateBookMetadataDto, { comicMetadata: { issueNumber: '1', characters: ['Batman'] } })).length).toBe(0);
+    expect((await errorsFor(UpdateBookMetadataDto, { comicMetadata: { issueNumber: 1 } })).length).toBeGreaterThan(0);
+    expect((await errorsFor(UpdateBookMetadataDto, { comicMetadata: { characters: [1] } })).length).toBeGreaterThan(0);
+  });
+
   it('validates inline-edit single-field patches for table view use cases', async () => {
     // Single title patch
     expect((await errorsFor(UpdateBookMetadataDto, { title: 'New Title' })).length).toBe(0);
