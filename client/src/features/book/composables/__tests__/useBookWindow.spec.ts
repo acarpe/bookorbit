@@ -418,7 +418,7 @@ describe('useBookWindow', () => {
     const { window } = makeWindow()
     await flush()
 
-    window.booksProxy.value = window.booksProxy.value
+    window.booksProxy.value = [...window.booksProxy.value]
     expect(window.total.value).toBe(20)
     expect(window.loadedCards.value).toHaveLength(20)
   })

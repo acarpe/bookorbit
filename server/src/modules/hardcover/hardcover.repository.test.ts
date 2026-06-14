@@ -142,6 +142,27 @@ describe('HardcoverRepository', () => {
     expect(updateChain.set).toHaveBeenCalledWith({ lastSyncedAt: syncedAt });
   });
 
+  it('findSyncableBooks selects the local pageCount and format', async () => {
+    const { repo, db } = makeRepository();
+    const selectArgs: Array<Record<string, unknown>> = [];
+    const chain: Record<string, unknown> = {};
+    for (const method of ['from', 'innerJoin', 'leftJoin', 'where', 'groupBy', 'as']) {
+      chain[method] = vi.fn().mockReturnValue(chain);
+    }
+    chain.then = (resolve: (rows: unknown[]) => void) => resolve([]);
+    db.select.mockImplementation((cols: Record<string, unknown>) => {
+      selectArgs.push(cols);
+      return chain;
+    });
+
+    await repo.findSyncableBooks(7);
+
+    const mainSelect = selectArgs.find((cols) => cols && 'bookId' in cols && 'status' in cols);
+    expect(mainSelect).toBeDefined();
+    expect(mainSelect).toHaveProperty('pageCount');
+    expect(mainSelect).toHaveProperty('format');
+  });
+
   it('findSyncableBook returns a book from findSyncableBooks', async () => {
     const { repo } = makeRepository();
     const findSyncableBooksForUser = vi.spyOn(repo as any, 'findSyncableBooksForUser');

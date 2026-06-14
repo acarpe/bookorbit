@@ -206,7 +206,7 @@ describe('useBookViewWindow', () => {
     expect(win.activeBucketKey.value).toBe('A')
     expect(typeof win.railGutterReserved.value).toBe('boolean')
 
-    const scrollTo = vi.fn()
+    const scrollTo = vi.fn<(index: number) => void>()
     win.registerScroller(scrollTo)
     fetchMock.mockClear()
 

@@ -16,6 +16,8 @@ export interface BookSyncData {
   title: string | null;
   authorName: string | null;
   hardcoverMetadataId: string | null;
+  pageCount: number | null;
+  format: string | null;
   status: string;
   startedAt: Date | null;
   finishedAt: Date | null;
@@ -149,6 +151,8 @@ export class HardcoverRepository {
         title: schema.bookMetadata.title,
         authorName: firstAuthorSq.authorName,
         hardcoverMetadataId: schema.bookMetadata.hardcoverId,
+        pageCount: schema.bookMetadata.pageCount,
+        format: schema.bookFiles.format,
         status: schema.userBookStatus.status,
         startedAt: schema.userBookStatus.startedAt,
         finishedAt: schema.userBookStatus.finishedAt,
@@ -164,6 +168,7 @@ export class HardcoverRepository {
       .leftJoin(schema.userBookRatings, and(eq(schema.userBookRatings.bookId, schema.books.id), eq(schema.userBookRatings.userId, userId)))
       .leftJoin(maxProgressSq, eq(maxProgressSq.bookId, schema.books.id))
       .leftJoin(firstAuthorSq, eq(firstAuthorSq.bookId, schema.books.id))
+      .leftJoin(schema.bookFiles, eq(schema.bookFiles.id, schema.books.primaryFileId))
       .where(bookFilter);
 
     return rows as BookSyncData[];
