@@ -30,7 +30,7 @@ export function useBookWindow(options: { endpoint: Ref<string | null>; query: Re
   const initialized = shallowRef(false)
   const error = shallowRef<string | null>(null)
 
-  const inFlight = new Set<number>()
+  const inFlight = new Map<number, Promise<void>>()
   const failedAt = new Map<number, number>()
   let generation = 0
   let controller: AbortController | null = null
@@ -58,13 +58,24 @@ export function useBookWindow(options: { endpoint: Ref<string | null>; query: Re
     return true
   }
 
-  async function fetchBlock(block: number) {
+  // Returns the block's load promise so callers (e.g. list-mode load-more) can
+  // await the fetch instead of firing it and racing the result. A block already
+  // in flight returns its existing promise rather than starting a second fetch.
+  function fetchBlock(block: number): Promise<void> {
+    const existing = inFlight.get(block)
+    if (existing) return existing
+    if (!options.endpoint.value) return Promise.resolve()
+    const promise = loadBlock(block)
+    inFlight.set(block, promise)
+    return promise
+  }
+
+  async function loadBlock(block: number) {
     const endpoint = options.endpoint.value
     if (!endpoint) return
 
     const gen = generation
     const signal = controller?.signal
-    inFlight.add(block)
     loading.value = true
 
     try {
@@ -106,9 +117,9 @@ export function useBookWindow(options: { endpoint: Ref<string | null>; query: Re
     }
   }
 
-  function ensureRange(startIndex: number, endIndex: number) {
-    if (!options.endpoint.value) return
-    if (initialized.value && total.value === 0 && failedAt.size === 0) return
+  function ensureRange(startIndex: number, endIndex: number): Promise<void> {
+    if (!options.endpoint.value) return Promise.resolve()
+    if (initialized.value && total.value === 0 && failedAt.size === 0) return Promise.resolve()
     const start = Math.max(0, startIndex)
     let end = Math.max(start, endIndex)
     if (total.value > 0) end = Math.min(end, total.value - 1)
@@ -116,13 +127,19 @@ export function useBookWindow(options: { endpoint: Ref<string | null>; query: Re
 
     const firstBlock = Math.floor(start / BOOK_WINDOW_BLOCK_SIZE)
     const lastBlock = Math.floor(end / BOOK_WINDOW_BLOCK_SIZE)
+    const pending: Promise<void>[] = []
     for (let block = firstBlock; block <= lastBlock; block++) {
-      if (inFlight.has(block)) continue
+      const existing = inFlight.get(block)
+      if (existing) {
+        pending.push(existing)
+        continue
+      }
       const failed = failedAt.get(block)
       if (failed !== undefined && Date.now() - failed < FAILED_BLOCK_RETRY_MS) continue
       if (initialized.value && blockFullyLoaded(block)) continue
-      void fetchBlock(block)
+      pending.push(fetchBlock(block))
     }
+    return pending.length > 0 ? Promise.all(pending).then(() => undefined) : Promise.resolve()
   }
 
   function invalidateInFlight() {

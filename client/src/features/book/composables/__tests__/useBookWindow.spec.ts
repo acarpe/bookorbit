@@ -244,4 +244,203 @@ describe('useBookWindow', () => {
     expect(window.total.value).toBe(299)
     expect(isBookPlaceholder(window.slots.value[100]!)).toBe(true)
   })
+
+  it('ensureRange resolves only after the requested block has finished loading', async () => {
+    mockBlocks(500)
+    const { window } = makeWindow()
+    await flush()
+
+    let resolveBlock: ((value: unknown) => void) | undefined
+    fetchMock.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveBlock = resolve
+        }),
+    )
+
+    let settled = false
+    const pending = window.ensureRange(150, 199).then(() => {
+      settled = true
+    })
+    await flush()
+    expect(settled).toBe(false)
+    expect(isBookPlaceholder(window.slots.value[150]!)).toBe(true)
+
+    resolveBlock?.({ ok: true, json: () => Promise.resolve(pageFor(1, 500)) })
+    await pending
+    expect(settled).toBe(true)
+    expect(isBookPlaceholder(window.slots.value[150]!)).toBe(false)
+  })
+
+  it('ensureRange resolves immediately without fetching when the range is already loaded', async () => {
+    mockBlocks(50)
+    const { window } = makeWindow()
+    await flush()
+    fetchMock.mockClear()
+
+    await window.ensureRange(0, 49)
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it('ensureRange resolves even when the block fails to load', async () => {
+    mockBlocks(300)
+    const { window } = makeWindow()
+    await flush()
+    fetchMock.mockClear()
+    fetchMock.mockResolvedValueOnce({ ok: false, status: 500 })
+
+    let settled = false
+    await window.ensureRange(100, 150).then(() => {
+      settled = true
+    })
+
+    expect(settled).toBe(true)
+    expect(requestedBlocks()).toEqual([1])
+    expect(window.error.value).toBe('HTTP 500')
+  })
+
+  it('ensureRange awaits an already in-flight block rather than starting a second fetch', async () => {
+    mockBlocks(500)
+    const { window } = makeWindow()
+    await flush()
+    fetchMock.mockClear()
+
+    let resolveBlock: ((value: unknown) => void) | undefined
+    fetchMock.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveBlock = resolve
+        }),
+    )
+
+    let firstSettled = false
+    let secondSettled = false
+    const first = window.ensureRange(150, 199).then(() => {
+      firstSettled = true
+    })
+    const second = window.ensureRange(150, 199).then(() => {
+      secondSettled = true
+    })
+    await flush()
+    expect(requestedBlocks()).toEqual([1])
+    expect(firstSettled).toBe(false)
+    expect(secondSettled).toBe(false)
+
+    resolveBlock?.({ ok: true, json: () => Promise.resolve(pageFor(1, 500)) })
+    await Promise.all([first, second])
+    expect(firstSettled).toBe(true)
+    expect(secondSettled).toBe(true)
+  })
+
+  it('retry refetches previously failed blocks and clears the error', async () => {
+    fetchMock.mockResolvedValueOnce({ ok: false, status: 500 })
+    const { window } = makeWindow()
+    await flush()
+    expect(window.error.value).toBe('HTTP 500')
+
+    fetchMock.mockClear()
+    mockBlocks(120)
+    window.retry()
+    await flush()
+
+    expect(requestedBlocks()).toEqual([0])
+    expect(window.error.value).toBeNull()
+    expect(window.total.value).toBe(120)
+  })
+
+  it('retry reloads from scratch when the listing is empty', async () => {
+    mockBlocks(0)
+    const { window } = makeWindow()
+    await flush()
+    expect(window.total.value).toBe(0)
+
+    fetchMock.mockClear()
+    mockBlocks(40)
+    window.retry()
+    await flush()
+
+    expect(requestedBlocks()).toEqual([0])
+    expect(window.total.value).toBe(40)
+  })
+
+  it('retry re-ensures the first block without refetching what is already loaded', async () => {
+    mockBlocks(250)
+    const { window } = makeWindow()
+    await flush()
+    fetchMock.mockClear()
+
+    window.retry()
+    await flush()
+
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it('booksProxy reconciles assignments by id (remove, update, prepend)', async () => {
+    mockBlocks(50)
+    const { window } = makeWindow()
+    await flush()
+    expect(window.booksProxy.value).toHaveLength(50)
+
+    const current = window.booksProxy.value
+    window.booksProxy.value = [
+      makeBook(900),
+      ...current.filter((card) => card.id !== 1).map((card) => (card.id === 2 ? makeBook(2, { title: 'Renamed' }) : card)),
+    ]
+
+    const ids = window.loadedCards.value.map((card) => card.id)
+    expect(ids).not.toContain(1)
+    expect(ids).toContain(900)
+    expect((window.loadedCards.value.find((card) => card.id === 2) as BookCard).title).toBe('Renamed')
+    expect(window.total.value).toBe(50)
+  })
+
+  it('removeBooks is a no-op when none of the ids are loaded', async () => {
+    mockBlocks(20)
+    const { window } = makeWindow()
+    await flush()
+
+    window.removeBooks([9999])
+    expect(window.total.value).toBe(20)
+    expect(window.slots.value).toHaveLength(20)
+  })
+
+  it('prependBooks ignores cards whose ids are already loaded', async () => {
+    mockBlocks(20)
+    const { window } = makeWindow()
+    await flush()
+
+    window.prependBooks([makeBook(1), makeBook(2)])
+    expect(window.total.value).toBe(20)
+  })
+
+  it('booksProxy assignment with no structural change leaves the window untouched', async () => {
+    mockBlocks(20)
+    const { window } = makeWindow()
+    await flush()
+
+    window.booksProxy.value = window.booksProxy.value
+    expect(window.total.value).toBe(20)
+    expect(window.loadedCards.value).toHaveLength(20)
+  })
+
+  it('updateBook is a no-op when the id is not loaded', async () => {
+    mockBlocks(20)
+    const { window } = makeWindow()
+    await flush()
+
+    const before = window.slots.value
+    window.updateBook(makeBook(9999, { title: 'Ghost' }))
+    expect(window.slots.value).toBe(before)
+  })
+
+  it('booksProxy replaces a card in place when only its contents change', async () => {
+    mockBlocks(20)
+    const { window } = makeWindow()
+    await flush()
+
+    window.booksProxy.value = window.booksProxy.value.map((card) => (card.id === 5 ? makeBook(5, { title: 'Updated' }) : card))
+
+    expect((window.loadedCards.value.find((card) => card.id === 5) as BookCard).title).toBe('Updated')
+    expect(window.total.value).toBe(20)
+  })
 })

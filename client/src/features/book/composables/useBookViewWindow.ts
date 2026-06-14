@@ -90,7 +90,7 @@ export function useBookViewWindow(options: {
 
   function loadMorePrefix() {
     const start = window.contiguousPrefix.value.length
-    window.ensureRange(start, start + LIST_CHUNK - 1)
+    return window.ensureRange(start, start + LIST_CHUNK - 1)
   }
 
   return {

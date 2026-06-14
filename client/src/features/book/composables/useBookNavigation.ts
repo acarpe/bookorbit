@@ -17,9 +17,22 @@ const positionById = computed(() => {
   return map
 })
 
+// Skip the reassignment when the listing is structurally identical. A re-sync
+// with the same ids/indexes (e.g. while a lazy block is still in flight) must
+// not invalidate `entries`, or watchers that recompute the next/prev id would
+// fire in a loop and starve the in-flight fetch.
+function sameEntries(a: NavEntry[], b: NavEntry[]): boolean {
+  if (a.length !== b.length) return false
+  for (let i = 0; i < a.length; i++) {
+    if (a[i]!.id !== b[i]!.id || a[i]!.index !== b[i]!.index) return false
+  }
+  return true
+}
+
 export function useBookNavigation() {
   const setBookContext = (ids: number[], totalCount: number) => {
-    entries.value = ids.map((id, index) => ({ id, index }))
+    const next = ids.map((id, index) => ({ id, index }))
+    if (!sameEntries(entries.value, next)) entries.value = next
     total.value = totalCount
   }
 
@@ -29,7 +42,7 @@ export function useBookNavigation() {
       const slot = slots[i]!
       if (!isBookPlaceholder(slot)) next.push({ id: slot.id, index: i })
     }
-    entries.value = next
+    if (!sameEntries(entries.value, next)) entries.value = next
     total.value = totalCount
   }
 

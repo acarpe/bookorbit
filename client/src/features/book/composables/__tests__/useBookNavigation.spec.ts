@@ -1,3 +1,4 @@
+import { nextTick, watch } from 'vue'
 import { afterEach, describe, expect, it } from 'vitest'
 import type { BookCard } from '@bookorbit/types'
 import { useBookNavigation } from '../useBookNavigation'
@@ -137,6 +138,47 @@ describe('useBookNavigation', () => {
       nav.registerLoadMore(async () => {})
 
       expect(await nav.getNextId(2)).toBe(null)
+    })
+  })
+
+  describe('re-sync stability (boundary loop guard)', () => {
+    it('does not invalidate bookIds when the slot context is structurally unchanged', async () => {
+      const nav = useBookNavigation()
+      nav.setBookSlotContext([makeBook(1), makeBook(2), makeBook(3)], 100)
+
+      let fires = 0
+      const stop = watch(nav.bookIds, () => {
+        fires++
+      })
+
+      // A re-sync with the same ids/indexes (e.g. while a lazy block is still
+      // in flight) must not retrigger watchers that recompute next/prev id.
+      nav.setBookSlotContext([makeBook(1), makeBook(2), makeBook(3)], 100)
+      await nextTick()
+      expect(fires).toBe(0)
+
+      // A genuine change still propagates.
+      nav.setBookSlotContext([makeBook(1), makeBook(2), makeBook(3), makeBook(4)], 100)
+      await nextTick()
+      expect(fires).toBe(1)
+
+      stop()
+    })
+
+    it('does not invalidate bookIds when the fully-loaded context is unchanged', async () => {
+      const nav = useBookNavigation()
+      nav.setBookContext([1, 2, 3], 3)
+
+      let fires = 0
+      const stop = watch(nav.bookIds, () => {
+        fires++
+      })
+
+      nav.setBookContext([1, 2, 3], 3)
+      await nextTick()
+      expect(fires).toBe(0)
+
+      stop()
     })
   })
 })
