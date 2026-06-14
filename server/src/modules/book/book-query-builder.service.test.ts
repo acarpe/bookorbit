@@ -86,6 +86,8 @@ function buildValueFor(operator: RuleOperator, field: RuleField): { value?: unkn
     case 'isUnread':
     case 'isInProgress':
     case 'isFinished':
+    case 'isLocked':
+    case 'isUnlocked':
       return {};
     case 'contains':
     case 'notContains':
@@ -1137,6 +1139,33 @@ describe('coverRuleToSql', () => {
     const { builder } = makeBuilder();
     const where = builder.buildWhere(wrapRule({ type: 'rule', field: 'cover', operator: 'isPresent' }) as never, BASE_CTX) as any;
     expect(getRuleSql(where)).toMatchObject({ type: 'isNotNull' });
+  });
+});
+
+describe('lockStatusRuleToSql', () => {
+  it('isLocked produces cardinality(lockedFields) > 0', () => {
+    const { builder } = makeBuilder();
+    const where = builder.buildWhere(wrapRule({ type: 'rule', field: 'lockStatus', operator: 'isLocked' }) as never, BASE_CTX) as any;
+    const clause = getRuleSql(where);
+    expect(clause).toMatchObject({ type: 'sql' });
+    expect(clause.text).toContain('cardinality');
+    expect(clause.text).toContain('> 0');
+  });
+
+  it('isUnlocked produces cardinality(lockedFields) = 0', () => {
+    const { builder } = makeBuilder();
+    const where = builder.buildWhere(wrapRule({ type: 'rule', field: 'lockStatus', operator: 'isUnlocked' }) as never, BASE_CTX) as any;
+    const clause = getRuleSql(where);
+    expect(clause).toMatchObject({ type: 'sql' });
+    expect(clause.text).toContain('cardinality');
+    expect(clause.text).toContain('= 0');
+  });
+
+  it('rejects an invalid operator for lockStatus', () => {
+    const { builder } = makeBuilder();
+    expect(() => builder.buildWhere(wrapRule({ type: 'rule', field: 'lockStatus', operator: 'isPresent' }) as never, BASE_CTX)).toThrow(
+      BadRequestException,
+    );
   });
 });
 

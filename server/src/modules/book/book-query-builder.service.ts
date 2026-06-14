@@ -167,6 +167,8 @@ export class BookQueryBuilder {
         return this.numericRuleToSql(bookMetadata.metadataScore, operator, value as number, valueTo as number | undefined);
       case 'cover':
         return this.coverRuleToSql(operator);
+      case 'lockStatus':
+        return this.lockStatusRuleToSql(operator);
       default:
         throw new BadRequestException(`Unknown filter field: ${String(field)}`);
     }
@@ -486,6 +488,17 @@ export class BookQueryBuilder {
         return isNotNull(bookMetadata.coverSource);
       default:
         throw new BadRequestException(`Invalid operator '${operator}' for cover field`);
+    }
+  }
+
+  private lockStatusRuleToSql(operator: string): SQL {
+    switch (operator) {
+      case 'isLocked':
+        return sql`coalesce(cardinality(${bookMetadata.lockedFields}), 0) > 0`;
+      case 'isUnlocked':
+        return sql`coalesce(cardinality(${bookMetadata.lockedFields}), 0) = 0`;
+      default:
+        throw new BadRequestException(`Invalid operator '${operator}' for lockStatus field`);
     }
   }
 

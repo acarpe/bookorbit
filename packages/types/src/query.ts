@@ -14,6 +14,7 @@
  * - `library` - resolved via `books.library_id` join to `libraries.name`
  * - `format` - resolved via `book_files.format` (primary file)
  * - `isbn` - matches both `isbn10` and `isbn13` in `book_metadata`
+ * - `lockStatus` - derived from `book_metadata.locked_fields` (non-empty array = locked)
  */
 export type RuleField =
   | "title"
@@ -39,7 +40,8 @@ export type RuleField =
   | "description"
   | "isbn"
   | "metadataScore"
-  | "cover";
+  | "cover"
+  | "lockStatus";
 
 export type RuleOperator =
   | "contains"
@@ -65,7 +67,9 @@ export type RuleOperator =
   | "isPresent"
   | "isUnread"
   | "isInProgress"
-  | "isFinished";
+  | "isFinished"
+  | "isLocked"
+  | "isUnlocked";
 
 export const FIELD_OPERATORS: Record<RuleField, RuleOperator[]> = {
   title: ["contains", "notContains", "startsWith", "endsWith", "eq", "notEq", "isEmpty", "isNotEmpty"],
@@ -92,6 +96,7 @@ export const FIELD_OPERATORS: Record<RuleField, RuleOperator[]> = {
   isbn: ["isEmpty", "isNotEmpty", "eq"],
   metadataScore: ["gt", "gte", "lt", "lte", "between", "isEmpty", "isNotEmpty"],
   cover: ["isMissing", "isPresent"],
+  lockStatus: ["isLocked", "isUnlocked"],
 };
 
 export const RULE_FIELDS = Object.keys(FIELD_OPERATORS) as RuleField[];
@@ -121,6 +126,8 @@ export const RULE_OPERATORS: RuleOperator[] = [
   "isUnread",
   "isInProgress",
   "isFinished",
+  "isLocked",
+  "isUnlocked",
 ];
 
 export type Rule = {

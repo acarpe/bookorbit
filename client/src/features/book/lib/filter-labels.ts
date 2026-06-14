@@ -48,6 +48,7 @@ export const FIELD_LABELS: Record<RuleField, string> = {
   isbn: 'ISBN',
   metadataScore: 'Metadata Score',
   cover: 'Cover',
+  lockStatus: 'Lock Status',
 }
 
 export const OPERATOR_LABELS: Record<RuleOperator, string> = {
@@ -75,9 +76,21 @@ export const OPERATOR_LABELS: Record<RuleOperator, string> = {
   isUnread: 'is unread',
   isInProgress: 'is in progress',
   isFinished: 'is finished',
+  isLocked: 'is locked',
+  isUnlocked: 'is unlocked',
 }
 
-const NO_VALUE_OPS: RuleOperator[] = ['isEmpty', 'isNotEmpty', 'isMissing', 'isPresent', 'isUnread', 'isInProgress', 'isFinished']
+const NO_VALUE_OPS: RuleOperator[] = [
+  'isEmpty',
+  'isNotEmpty',
+  'isMissing',
+  'isPresent',
+  'isUnread',
+  'isInProgress',
+  'isFinished',
+  'isLocked',
+  'isUnlocked',
+]
 
 export function ruleToParts(rule: Rule): { field: string; operator: string; value: string | null } {
   const field = FIELD_LABELS[rule.field] ?? rule.field
