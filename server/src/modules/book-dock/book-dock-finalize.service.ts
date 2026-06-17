@@ -14,6 +14,7 @@ import type {
 import { NotificationType, resolveUploadPath } from '@bookorbit/types';
 import { NotificationService } from '../notification/notification.service';
 import { SeriesIdentityService } from '../../common/services/series-identity.service';
+import { SeriesMembershipService } from '../../common/services/series-membership.service';
 import { formatSeriesIndex } from '../../common/utils/series-index-format.utils';
 import { DB } from '../../db';
 import * as schema from '../../db/schema';
@@ -72,6 +73,7 @@ export class BookDockFinalizeService implements OnModuleInit {
     private readonly gateway: BookDockGateway,
     private readonly notificationService: NotificationService,
     @Optional() private readonly seriesIdentity?: SeriesIdentityService,
+    @Optional() private readonly seriesMemberships?: SeriesMembershipService,
   ) {}
 
   onModuleInit() {
@@ -591,6 +593,7 @@ export class BookDockFinalizeService implements OnModuleInit {
       .update(bookMetadata)
       .set({ ...patch, ...buildAudioMetadataPatch(audio) })
       .where(eq(bookMetadata.bookId, bookId));
+    await this.seriesMemberships?.syncPrimaryFromMetadata(bookId);
 
     if (meta.authors.length > 0) {
       await this.metadataService.replaceAuthors(
