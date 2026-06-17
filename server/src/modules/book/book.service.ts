@@ -16,6 +16,7 @@ import { inArray, type SQL } from 'drizzle-orm';
 import { bookCoverDirPath, bookThumbnailPath, findPreferredBookCoverFileName } from '../../common/book-cover-storage';
 import { MAX_BOOK_QUERY_OFFSET_ROWS, isBookQueryOffsetWithinLimit } from '../../common/constants/pagination.constants';
 import { sanitizeLogValue } from '../../common/utils/log-sanitize.utils';
+import { formatSeriesIndex } from '../../common/utils/series-index-format.utils';
 import { isDateKey, resolveTimeZone, toDateKeyInTimeZone, toTimeZoneStartOfDay } from '../../common/utils/timezone.utils';
 import { extractEpubMetadata } from '../metadata/lib/epub';
 import { extractAudioMetadata } from '../metadata/extractors/audio.extractor';
@@ -1070,14 +1071,6 @@ export class BookService {
     }
   }
 
-  private formatSeriesIndex(value: number | null): string | null {
-    if (value == null) return null;
-    const whole = Math.floor(value);
-    const fraction = value - whole;
-    const padded = String(whole).padStart(2, '0');
-    return fraction > 0 ? `${padded}.${String(fraction).split('.')[1]}` : padded;
-  }
-
   private sanitizeFilenameSegment(raw: string, fallback = 'download'): string {
     const fallbackSafe =
       fallback
@@ -1145,7 +1138,7 @@ export class BookService {
     if (meta.publishedYear) tokens['year'] = String(meta.publishedYear);
     if (meta.seriesName) tokens['series'] = meta.seriesName;
 
-    const seriesIndex = this.formatSeriesIndex(meta.seriesIndex);
+    const seriesIndex = formatSeriesIndex(meta.seriesIndex);
     if (seriesIndex) tokens['seriesIndex'] = seriesIndex;
     if (meta.authors.length > 0) tokens['authors'] = meta.authors.join(', ');
 
