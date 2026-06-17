@@ -2,19 +2,19 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import type { NotificationItem } from '@bookorbit/types'
 import { NotificationType } from '@bookorbit/types'
 
-const mockApi = vi.fn()
-const mockGetAccessToken = vi.fn().mockReturnValue('token')
+const mockApi = vi.fn<(...args: unknown[]) => unknown>()
+const mockGetAccessToken = vi.fn<(...args: unknown[]) => unknown>().mockReturnValue('token')
 vi.mock('@/lib/api', () => ({
   api: (...args: unknown[]) => mockApi(...args),
   getAccessToken: () => mockGetAccessToken(),
 }))
 
-const mockIo = vi.fn()
+const mockIo = vi.fn<(...args: unknown[]) => unknown>()
 vi.mock('socket.io-client', () => ({
   io: (...args: unknown[]) => mockIo(...args),
 }))
 
-const mockShowAchievementToast = vi.fn()
+const mockShowAchievementToast = vi.fn<(...args: unknown[]) => unknown>()
 vi.mock('@/features/achievements/utils/achievementToast', () => ({
   showAchievementToast: (...args: unknown[]) => mockShowAchievementToast(...args),
 }))
@@ -43,10 +43,10 @@ function makeNotification(overrides: Partial<NotificationItem> = {}): Notificati
 
 function makeMockSocket() {
   return {
-    on: vi.fn(),
-    off: vi.fn(),
-    disconnect: vi.fn(),
-    emit: vi.fn(),
+    on: vi.fn<(...args: unknown[]) => unknown>(),
+    off: vi.fn<(...args: unknown[]) => unknown>(),
+    disconnect: vi.fn<(...args: unknown[]) => unknown>(),
+    emit: vi.fn<(...args: unknown[]) => unknown>(),
     connected: false,
   }
 }
@@ -91,7 +91,7 @@ describe('useNotifications', () => {
       const { subscribe } = useNotifications()
       subscribe()
 
-      const notificationNewHandler = mockSocket.on.mock.calls.find(([event]: [string]) => event === 'notification:new')?.[1] as
+      const notificationNewHandler = mockSocket.on.mock.calls.find(([event]: unknown[]) => event === 'notification:new')?.[1] as
         | ((item: NotificationItem) => void)
         | undefined
 
@@ -116,7 +116,7 @@ describe('useNotifications', () => {
       const { subscribe } = useNotifications()
       subscribe()
 
-      const notificationNewHandler = mockSocket.on.mock.calls.find(([event]: [string]) => event === 'notification:new')?.[1] as (
+      const notificationNewHandler = mockSocket.on.mock.calls.find(([event]: unknown[]) => event === 'notification:new')?.[1] as (
         item: NotificationItem,
       ) => void
 
@@ -137,7 +137,7 @@ describe('useNotifications', () => {
       const { subscribe } = useNotifications()
       subscribe()
 
-      const notificationNewHandler = mockSocket.on.mock.calls.find(([event]: [string]) => event === 'notification:new')?.[1] as (
+      const notificationNewHandler = mockSocket.on.mock.calls.find(([event]: unknown[]) => event === 'notification:new')?.[1] as (
         item: NotificationItem,
       ) => void
 
@@ -161,7 +161,7 @@ describe('useNotifications', () => {
       const useNotifications = await loadModule()
       const { subscribe } = useNotifications()
       subscribe()
-      return mockSocket.on.mock.calls.find(([event]: [string]) => event === 'notification:new')?.[1] as (item: NotificationItem) => void
+      return mockSocket.on.mock.calls.find(([event]: unknown[]) => event === 'notification:new')?.[1] as (item: NotificationItem) => void
     }
 
     it('uses message as name when present', async () => {

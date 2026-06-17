@@ -166,8 +166,8 @@ describe('mergeBookCardWithDetail', () => {
     const detail = makeDetail({
       audioMetadata: {
         narrators: [
-          { id: 1, name: 'Narrator One' },
-          { id: 2, name: 'Narrator Two' },
+          { id: 1, name: 'Narrator One', sortName: null, displayOrder: 0 },
+          { id: 2, name: 'Narrator Two', sortName: null, displayOrder: 1 },
         ],
         durationSeconds: 3600,
         abridged: false,
@@ -187,7 +187,7 @@ describe('mergeBookCardWithDetail', () => {
 
   it('returns empty narrators array when audioMetadata is undefined', () => {
     const detail = makeDetail()
-    ;(detail as BookDetail & { audioMetadata: undefined }).audioMetadata = undefined as unknown as null
+    ;(detail as { audioMetadata: unknown }).audioMetadata = undefined
     const result = mergeBookCardWithDetail(makeBook(), detail)
     expect(result.narrators).toEqual([])
   })

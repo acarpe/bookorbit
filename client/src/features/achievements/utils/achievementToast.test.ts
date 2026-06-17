@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 
-vi.mock('vue-sonner', () => ({ toast: { success: vi.fn() } }))
-vi.mock('canvas-confetti', () => ({ default: vi.fn() }))
+vi.mock('vue-sonner', () => ({ toast: { success: vi.fn<(...args: unknown[]) => unknown>() } }))
+vi.mock('canvas-confetti', () => ({ default: vi.fn<(...args: unknown[]) => unknown>() }))
 
 import { toast } from 'vue-sonner'
 import confetti from 'canvas-confetti'

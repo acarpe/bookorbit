@@ -15,7 +15,7 @@ import {
   MAX_AUTHOR_IMAGE_BYTES,
 } from './author'
 
-vi.mock('@/lib/api', () => ({ api: vi.fn() }))
+vi.mock('@/lib/api', () => ({ api: vi.fn<(...args: unknown[]) => unknown>() }))
 
 const mockedApi = vi.mocked(api)
 
@@ -30,7 +30,7 @@ function mockErrorResponse(status = 500) {
 function mockStreamResponse(lines: string[]) {
   let index = 0
   const reader = {
-    read: vi.fn().mockImplementation(() => {
+    read: vi.fn<(...args: unknown[]) => unknown>().mockImplementation(() => {
       if (index < lines.length) {
         const value = new TextEncoder().encode(lines[index++] + '\n')
         return Promise.resolve({ done: false, value })
@@ -38,7 +38,7 @@ function mockStreamResponse(lines: string[]) {
       return Promise.resolve({ done: true, value: undefined })
     }),
   }
-  return { ok: true, status: 200, body: { getReader: () => reader }, json: vi.fn() } as unknown as Response
+  return { ok: true, status: 200, body: { getReader: () => reader }, json: vi.fn<(...args: unknown[]) => unknown>() } as unknown as Response
 }
 
 beforeEach(() => {
@@ -273,12 +273,12 @@ describe('fetchAuthorMetadataCandidates', () => {
   it('includes optional params in the URL', async () => {
     mockedApi.mockResolvedValue(mockOkResponse([]))
 
-    await fetchAuthorMetadataCandidates({ q: 'tolkien', region: 'en', limit: 5, providers: ['openlibrary', 'musicbrainz'] })
+    await fetchAuthorMetadataCandidates({ q: 'tolkien', region: 'en', limit: 5, providers: ['audnexus'] })
 
     const url = mockedApi.mock.calls[0][0] as string
     expect(url).toContain('region=en')
     expect(url).toContain('limit=5')
-    expect(url).toContain('providers=openlibrary%2Cmusicbrainz')
+    expect(url).toContain('providers=audnexus')
   })
 
   it('throws on non-ok response', async () => {
@@ -314,7 +314,7 @@ describe('bulkRefreshAuthorsMetadata', () => {
     ]
     mockedApi.mockResolvedValue(mockStreamResponse(lines))
 
-    const onProgress = vi.fn()
+    const onProgress = vi.fn<(...args: unknown[]) => unknown>()
     await bulkRefreshAuthorsMetadata([10, 11], onProgress)
 
     expect(onProgress).toHaveBeenCalledTimes(2)

@@ -63,8 +63,7 @@ export class BulkRenameRepository {
       .where(eq(books.libraryId, libraryId))
       .orderBy(asc(books.id));
 
-    const bookIds = rows.map((r) => r.bookId);
-    if (bookIds.length === 0) return [];
+    if (rows.length === 0) return [];
 
     const authorRows = await this.db
       .select({
@@ -73,7 +72,7 @@ export class BulkRenameRepository {
       })
       .from(bookAuthors)
       .innerJoin(authors, eq(authors.id, bookAuthors.authorId))
-      .where(inArray(bookAuthors.bookId, bookIds))
+      .where(inArray(bookAuthors.bookId, this.db.select({ id: books.id }).from(books).where(eq(books.libraryId, libraryId))))
       .orderBy(asc(bookAuthors.bookId), asc(bookAuthors.displayOrder));
 
     const authorsByBook = new Map<number, string[]>();
@@ -128,10 +127,5 @@ export class BulkRenameRepository {
       .limit(1);
 
     return row ?? null;
-  }
-
-  async findLibraryBookIds(libraryId: number): Promise<number[]> {
-    const rows = await this.db.select({ id: books.id }).from(books).where(eq(books.libraryId, libraryId)).orderBy(asc(books.id));
-    return rows.map((r) => r.id);
   }
 }

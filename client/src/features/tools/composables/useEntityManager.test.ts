@@ -2,19 +2,19 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import type { BrowseEntityItem, DuplicateCluster, DuplicateScanStatus, DismissedPairInfo } from '@bookorbit/types'
 
 vi.mock('../api/entity-manager', () => ({
-  getDuplicateScanStatus: vi.fn(),
-  refreshDuplicates: vi.fn(),
-  browseEntities: vi.fn(),
-  mergeEntities: vi.fn(),
-  renameEntity: vi.fn(),
-  deleteEntity: vi.fn(),
-  bulkDeleteEntities: vi.fn(),
-  splitEntity: vi.fn(),
-  scanDuplicates: vi.fn(),
-  dismissPair: vi.fn(),
-  undismissPair: vi.fn(),
-  getDismissedPairs: vi.fn(),
-  getEntityInfo: vi.fn(),
+  getDuplicateScanStatus: vi.fn<(...args: unknown[]) => unknown>(),
+  refreshDuplicates: vi.fn<(...args: unknown[]) => unknown>(),
+  browseEntities: vi.fn<(...args: unknown[]) => unknown>(),
+  mergeEntities: vi.fn<(...args: unknown[]) => unknown>(),
+  renameEntity: vi.fn<(...args: unknown[]) => unknown>(),
+  deleteEntity: vi.fn<(...args: unknown[]) => unknown>(),
+  bulkDeleteEntities: vi.fn<(...args: unknown[]) => unknown>(),
+  splitEntity: vi.fn<(...args: unknown[]) => unknown>(),
+  scanDuplicates: vi.fn<(...args: unknown[]) => unknown>(),
+  dismissPair: vi.fn<(...args: unknown[]) => unknown>(),
+  undismissPair: vi.fn<(...args: unknown[]) => unknown>(),
+  getDismissedPairs: vi.fn<(...args: unknown[]) => unknown>(),
+  getEntityInfo: vi.fn<(...args: unknown[]) => unknown>(),
 }))
 
 import * as entityManagerApi from '../api/entity-manager'
@@ -113,7 +113,6 @@ describe('useEntityManager', () => {
     })
 
     it('triggers scan when status transitions from computing to done', async () => {
-      const { scanDuplicates: mockScan } = entityManagerApi
       mockGetDuplicateScanStatus.mockResolvedValueOnce(makeStatus('computing'))
       vi.mocked(entityManagerApi.scanDuplicates).mockResolvedValue({
         clusters: [],

@@ -3,13 +3,14 @@
 
   // Override to include only test files and clear exclusions.
   // Application code imported in tests is automatically included via module resolution.
-  "include": ["src/**/__tests__/*", "env.d.ts"],
+  "include": ["src/**/__tests__/*", "src/**/*.test.ts", "src/**/*.spec.ts", "env.d.ts"],
   "exclude": [],
 
   "compilerOptions": {
     // Vitest runs in a different environment than the application code.
-    // Adjust lib and types accordingly.
-    "lib": [],
+    // Adjust lib and types accordingly. ES2022 matches the app's target so
+    // newer built-ins (e.g. Array.prototype.at) are available in tests.
+    "lib": ["ES2022"],
     "types": ["node", "jsdom"],
 
     // noUncheckedIndexedAccess produces false positives in tests where the

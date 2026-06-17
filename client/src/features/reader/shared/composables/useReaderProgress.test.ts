@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { ref } from 'vue'
 
-vi.mock('@/lib/api', () => ({ api: vi.fn() }))
+vi.mock('@/lib/api', () => ({ api: vi.fn<(...args: unknown[]) => unknown>() }))
 
 import { api } from '@/lib/api'
 import { formatTimeRemaining, useReaderProgress } from './useReaderProgress'

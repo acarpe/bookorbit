@@ -92,8 +92,9 @@ export class BulkRenameService {
     this.runningLibraries.add(libraryId);
     this.previewCache.delete(libraryId);
 
-    const bookIds = await this.bulkRenameRepo.findLibraryBookIds(libraryId);
-    this.logger.log(`[${event}] [start] libraryId=${libraryId} userId=${userId} bookCount=${bookIds.length} - bulk rename started`);
+    const preview = await this.computeFullPreview(libraryId);
+    const bookIds = preview.items.filter((item) => item.status === 'will_rename').map((item) => item.bookId);
+    this.logger.log(`[${event}] [start] libraryId=${libraryId} userId=${userId} candidateCount=${bookIds.length} - bulk rename started`);
 
     let watcherWasStopped = false;
     if (settings.watch) {
@@ -110,7 +111,7 @@ export class BulkRenameService {
         if (options.isCancelled()) break;
 
         try {
-          const result = await this.fileRenameService.performRename(bookId, userId);
+          const result = await this.fileRenameService.performRename(bookId, userId, false, true);
 
           if (result.status === 'success') succeeded++;
           else if (result.status === 'failed') failed++;

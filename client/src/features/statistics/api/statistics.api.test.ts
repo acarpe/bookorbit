@@ -37,7 +37,7 @@ import {
 } from './statistics.api'
 import type { StatisticsFilterConfig } from '@bookorbit/types'
 
-vi.mock('@/lib/api', () => ({ api: vi.fn() }))
+vi.mock('@/lib/api', () => ({ api: vi.fn<(...args: unknown[]) => unknown>() }))
 
 const mockedApi = vi.mocked(api)
 
@@ -51,8 +51,8 @@ function mockErrorResponse(status = 500) {
 
 const filters: StatisticsFilterConfig = {
   libraryIds: [1, 2],
-  booksOverTimeGranularity: 'month',
-  booksOverTimeRange: '1y',
+  booksOverTimeGranularity: 'monthly',
+  booksOverTimeRange: 'last-year',
 }
 
 beforeEach(() => {
@@ -111,8 +111,8 @@ describe('fetchBooksAddedOverTime', () => {
 
     const url = mockedApi.mock.calls[0][0] as string
     expect(url).toContain('/api/v1/statistics/books-added-over-time')
-    expect(url).toContain('granularity=month')
-    expect(url).toContain('range=1y')
+    expect(url).toContain('granularity=monthly')
+    expect(url).toContain('range=last-year')
     expect(result).toEqual(data)
   })
 

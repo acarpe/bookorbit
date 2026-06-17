@@ -3,12 +3,12 @@ import { ref } from 'vue'
 import type { BookCard, ScanBooksAddedEvent } from '@bookorbit/types'
 
 const mockSocket = {
-  on: vi.fn(),
-  off: vi.fn(),
+  on: vi.fn<(...args: unknown[]) => unknown>(),
+  off: vi.fn<(...args: unknown[]) => unknown>(),
 }
 
 vi.mock('./useScanProgress', () => ({
-  getSocket: vi.fn(() => mockSocket),
+  getSocket: vi.fn<(...args: unknown[]) => unknown>(() => mockSocket),
 }))
 
 import { useLiveScanBooks } from './useLiveScanBooks'
@@ -36,7 +36,7 @@ function makeBook(overrides: Partial<BookCard> = {}): BookCard {
 }
 
 function captureHandler(): (event: ScanBooksAddedEvent) => void {
-  const call = mockSocket.on.mock.calls.find(([event]: [string]) => event === 'scan:books:added')
+  const call = mockSocket.on.mock.calls.find(([event]: unknown[]) => event === 'scan:books:added')
   const handler = call?.[1] as ((event: ScanBooksAddedEvent) => void) | undefined
   if (!handler) throw new Error('scan:books:added handler not registered')
   return handler
@@ -46,7 +46,7 @@ describe('useLiveScanBooks', () => {
   beforeEach(() => {
     vi.useFakeTimers()
     vi.clearAllMocks()
-    mockGetSocket.mockReturnValue(mockSocket as ReturnType<typeof getSocket>)
+    mockGetSocket.mockReturnValue(mockSocket as unknown as ReturnType<typeof getSocket>)
   })
 
   afterEach(() => {
@@ -178,7 +178,7 @@ describe('useLiveScanBooks', () => {
     expect(existingBooks.value).toHaveLength(1)
 
     vi.clearAllMocks()
-    mockGetSocket.mockReturnValue(mockSocket as ReturnType<typeof getSocket>)
+    mockGetSocket.mockReturnValue(mockSocket as unknown as ReturnType<typeof getSocket>)
 
     const { start: start2, newBookIds: newBookIds2 } = useLiveScanBooks(libraryId, existingBooks, total)
     start2()
@@ -213,7 +213,7 @@ describe('useLiveScanBooks', () => {
     start()
     start()
 
-    const calls = mockSocket.on.mock.calls.filter(([event]: [string]) => event === 'scan:books:added')
+    const calls = mockSocket.on.mock.calls.filter(([event]: unknown[]) => event === 'scan:books:added')
     expect(calls).toHaveLength(1)
   })
 

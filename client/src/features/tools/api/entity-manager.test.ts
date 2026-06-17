@@ -16,7 +16,7 @@ import {
   getEntityInfo,
 } from './entity-manager'
 
-vi.mock('@/lib/api', () => ({ api: vi.fn() }))
+vi.mock('@/lib/api', () => ({ api: vi.fn<(...args: unknown[]) => unknown>() }))
 
 const mockedApi = vi.mocked(api)
 

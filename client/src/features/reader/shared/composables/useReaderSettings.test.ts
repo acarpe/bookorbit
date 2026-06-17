@@ -2,13 +2,13 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { ref } from 'vue'
 import { CBX_READER_DEFAULTS, READER_GROUP_DEFAULTS } from '@bookorbit/types'
 
-const apiMock = vi.hoisted(() => vi.fn())
+const apiMock = vi.hoisted(() => vi.fn<(...args: unknown[]) => Promise<unknown>>())
 vi.mock('@/lib/api', () => ({ api: apiMock }))
 
-const toastMock = vi.hoisted(() => ({ success: vi.fn() }))
+const toastMock = vi.hoisted(() => ({ success: vi.fn<(...args: unknown[]) => unknown>() }))
 vi.mock('vue-sonner', () => ({ toast: toastMock }))
 
-const useAuthMock = vi.hoisted(() => vi.fn(() => ({ user: ref(null) })))
+const useAuthMock = vi.hoisted(() => vi.fn<(...args: unknown[]) => unknown>(() => ({ user: ref(null) })))
 vi.mock('@/features/auth/composables/useAuth', () => ({ useAuth: useAuthMock }))
 
 import { useReaderSettings, useReaderDefaultSettings } from './useReaderSettings'
