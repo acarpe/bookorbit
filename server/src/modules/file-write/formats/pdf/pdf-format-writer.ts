@@ -32,6 +32,13 @@ export class PdfFormatWriter implements FormatWriter {
     const originalBytes = await readFile(filePath);
     const pdfDoc = await PDFDocument.load(originalBytes, { ignoreEncryption: true });
 
+    // pdf-lib cannot re-encrypt, so saving an encrypted PDF would strip its
+    // encryption and write back still-encrypted byte streams, silently corrupting
+    // the file. Skip the file write (DB metadata is persisted separately).
+    if (pdfDoc.isEncrypted) {
+      return { status: 'skipped', reason: 'encrypted-pdf', fieldsWritten: [], durationMs: Date.now() - start };
+    }
+
     applyInfoDict(pdfDoc, payload, pdfFieldMask);
     embedXmp(pdfDoc, buildXmp(payload, pdfFieldMask));
 

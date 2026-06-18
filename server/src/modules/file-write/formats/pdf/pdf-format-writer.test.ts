@@ -48,12 +48,13 @@ const mockPdfNameOf = PDFName.of as MockedFunction<typeof PDFName.of>;
 const mockBuildXmp = buildXmp as MockedFunction<typeof buildXmp>;
 
 describe('PdfFormatWriter', () => {
-  function makePdfDoc() {
+  function makePdfDoc(overrides: { isEncrypted?: boolean } = {}) {
     const stream = vi.fn().mockReturnValue('stream-ref');
     const register = vi.fn().mockReturnValue('registered-stream');
     const set = vi.fn();
 
     const doc = {
+      isEncrypted: overrides.isEncrypted ?? false,
       setTitle: vi.fn(),
       setAuthor: vi.fn(),
       setSubject: vi.fn(),
@@ -144,5 +145,42 @@ describe('PdfFormatWriter', () => {
     );
 
     expect(mockUnlink).toHaveBeenCalledWith('/books/.tmp-abc-uuid.pdf');
+  });
+
+  it('skips encrypted PDFs without mutating or rewriting the file', async () => {
+    const pdfDoc = makePdfDoc({ isEncrypted: true });
+    mockPdfLoad.mockResolvedValue(pdfDoc as never);
+
+    const writer = new PdfFormatWriter();
+
+    const result = await writer.write('/books/secret.pdf', { title: 'Dune' }, { fieldMask: new Set(['title']), dryRun: false });
+
+    expect(result.status).toBe('skipped');
+    expect(result.reason).toBe('encrypted-pdf');
+    expect(result.fieldsWritten).toEqual([]);
+    expect(typeof result.durationMs).toBe('number');
+
+    // The file must be left untouched: no metadata applied, nothing saved or replaced.
+    expect(pdfDoc.setTitle).not.toHaveBeenCalled();
+    expect(pdfDoc.save).not.toHaveBeenCalled();
+    expect(mockBuildXmp).not.toHaveBeenCalled();
+    expect(mockWriteFile).not.toHaveBeenCalled();
+    expect(mockRename).not.toHaveBeenCalled();
+  });
+
+  it('checks encryption before mutating, even when no writable fields are in the mask', async () => {
+    const pdfDoc = makePdfDoc({ isEncrypted: true });
+    mockPdfLoad.mockResolvedValue(pdfDoc as never);
+
+    const writer = new PdfFormatWriter();
+
+    const result = await writer.write('/books/secret.pdf', { title: 'Dune' }, { fieldMask: new Set([]), dryRun: false });
+
+    expect(mockPdfLoad).toHaveBeenCalledWith(Buffer.from('pdf-bytes'), { ignoreEncryption: true });
+    expect(result.status).toBe('skipped');
+    expect(result.reason).toBe('encrypted-pdf');
+    expect(pdfDoc.setCreator).not.toHaveBeenCalled();
+    expect(pdfDoc.save).not.toHaveBeenCalled();
+    expect(mockWriteFile).not.toHaveBeenCalled();
   });
 });
