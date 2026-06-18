@@ -142,6 +142,36 @@ describe('BookSortBuilder', () => {
     );
   });
 
+  it('builds readStatus sort that coalesces a missing status row to unread', () => {
+    const raw = (sql as unknown as { raw: vi.Mock }).raw;
+
+    const result = service.build([{ field: 'readStatus', dir: 'asc' }], 42);
+
+    expect(result).toHaveLength(2);
+    expect(result[0]).toMatchObject({
+      type: 'sql',
+      text: expect.stringContaining('COALESCE((SELECT ubs.status FROM user_book_status ubs'),
+    });
+    expect(result[0]?.text).toContain("), 'unread') ");
+    expect(result[0]?.values[0]).toBe(42);
+    expect(raw).toHaveBeenCalledWith('ASC');
+  });
+
+  it('keeps explicit unread and missing-row books in the same sort group when sorted with a secondary author key', () => {
+    const result = service.build(
+      [
+        { field: 'readStatus', dir: 'asc' },
+        { field: 'author', dir: 'asc' },
+      ],
+      42,
+    );
+
+    expect(result).toHaveLength(3);
+    expect(result[0]?.text).toContain('COALESCE(');
+    expect(result[0]?.text).toContain("'unread'");
+    expect(result[1]?.text).toContain(' NULLS LAST');
+  });
+
   it('adds series name fallback when sorting by seriesIndex without series sort', () => {
     const raw = (sql as unknown as { raw: vi.Mock }).raw;
 

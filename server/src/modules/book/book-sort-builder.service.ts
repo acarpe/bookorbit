@@ -84,7 +84,7 @@ export class BookSortBuilder {
       case 'readStatus':
         if (userId === undefined) throw new BadRequestException('readStatus sort requires an authenticated user');
         result.push(
-          sql`(SELECT ubs.status FROM user_book_status ubs WHERE ubs.book_id = books.id AND ubs.user_id = ${userId}) ${sql.raw(D)} NULLS LAST`,
+          sql`COALESCE((SELECT ubs.status FROM user_book_status ubs WHERE ubs.book_id = books.id AND ubs.user_id = ${userId}), 'unread') ${sql.raw(D)} NULLS LAST`,
         );
         break;
       case 'format':
