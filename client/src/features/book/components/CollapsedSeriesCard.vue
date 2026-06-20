@@ -104,6 +104,11 @@ function handleSingleCoverError() {
   singleCoverFailed.value = true
 }
 
+function coverVersionFor(bookId: number): string | null | undefined {
+  if (bookId === props.book.id) return props.book.updatedAt ?? props.book.addedAt
+  return collapsed.value.coverUpdatedAtByBookId?.[bookId]
+}
+
 function handleClick() {
   openSeriesDetails()
 }
@@ -208,7 +213,7 @@ const secondaryLabelText = computed(() => resolveSeriesLabel(gridCardSecondaryLa
             data-testid="series-stack-cover"
           >
             <BookCoverArtwork
-              :src="coverUrl(bookId)"
+              :src="coverUrl(bookId, 'thumbnail', coverVersionFor(bookId))"
               :has-cover="true"
               :title="seriesName"
               :author-line="authorLine"
@@ -250,7 +255,7 @@ const secondaryLabelText = computed(() => resolveSeriesLabel(gridCardSecondaryLa
           </div>
           <img
             v-if="!singleCoverFailed"
-            :src="coverUrl(resolvedCoverId)"
+            :src="coverUrl(resolvedCoverId, 'thumbnail', coverVersionFor(resolvedCoverId))"
             class="absolute inset-0 h-full w-full object-cover transition-opacity duration-300 ease-out"
             :class="singleCoverLoaded ? 'opacity-100' : 'opacity-0'"
             loading="lazy"
@@ -274,7 +279,7 @@ const secondaryLabelText = computed(() => resolveSeriesLabel(gridCardSecondaryLa
               </div>
               <img
                 v-if="!failedCovers.has(bookId)"
-                :src="coverUrl(bookId)"
+                :src="coverUrl(bookId, 'thumbnail', coverVersionFor(bookId))"
                 class="absolute inset-0 h-full w-full object-cover transition-opacity duration-300 ease-out"
                 :class="loadedCovers.has(bookId) ? 'opacity-100' : 'opacity-0'"
                 loading="lazy"

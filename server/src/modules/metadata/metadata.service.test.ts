@@ -85,7 +85,7 @@ vi.mock('./extractors/audio.extractor', () => ({
 import { mkdir, readFile, readdir, rm, writeFile } from 'fs/promises';
 import { Logger } from '@nestjs/common';
 
-import { authors, bookAuthors, bookGenres, bookMetadata, bookTags, genres, tags } from '../../db/schema';
+import { authors, bookAuthors, bookGenres, bookMetadata, books, bookTags, genres, tags } from '../../db/schema';
 import { generateThumbnail, imageExt } from './lib/cover';
 import { extractEpubCover } from './lib/cover-epub';
 import { extractEpubMetadata } from './lib/epub';
@@ -249,6 +249,60 @@ describe('MetadataService', () => {
     expect(mockRm).toHaveBeenCalledWith('/books/covers/11/cover_extracted.jpg', { force: true });
     expect(mockRm).toHaveBeenCalledWith('/books/covers/11/cover_extracted.png', { force: true });
     expect(mockWriteFile).toHaveBeenCalledWith('/books/covers/11/cover_extracted.png', Buffer.from('image-bytes'));
+  });
+
+  it('saveExtractedCoverBytes removes stale custom files unless the DB owns a custom cover', async () => {
+    const { db } = makeDb();
+    const service = makeService(db);
+    mockReaddir.mockResolvedValue(['cover_custom.jpg', 'cover_extracted.png', 'thumbnail.jpg']);
+
+    await service.saveExtractedCoverBytes(12, Buffer.from('image-bytes'));
+
+    expect(mockRm).toHaveBeenCalledWith('/books/covers/12/cover_custom.jpg', { force: true });
+    expect(mockRm).toHaveBeenCalledWith('/books/covers/12/cover_extracted.png', { force: true });
+    expect(mockWriteFile).toHaveBeenCalledWith('/books/covers/12/thumbnail.jpg', Buffer.from('thumbnail-bytes'));
+    expect(db.update).toHaveBeenCalledWith(books);
+  });
+
+  it('refreshCoverForBook preserves a DB-owned custom cover while refreshing extracted fallback', async () => {
+    const { db, selectLimit } = makeDb();
+    const service = makeService(db);
+    selectLimit.mockResolvedValue([{ coverSource: 'custom' }]);
+    mockReaddir.mockResolvedValue(['cover_custom.jpg', 'cover_extracted.png', 'thumbnail.jpg']);
+    mockExtractEpubMetadata.mockResolvedValueOnce({
+      title: 'Refreshable book',
+      subtitle: null,
+      description: null,
+      isbn10: null,
+      isbn13: null,
+      publisher: null,
+      publishedYear: null,
+      language: null,
+      seriesName: null,
+      seriesIndex: null,
+      authors: [],
+      genres: [],
+      tags: [],
+      rating: null,
+      pageCount: null,
+      googleBooksId: null,
+      goodreadsId: null,
+      amazonId: null,
+      hardcoverId: null,
+      openLibraryId: null,
+      ranobedbId: null,
+      itunesId: null,
+      coverBuffer: null,
+    });
+    mockExtractEpubCover.mockResolvedValueOnce(Buffer.from('image-bytes'));
+
+    await expect(service.refreshCoverForBook(13, '/book.epub', 'epub')).resolves.toBe(true);
+
+    expect(mockRm).not.toHaveBeenCalledWith('/books/covers/13/cover_custom.jpg', { force: true });
+    expect(mockRm).toHaveBeenCalledWith('/books/covers/13/cover_extracted.png', { force: true });
+    expect(mockWriteFile).toHaveBeenCalledWith('/books/covers/13/cover_extracted.png', Buffer.from('image-bytes'));
+    expect(mockWriteFile).not.toHaveBeenCalledWith('/books/covers/13/thumbnail.jpg', expect.any(Buffer));
+    expect(db.update).not.toHaveBeenCalledWith(books);
   });
 
   it('downloadAndSaveCover no-ops on empty payloads and network failures', async () => {

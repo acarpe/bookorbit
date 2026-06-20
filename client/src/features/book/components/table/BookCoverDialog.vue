@@ -33,6 +33,7 @@ const { coverUrl } = useCoverVersions()
 const coverAspectRatio = inject(COVER_ASPECT_RATIO_KEY, ref(DEFAULT_COVER_ASPECT_RATIO))
 
 const hasCoverResolved = computed(() => savedCover.value || (props.book?.hasCover ?? false))
+const coverVersion = computed(() => detail.value?.updatedAt ?? props.book?.updatedAt ?? props.book?.addedAt ?? null)
 
 watch(
   () => props.book?.id,
@@ -113,7 +114,12 @@ async function handleToggleCoverLock() {
           <template v-if="mode === 'view'">
             <div class="mb-4 flex justify-center">
               <div class="overflow-hidden rounded-lg bg-muted shadow-md" :style="{ aspectRatio: coverAspectRatio, width: 'min(100%, 280px)' }">
-                <img v-if="hasCoverResolved && book" :src="coverUrl(book.id, 'cover')" :alt="book.title ?? ''" class="h-full w-full object-contain" />
+                <img
+                  v-if="hasCoverResolved && book"
+                  :src="coverUrl(book.id, 'cover', coverVersion)"
+                  :alt="book.title ?? ''"
+                  class="h-full w-full object-contain"
+                />
                 <BookCoverPlaceholder
                   v-else
                   :title="book?.title ?? ''"

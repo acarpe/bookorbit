@@ -23,7 +23,7 @@ import { BookMetadataLockService } from '../book-metadata-lock/book-metadata-loc
 import { ComicMetadataRepository } from './comic-metadata.repository';
 import { MetadataScoreService } from '../metadata-score/metadata-score.service';
 import { NarratorService } from '../narrator/narrator.service';
-import { authors, bookAuthors, bookGenres, bookMetadata, bookTags, genres, tags } from '../../db/schema';
+import { authors, bookAuthors, bookGenres, bookMetadata, books, bookTags, genres, tags } from '../../db/schema';
 import { type ComicMetadataFields, isAudioFormat } from '@bookorbit/types';
 import { parseAudioDuration } from './extractors/audio.extractor';
 import { AudioFormatExtractor } from './extractors/audio-format.extractor';
@@ -665,25 +665,38 @@ export class MetadataService {
     await mkdir(dir, { recursive: true });
 
     const files = await readdir(dir).catch(() => [] as string[]);
-    const hasCustom = files.some(isCustomBookCoverFileName);
+    const [currentCover] = await this.db
+      .select({ coverSource: bookMetadata.coverSource })
+      .from(bookMetadata)
+      .where(eq(bookMetadata.bookId, bookId))
+      .limit(1);
+    const preserveCustom = !overwrite && currentCover?.coverSource === 'custom';
 
-    const staleExtractedFiles = files.filter(isExtractedBookCoverFileName);
-    await Promise.all(staleExtractedFiles.map((fileName) => rm(join(dir, fileName), { force: true })));
+    const staleCoverFiles = files.filter(
+      (fileName) => isExtractedBookCoverFileName(fileName) || (!preserveCustom && isCustomBookCoverFileName(fileName)),
+    );
+    await Promise.all(staleCoverFiles.map((fileName) => rm(join(dir, fileName), { force: true })));
 
     await writeFile(join(dir, `${COVER_EXTRACTED_FILE_PREFIX}${ext}`), bytes);
 
-    if (!hasCustom) {
+    if (!preserveCustom) {
       const thumbnail = await generateThumbnail(bytes);
       await writeFile(bookThumbnailPath(this.appDataPath, bookId), thumbnail);
     }
 
+    const now = new Date();
+
     if (overwrite) {
-      await this.db.update(bookMetadata).set({ coverSource: EXTRACTED_COVER_SOURCE, updatedAt: new Date() }).where(eq(bookMetadata.bookId, bookId));
+      await this.db.update(bookMetadata).set({ coverSource: EXTRACTED_COVER_SOURCE, updatedAt: now }).where(eq(bookMetadata.bookId, bookId));
     } else {
       await this.db
         .update(bookMetadata)
         .set({ coverSource: EXTRACTED_COVER_SOURCE })
         .where(and(eq(bookMetadata.bookId, bookId), isNull(bookMetadata.coverSource)));
+    }
+
+    if (!preserveCustom) {
+      await this.db.update(books).set({ updatedAt: now }).where(eq(books.id, bookId));
     }
   }
 

@@ -110,7 +110,7 @@ async function setRating(star: number) {
 }
 
 const { coverUrl } = useCoverVersions()
-const coverSrc = computed(() => coverUrl(props.book.id))
+const coverSrc = computed(() => coverUrl(props.book.id, 'thumbnail', props.book.updatedAt ?? props.book.addedAt))
 
 const { refreshing, refreshWithFeedback } = useRefreshMetadata()
 const coverAspectRatio = inject(COVER_ASPECT_RATIO_KEY, ref(DEFAULT_COVER_ASPECT_RATIO))

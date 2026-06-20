@@ -62,7 +62,7 @@ function toHtml(md: string): string {
   }
 
   for (const line of lines) {
-    if (/^```/.test(line)) {
+    if (line.startsWith('```')) {
       if (inCode) {
         out.push(`<pre><code>${escapeHtml(code.join('\n'))}</code></pre>`)
         inCode = false

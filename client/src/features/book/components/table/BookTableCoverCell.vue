@@ -10,6 +10,7 @@ import { useRefreshingBooks } from '@/features/book/composables/useRefreshingBoo
 const props = defineProps<{
   bookId: number
   title: string | null
+  version?: string | number | Date | null
   hasCover: boolean
   isAudio: boolean
   isComic: boolean
@@ -21,7 +22,7 @@ const { isRefreshing } = useRefreshingBooks()
 const seed = computed(() => props.title ?? String(props.bookId))
 const isRefreshingBook = computed(() => isRefreshing(props.bookId))
 const { coverUrl } = useCoverVersions()
-const thumbnailSrc = computed(() => coverUrl(props.bookId, 'thumbnail'))
+const thumbnailSrc = computed(() => coverUrl(props.bookId, 'thumbnail', props.version))
 const showPreview = ref(false)
 const previewPos = ref({ x: 0, y: 0 })
 let hoverTimer: ReturnType<typeof setTimeout> | null = null
@@ -108,7 +109,7 @@ const adjustedTop = computed(() => {
         class="pointer-events-none fixed z-[200] rounded-lg border border-border bg-popover p-1.5 shadow-xl transition-opacity duration-150"
         :style="{ top: `${adjustedTop}px`, left: `${adjustedLeft}px` }"
       >
-        <BookCoverImage :book-id="bookId" type="cover" class="h-[240px] w-auto rounded-md object-contain" />
+        <BookCoverImage :book-id="bookId" type="cover" :version="version" class="h-[240px] w-auto rounded-md object-contain" />
       </div>
     </Teleport>
   </div>

@@ -27,6 +27,27 @@ vi.mock('@/features/author/api/author', () => ({
 }))
 
 function makeBook(overrides?: Partial<BookCard>): BookCard {
+  const defaultCollapsed: NonNullable<BookCard['collapsedSeries']> = {
+    bookCount: 5,
+    readCount: 2,
+    coverBookIds: [1, 2, 3, 4],
+    seriesLatestAddedAt: '2024-06-01T00:00:00.000Z',
+  }
+  const collapsedSeries: NonNullable<BookCard['collapsedSeries']> =
+    overrides?.collapsedSeries === undefined
+      ? defaultCollapsed
+      : {
+          ...defaultCollapsed,
+          ...overrides.collapsedSeries,
+        }
+  const coverUpdatedAtByBookId =
+    collapsedSeries.coverUpdatedAtByBookId ??
+    Object.fromEntries(
+      [...collapsedSeries.coverBookIds, collapsedSeries.firstVolumeBookId, collapsedSeries.latestVolumeBookId, collapsedSeries.firstUnreadBookId]
+        .filter((bookId): bookId is number => bookId != null)
+        .map((bookId) => [bookId, '2024-01-01T00:00:00.000Z']),
+    )
+
   return {
     id: 1,
     status: 'present',
@@ -54,15 +75,16 @@ function makeBook(overrides?: Partial<BookCard>): BookCard {
     pageCount: null,
     isbn13: null,
     narrators: [],
-    collapsedSeries: {
-      bookCount: 5,
-      readCount: 2,
-      coverBookIds: [1, 2, 3, 4],
-      seriesLatestAddedAt: '2024-06-01T00:00:00.000Z',
-    },
     ...overrides,
+    collapsedSeries: {
+      ...collapsedSeries,
+      coverUpdatedAtByBookId,
+    },
   }
 }
+
+const expectedCoverUrl = (bookId: number, version = '2024-01-01T00:00:00.000Z') =>
+  `/api/v1/books/${bookId}/thumbnail?t=${new Date(version).getTime()}`
 
 const { bookSpineOverlay, seriesCardCoverMode, gridCardPrimaryLabel, gridCardSecondaryLabel, cardInfoMode, cardOverlays } = useDisplaySettings()
 
@@ -102,8 +124,28 @@ describe('CollapsedSeriesCard', () => {
 
     const imgs = wrapper.findAll('img')
     expect(imgs).toHaveLength(4)
-    expect(imgs[0]!.attributes('src')).toBe('/api/v1/books/10/thumbnail')
-    expect(imgs[1]!.attributes('src')).toBe('/api/v1/books/20/thumbnail')
+    expect(imgs[0]!.attributes('src')).toBe(expectedCoverUrl(10))
+    expect(imgs[1]!.attributes('src')).toBe(expectedCoverUrl(20))
+  })
+
+  it('uses the child cover timestamp instead of the collapsed representative timestamp', () => {
+    const wrapper = mount(CollapsedSeriesCard, {
+      props: {
+        book: makeBook({
+          updatedAt: '2026-01-01T00:00:00.000Z',
+          collapsedSeries: {
+            bookCount: 2,
+            readCount: 0,
+            coverBookIds: [10],
+            coverUpdatedAtByBookId: { 10: '2024-02-01T00:00:00.000Z' },
+            seriesLatestAddedAt: null,
+          },
+        }),
+      },
+    })
+
+    const img = wrapper.find('img')
+    expect(img.attributes('src')).toBe(expectedCoverUrl(10, '2024-02-01T00:00:00.000Z'))
   })
 
   it('does not pad missing slots when fewer than four covers exist', () => {
@@ -290,7 +332,7 @@ describe('CollapsedSeriesCard', () => {
       await wrapper.vm.$nextTick()
 
       expect(wrapper.findAll('[data-testid="series-stack-cover"]')).toHaveLength(1)
-      expect(wrapper.find('[data-testid="series-stack-cover"] img').attributes('src')).toBe('/api/v1/books/20/thumbnail')
+      expect(wrapper.find('[data-testid="series-stack-cover"] img').attributes('src')).toBe(expectedCoverUrl(20))
     })
 
     it('shows a stack fallback when coverBookIds is empty', () => {
@@ -340,7 +382,7 @@ describe('CollapsedSeriesCard', () => {
       expect(wrapper.findAll('[data-testid="series-cover-tile"]')).toHaveLength(0)
       const img = wrapper.find('[data-testid="series-single-cover"] img')
       expect(img.exists()).toBe(true)
-      expect(img.attributes('src')).toBe('/api/v1/books/10/thumbnail')
+      expect(img.attributes('src')).toBe(expectedCoverUrl(10))
     })
 
     it('renders single cover for latest-volume mode', () => {
@@ -362,7 +404,7 @@ describe('CollapsedSeriesCard', () => {
       })
 
       const img = wrapper.find('[data-testid="series-single-cover"] img')
-      expect(img.attributes('src')).toBe('/api/v1/books/40/thumbnail')
+      expect(img.attributes('src')).toBe(expectedCoverUrl(40))
     })
 
     it('renders single cover for first-unread mode', () => {
@@ -384,7 +426,7 @@ describe('CollapsedSeriesCard', () => {
       })
 
       const img = wrapper.find('[data-testid="series-single-cover"] img')
-      expect(img.attributes('src')).toBe('/api/v1/books/20/thumbnail')
+      expect(img.attributes('src')).toBe(expectedCoverUrl(20))
     })
 
     it('falls back to first coverBookId when volume ID is missing', () => {
@@ -403,7 +445,7 @@ describe('CollapsedSeriesCard', () => {
       })
 
       const img = wrapper.find('[data-testid="series-single-cover"] img')
-      expect(img.attributes('src')).toBe('/api/v1/books/77/thumbnail')
+      expect(img.attributes('src')).toBe(expectedCoverUrl(77))
     })
 
     it('first-unread falls back to firstVolumeBookId when firstUnreadBookId is missing', () => {
@@ -423,7 +465,7 @@ describe('CollapsedSeriesCard', () => {
       })
 
       const img = wrapper.find('[data-testid="series-single-cover"] img')
-      expect(img.attributes('src')).toBe('/api/v1/books/10/thumbnail')
+      expect(img.attributes('src')).toBe(expectedCoverUrl(10))
     })
 
     it('first-unread falls back to first coverBookId when both unread and first volume are missing', () => {
@@ -442,7 +484,7 @@ describe('CollapsedSeriesCard', () => {
       })
 
       const img = wrapper.find('[data-testid="series-single-cover"] img')
-      expect(img.attributes('src')).toBe('/api/v1/books/77/thumbnail')
+      expect(img.attributes('src')).toBe(expectedCoverUrl(77))
     })
 
     it('shows count badge in single cover mode', () => {

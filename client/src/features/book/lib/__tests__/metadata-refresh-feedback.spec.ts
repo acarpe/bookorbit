@@ -10,6 +10,7 @@ function makeBook(overrides: Partial<BookDetail> = {}): BookDetail {
     status: 'present',
     folderPath: '/books/a-little-life',
     addedAt: '2026-01-01T00:00:00.000Z',
+    updatedAt: null,
     title: 'A Little Life',
     subtitle: null,
     description: null,

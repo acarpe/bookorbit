@@ -306,6 +306,7 @@ function formatBadgeStyle(fmt: string) {
               <BookCoverImage
                 :book-id="result.id"
                 type="thumbnail"
+                :version="result.updatedAt"
                 class="h-16 w-12 object-cover rounded shrink-0 bg-muted"
                 :alt="result.title ?? ''"
               />
@@ -415,6 +416,7 @@ function formatBadgeStyle(fmt: string) {
               <BookCoverImage
                 :book-id="result.id"
                 type="thumbnail"
+                :version="result.updatedAt"
                 class="h-16 w-12 object-cover rounded shrink-0 bg-muted"
                 :alt="result.title ?? ''"
               />

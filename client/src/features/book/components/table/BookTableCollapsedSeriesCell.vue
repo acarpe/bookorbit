@@ -4,6 +4,7 @@ import { ChevronRight, LibraryBig } from 'lucide-vue-next'
 import { FORMAT_TO_GROUP, type BookCard } from '@bookorbit/types'
 import BookCoverSurface from '../BookCoverSurface.vue'
 import type { ColumnId } from '@/features/book/composables/useTableColumns'
+import { useCoverVersions } from '@/features/book/composables/useCoverVersions'
 
 const props = defineProps<{
   book: BookCard
@@ -18,9 +19,11 @@ const coverIds = computed(() => collapsed.value.coverBookIds.filter((id) => id >
 const primaryFile = computed(() => props.book.files.find((file) => file.role === 'primary') ?? props.book.files[0] ?? null)
 const isAudiobook = computed(() => primaryFile.value?.format != null && FORMAT_TO_GROUP[primaryFile.value.format] === 'audio')
 const isComic = computed(() => primaryFile.value?.format != null && FORMAT_TO_GROUP[primaryFile.value.format] === 'cbx')
+const { coverUrl } = useCoverVersions()
 
 function thumbnailUrl(bookId: number): string {
-  return `/api/v1/books/${bookId}/thumbnail`
+  const version = bookId === props.book.id ? (props.book.updatedAt ?? props.book.addedAt) : collapsed.value.coverUpdatedAtByBookId?.[bookId]
+  return coverUrl(bookId, 'thumbnail', version)
 }
 </script>
 

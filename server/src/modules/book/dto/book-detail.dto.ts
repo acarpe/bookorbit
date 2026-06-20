@@ -34,6 +34,7 @@ export class BookDetailDto {
   status: string;
   folderPath: string;
   addedAt: Date;
+  updatedAt: Date | null;
   title: string | null;
   subtitle: string | null;
   description: string | null;

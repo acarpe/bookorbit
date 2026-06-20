@@ -17,6 +17,7 @@ const AUTHOR_BOOKS_LIMIT = 25;
 export interface SeriesBookRow {
   bookId: number;
   title: string | null;
+  updatedAt: Date | null;
   seriesIndex: number | null;
   coverSource: string | null;
   authorNames: string[];
@@ -27,6 +28,7 @@ export interface SeriesBookRow {
 export interface AuthorBookRow {
   bookId: number;
   title: string | null;
+  updatedAt: Date | null;
   coverSource: string | null;
   authorNames: string[];
   isAudiobook: boolean;
@@ -168,6 +170,7 @@ export class RecommendationRepository {
       .select({
         bookId: books.id,
         title: bookMetadata.title,
+        updatedAt: books.updatedAt,
         seriesIndex: bookMetadata.seriesIndex,
         coverSource: bookMetadata.coverSource,
         primaryFormat: bookFiles.format,
@@ -194,6 +197,7 @@ export class RecommendationRepository {
     return rows.map((r) => ({
       bookId: r.bookId,
       title: r.title,
+      updatedAt: r.updatedAt ?? null,
       seriesIndex: r.seriesIndex,
       coverSource: r.coverSource,
       authorNames: authorsByBook.get(r.bookId) ?? [],
@@ -212,6 +216,7 @@ export class RecommendationRepository {
       .select({
         bookId: books.id,
         title: bookMetadata.title,
+        updatedAt: books.updatedAt,
         coverSource: bookMetadata.coverSource,
         sharedAuthors: sql<number>`count(*)::int`.as('shared_authors'),
         primaryFormat: bookFiles.format,
@@ -221,7 +226,7 @@ export class RecommendationRepository {
       .leftJoin(bookMetadata, eq(bookMetadata.bookId, books.id))
       .leftJoin(bookFiles, eq(bookFiles.id, books.primaryFileId))
       .where(and(inArray(bookAuthors.authorId, authorIds), inArray(books.libraryId, libraryIds), ne(books.id, bookId), ...filterClauses))
-      .groupBy(books.id, bookMetadata.title, bookMetadata.coverSource, bookFiles.format)
+      .groupBy(books.id, books.updatedAt, bookMetadata.title, bookMetadata.coverSource, bookFiles.format)
       .orderBy(desc(sql`shared_authors`), asc(bookMetadata.title), asc(books.id))
       .limit(AUTHOR_BOOKS_LIMIT);
 
@@ -240,6 +245,7 @@ export class RecommendationRepository {
     return rows.map((r) => ({
       bookId: r.bookId,
       title: r.title,
+      updatedAt: r.updatedAt ?? null,
       coverSource: r.coverSource,
       authorNames: authorsByBook.get(r.bookId) ?? [],
       isAudiobook: r.primaryFormat != null ? isAudioFormat(r.primaryFormat) : false,

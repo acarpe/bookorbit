@@ -115,6 +115,7 @@ export type BookDetail = {
   status: string;
   folderPath: string;
   addedAt: string;
+  updatedAt: string | null;
   title: string | null;
   subtitle: string | null;
   description: string | null;
@@ -230,6 +231,7 @@ export type BooksPage = {
 export type BookRecommendation = {
   id: number;
   title: string | null;
+  updatedAt: string | null;
   hasCover: boolean;
   authors: string[];
   isAudiobook?: boolean;
@@ -239,6 +241,7 @@ export type BookRecommendation = {
 export type SeriesBookRecommendation = {
   id: number;
   title: string | null;
+  updatedAt: string | null;
   seriesIndex: number | null;
   hasCover: boolean;
   authors: string[];

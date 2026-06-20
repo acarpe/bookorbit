@@ -9,6 +9,7 @@ import { CoverService } from './cover.service';
 import type { CoverProviderRegistry } from './provider-registry';
 import { DUCKDUCKGO_PROVIDER_KEY, ITUNES_PROVIDER_KEY } from './providers/cover-provider';
 import { EMPTY_CONTENT_FILTER_RULES } from '@bookorbit/types';
+import { books } from '../../db/schema';
 
 vi.mock('dns/promises', () => ({
   lookup: vi.fn(),
@@ -109,7 +110,10 @@ function createMutationService(options?: { assertFieldsUnlocked?: ReturnType<typ
   const onConflictDoUpdate = vi.fn().mockResolvedValue(undefined);
   const values = vi.fn().mockReturnValue({ onConflictDoUpdate });
   const insert = vi.fn().mockReturnValue({ values });
-  const mockDb = { insert };
+  const updateWhere = vi.fn().mockResolvedValue(undefined);
+  const updateSet = vi.fn().mockReturnValue({ where: updateWhere });
+  const update = vi.fn().mockReturnValue({ set: updateSet });
+  const mockDb = { insert, update };
 
   const service = new CoverService(
     mockDb as never,
@@ -121,7 +125,7 @@ function createMutationService(options?: { assertFieldsUnlocked?: ReturnType<typ
     { select: vi.fn().mockReturnValue([]) } as unknown as CoverProviderRegistry,
   );
 
-  return { service, mockDb };
+  return { service, mockDb, updateSet };
 }
 
 describe('CoverService', () => {
@@ -466,7 +470,7 @@ describe('CoverService', () => {
     });
 
     it('saves custom cover file and thumbnail when unlocked', async () => {
-      const { service } = createMutationService();
+      const { service, mockDb, updateSet } = createMutationService();
 
       vi.mocked(coverDirPath).mockReturnValue('/tmp/books/covers/12');
       vi.mocked(imageExt).mockReturnValue('jpg');
@@ -481,6 +485,8 @@ describe('CoverService', () => {
       expect(writeFile).toHaveBeenCalledTimes(2);
       expect(writeFile).toHaveBeenCalledWith(`/tmp/books/covers/12/${COVER_CUSTOM_FILE_PREFIX}jpg`, Buffer.from('image-data'));
       expect(writeFile).toHaveBeenCalledWith(`/tmp/books/covers/12/${COVER_THUMBNAIL_FILE_NAME}`, Buffer.from('thumb'));
+      expect(mockDb.update).toHaveBeenCalledWith(books);
+      expect(updateSet).toHaveBeenCalledWith({ updatedAt: expect.any(Date) });
     });
 
     it('removes custom cover and restores extracted if available', async () => {

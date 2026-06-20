@@ -70,6 +70,7 @@ type CollapsedRawRow = {
   book_count: string | null;
   read_count: string | null;
   cover_book_ids: number[] | null;
+  cover_updated_at_by_book_id: JsonObj | null;
   first_volume_book_id: number | null;
   latest_volume_book_id: number | null;
   first_unread_book_id: number | null;
@@ -88,6 +89,25 @@ type PatternMetadataRow = {
   isbn13: string | null;
   authors: string[];
 };
+
+function parseDateByBookId(value: JsonObj | null | undefined): Record<number, Date | null> {
+  const result: Record<number, Date | null> = {};
+  for (const [rawBookId, rawValue] of Object.entries(value ?? {})) {
+    const bookId = Number(rawBookId);
+    if (!Number.isInteger(bookId) || bookId <= 0) continue;
+    if (rawValue instanceof Date) {
+      result[bookId] = Number.isNaN(rawValue.getTime()) ? null : rawValue;
+      continue;
+    }
+    if (typeof rawValue === 'string' || typeof rawValue === 'number') {
+      const parsed = new Date(rawValue);
+      result[bookId] = Number.isNaN(parsed.getTime()) ? null : parsed;
+      continue;
+    }
+    result[bookId] = null;
+  }
+  return result;
+}
 
 const PROGRESS_EPSILON = 0.0001;
 
@@ -339,6 +359,7 @@ export class BookRepository {
       bookCount: number | null;
       readCount: number | null;
       coverBookIds: number[] | null;
+      coverUpdatedAtByBookId: Record<number, Date | null> | null;
       seriesLatestAddedAt: Date | null;
       firstVolumeBookId: number | null;
       latestVolumeBookId: number | null;
@@ -470,6 +491,32 @@ export class BookRepository {
         ) sfu
         WHERE sfu.rn = 1
       ),
+      series_cover_version_ids AS (
+        SELECT scc.series_id, scc.library_id, scc.id
+        FROM series_cover_candidates scc
+        WHERE scc.rn <= 4
+        UNION
+        SELECT sfv.series_id, sfv.library_id, sfv.first_volume_book_id AS id
+        FROM series_first_volume sfv
+        UNION
+        SELECT slv.series_id, slv.library_id, slv.latest_volume_book_id AS id
+        FROM series_latest_volume slv
+        UNION
+        SELECT sfu.series_id, sfu.library_id, sfu.first_unread_book_id AS id
+        FROM series_first_unread sfu
+      ),
+      series_cover_versions AS (
+        SELECT
+          scvi.series_id,
+          scvi.library_id,
+          COALESCE(JSONB_OBJECT_AGG(scvi.id::text, base.updated_at), '{}'::jsonb) AS cover_updated_at_by_book_id
+        FROM series_cover_version_ids scvi
+        INNER JOIN base_rows base
+          ON base.id = scvi.id
+          AND base.series_id = scvi.series_id
+          AND base.library_id = scvi.library_id
+        GROUP BY scvi.series_id, scvi.library_id
+      ),
       representatives AS (
         SELECT DISTINCT ON (${sql.raw(COLLAPSE_GROUP_KEY_SQL)})
           base.id,
@@ -498,6 +545,7 @@ export class BookRepository {
           sa.book_count,
           sa.read_count,
           sc.cover_book_ids,
+          scv.cover_updated_at_by_book_id,
           sfv.first_volume_book_id,
           slv2.latest_volume_book_id,
           sfu2.first_unread_book_id
@@ -509,6 +557,9 @@ export class BookRepository {
         LEFT JOIN series_covers sc
           ON sc.series_id = sa.series_id
           AND sc.library_id = sa.library_id
+        LEFT JOIN series_cover_versions scv
+          ON scv.series_id = sa.series_id
+          AND scv.library_id = sa.library_id
         LEFT JOIN series_first_volume sfv
           ON sfv.series_id = base.series_id
           AND sfv.library_id = base.library_id
@@ -554,6 +605,7 @@ export class BookRepository {
       bookCount: r.book_count !== null ? Number(r.book_count) : null,
       readCount: r.read_count !== null ? Number(r.read_count) : null,
       coverBookIds: r.cover_book_ids,
+      coverUpdatedAtByBookId: parseDateByBookId(r.cover_updated_at_by_book_id),
       seriesLatestAddedAt: r.sort_added_at ? new Date(r.sort_added_at) : null,
       firstVolumeBookId: r.first_volume_book_id ?? null,
       latestVolumeBookId: r.latest_volume_book_id ?? null,
@@ -914,6 +966,7 @@ export class BookRepository {
         seriesName: bookMetadata.seriesName,
         libraryId: books.libraryId,
         libraryName: libraries.name,
+        updatedAt: books.updatedAt,
       })
       .from(books)
       .leftJoin(bookMetadata, eq(bookMetadata.bookId, books.id))
@@ -979,6 +1032,7 @@ export class BookRepository {
       authors: authorsByBook.get(r.id) ?? [],
       libraryId: r.libraryId,
       libraryName: r.libraryName,
+      updatedAt: r.updatedAt?.toISOString() ?? null,
       formats: formatsByBook.get(r.id) ?? [],
     }));
   }
@@ -999,12 +1053,20 @@ export class BookRepository {
 
   async findRecommendationTitlesByBookIds(
     bookIds: number[],
-  ): Promise<{ id: number; title: string | null; hasCover: boolean; authors: string[]; isAudiobook: boolean; isComic: boolean }[]> {
+  ): Promise<
+    { id: number; title: string | null; updatedAt: string | null; hasCover: boolean; authors: string[]; isAudiobook: boolean; isComic: boolean }[]
+  > {
     if (bookIds.length === 0) return [];
 
     const [rows, authorRows] = await Promise.all([
       this.db
-        .select({ id: books.id, title: bookMetadata.title, coverSource: bookMetadata.coverSource, primaryFormat: bookFiles.format })
+        .select({
+          id: books.id,
+          title: bookMetadata.title,
+          updatedAt: books.updatedAt,
+          coverSource: bookMetadata.coverSource,
+          primaryFormat: bookFiles.format,
+        })
         .from(books)
         .leftJoin(bookMetadata, eq(bookMetadata.bookId, books.id))
         .leftJoin(bookFiles, eq(bookFiles.id, books.primaryFileId))
@@ -1026,6 +1088,7 @@ export class BookRepository {
     return rows.map((r) => ({
       id: r.id,
       title: r.title,
+      updatedAt: r.updatedAt?.toISOString() ?? null,
       hasCover: r.coverSource !== null,
       authors: authorsByBook.get(r.id) ?? [],
       isAudiobook: r.primaryFormat != null ? isAudioFormat(r.primaryFormat) : false,

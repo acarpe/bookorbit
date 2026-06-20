@@ -93,8 +93,17 @@ export class RecommendationService {
       const recommendations = rescored
         .map((rescoredCandidate) => rowMap.get(rescoredCandidate.bookId))
         .filter(
-          (row): row is { id: number; title: string | null; hasCover: boolean; authors: string[]; isAudiobook: boolean; isComic: boolean } =>
-            row != null,
+          (
+            row,
+          ): row is {
+            id: number;
+            title: string | null;
+            updatedAt: string | null;
+            hasCover: boolean;
+            authors: string[];
+            isAudiobook: boolean;
+            isComic: boolean;
+          } => row != null,
         );
 
       this.logger.log(
@@ -138,6 +147,7 @@ export class RecommendationService {
       return rows.map((r) => ({
         id: r.bookId,
         title: r.title,
+        updatedAt: r.updatedAt?.toISOString() ?? null,
         seriesIndex: r.seriesIndex,
         hasCover: r.coverSource !== null,
         authors: r.authorNames,
@@ -172,6 +182,7 @@ export class RecommendationService {
       return rows.map((r) => ({
         id: r.bookId,
         title: r.title,
+        updatedAt: r.updatedAt?.toISOString() ?? null,
         hasCover: r.coverSource !== null,
         authors: r.authorNames,
         isAudiobook: r.isAudiobook,

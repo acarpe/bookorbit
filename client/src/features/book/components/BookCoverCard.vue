@@ -93,7 +93,7 @@ const openableFiles = computed(() => {
 })
 
 const { coverUrl, bumpVersion } = useCoverVersions()
-const coverSrc = computed(() => coverUrl(props.book.id))
+const coverSrc = computed(() => coverUrl(props.book.id, 'thumbnail', props.book.updatedAt ?? props.book.addedAt))
 
 const { refreshing, refreshWithFeedback } = useRefreshMetadata()
 const { isRefreshing } = useRefreshingBooks()

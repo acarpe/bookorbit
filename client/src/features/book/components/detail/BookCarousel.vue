@@ -11,6 +11,7 @@ import { DEFAULT_COVER_ASPECT_RATIO } from '@/features/book/lib/cover-aspect-rat
 export interface CarouselBook {
   id: number
   title: string | null
+  updatedAt?: string | null
   seriesIndex?: number | null
   hasCover: boolean
   authors: string[]
@@ -131,7 +132,7 @@ defineExpose({ scroll })
           :style="{ aspectRatio: cardAspectRatio(book) }"
         >
           <BookCoverArtwork
-            :src="coverUrl(book.id, 'thumbnail')"
+            :src="coverUrl(book.id, 'thumbnail', book.updatedAt)"
             :has-cover="book.hasCover"
             :title="book.title"
             :author-line="book.authors.length > 0 ? book.authors.join(', ') : null"

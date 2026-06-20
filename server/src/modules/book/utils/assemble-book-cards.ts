@@ -37,6 +37,7 @@ type CollapsedBookRow = BookRow & {
   bookCount: number | null;
   readCount: number | null;
   coverBookIds: number[] | null;
+  coverUpdatedAtByBookId?: Record<number, Date | null> | null;
   seriesLatestAddedAt: Date | null;
   firstVolumeBookId: number | null;
   latestVolumeBookId: number | null;
@@ -56,6 +57,14 @@ type StatusRow = {
   finishedAt: Date | null;
   updatedAt: Date;
 };
+
+function serializeDateByBookId(values: Record<number, Date | null> | null | undefined): Record<number, string | null> {
+  const result: Record<number, string | null> = {};
+  for (const [bookId, value] of Object.entries(values ?? {})) {
+    result[Number(bookId)] = value?.toISOString() ?? null;
+  }
+  return result;
+}
 
 export function assembleBookCards(
   rows: BookRow[],
@@ -202,6 +211,10 @@ export function assembleCollapsedBookCards(
         bookCount: row.bookCount,
         readCount: row.readCount ?? 0,
         coverBookIds: row.coverBookIds ?? [],
+        coverUpdatedAtByBookId: {
+          ...serializeDateByBookId(row.coverUpdatedAtByBookId),
+          [row.id]: row.updatedAt?.toISOString() ?? row.addedAt.toISOString(),
+        },
         seriesLatestAddedAt: row.seriesLatestAddedAt?.toISOString() ?? null,
         firstVolumeBookId: row.firstVolumeBookId ?? null,
         latestVolumeBookId: row.latestVolumeBookId ?? null,
@@ -264,6 +277,7 @@ export function collapseBookCards(cards: BookCard[]): BookCard[] {
       bookCount: group.length,
       readCount,
       coverBookIds: coverIds.length > 0 ? coverIds : fallbackIds,
+      coverUpdatedAtByBookId: Object.fromEntries(group.map((book) => [book.id, book.updatedAt ?? book.addedAt])),
       seriesLatestAddedAt,
       firstVolumeBookId: sorted[0]!.id,
       latestVolumeBookId: (lastWithIndex ?? sorted[sorted.length - 1]!).id,

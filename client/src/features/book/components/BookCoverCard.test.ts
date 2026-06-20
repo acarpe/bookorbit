@@ -12,7 +12,9 @@ vi.mock('vue-router', () => ({
   useRouter: () => ({ push: mockRouterPush }),
 }))
 
-const mockCoverUrl = vi.fn<(id: number) => string>((id: number) => `/api/covers/${id}`)
+const mockCoverUrl = vi.fn<(id: number, type?: 'thumbnail' | 'cover', sourceVersion?: string | number | Date | null) => string>(
+  (id: number) => `/api/covers/${id}`,
+)
 const mockBumpVersion = vi.fn<() => void>()
 vi.mock('@/features/book/composables/useCoverVersions', () => ({
   useCoverVersions: () => ({ coverUrl: mockCoverUrl, bumpVersion: mockBumpVersion }),
@@ -450,7 +452,7 @@ describe('BookCoverCard', () => {
     it('uses coverUrl composable for the image src', () => {
       const book = makeBook({ id: 42, hasCover: true })
       mountCard({ book })
-      expect(mockCoverUrl).toHaveBeenCalledWith(42)
+      expect(mockCoverUrl).toHaveBeenCalledWith(42, 'thumbnail', book.addedAt)
     })
 
     it('constrains overlays to the natural fitted cover frame after image load', async () => {

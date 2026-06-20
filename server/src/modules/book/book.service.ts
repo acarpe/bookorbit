@@ -2666,6 +2666,7 @@ export class BookService {
       status: book.books.status,
       folderPath: book.books.folderPath,
       addedAt: book.books.addedAt,
+      updatedAt: book.books.updatedAt ?? null,
       title: meta?.title ?? null,
       subtitle: meta?.subtitle ?? null,
       description: meta?.description ?? null,

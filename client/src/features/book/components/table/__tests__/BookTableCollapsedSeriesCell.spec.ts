@@ -1,7 +1,16 @@
 import { mount } from '@vue/test-utils'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import type { BookCard } from '@bookorbit/types'
 import BookTableCollapsedSeriesCell from '../BookTableCollapsedSeriesCell.vue'
+
+vi.mock('@/features/book/composables/useCoverVersions', () => ({
+  useCoverVersions: () => ({
+    coverUrl: (bookId: number, type = 'thumbnail', version?: string | number | Date | null) => {
+      const base = `/api/v1/books/${bookId}/${type}`
+      return version == null ? base : `${base}?t=${new Date(version).getTime()}`
+    },
+  }),
+}))
 
 function makeBook(format: string | null): BookCard {
   return {
@@ -30,7 +39,13 @@ function makeBook(format: string | null): BookCard {
     pageCount: null,
     isbn13: null,
     narrators: [],
-    collapsedSeries: { bookCount: 3, readCount: 1, coverBookIds: [10, 11], seriesLatestAddedAt: null },
+    collapsedSeries: {
+      bookCount: 3,
+      readCount: 1,
+      coverBookIds: [10, 11],
+      coverUpdatedAtByBookId: { 10: '2024-01-01T00:00:00.000Z', 11: '2024-02-01T00:00:00.000Z' },
+      seriesLatestAddedAt: null,
+    },
   } as BookCard
 }
 
@@ -61,5 +76,13 @@ describe('BookTableCollapsedSeriesCell comic flag', () => {
     const surfaces = wrapper.findAll('[data-testid="surface"]')
 
     expect(surfaces.every((s) => s.attributes('data-comic') === 'false')).toBe(true)
+  })
+
+  it('versions collapsed cover thumbnails with child timestamps', () => {
+    const wrapper = mountCell('epub')
+    const imgs = wrapper.findAll('img')
+
+    expect(imgs[0]!.attributes('src')).toBe('/api/v1/books/10/thumbnail?t=1704067200000')
+    expect(imgs[1]!.attributes('src')).toBe('/api/v1/books/11/thumbnail?t=1706745600000')
   })
 })

@@ -16,7 +16,7 @@ const emit = defineEmits<{
 }>()
 
 const { coverUrl } = useCoverVersions()
-const bookCoverUrl = computed(() => coverUrl(props.book.id, 'cover'))
+const bookCoverUrl = computed(() => coverUrl(props.book.id, 'cover', props.book.updatedAt ?? props.book.addedAt))
 const searchDefaults = computed(() => ({
   title: props.book.title ?? undefined,
   author: props.book.authors[0]?.name ?? undefined,

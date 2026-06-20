@@ -399,6 +399,26 @@ describe('assembleCollapsedBookCards', () => {
     expect(card!.collapsedSeries!.coverBookIds).toEqual([]);
   });
 
+  it('serializes cover timestamps for collapsed series covers', () => {
+    const rows = [
+      makeCollapsedRow(1, {
+        updatedAt: new Date('2024-01-15T00:00:00.000Z'),
+        coverBookIds: [2, 3],
+        coverUpdatedAtByBookId: {
+          2: new Date('2024-02-01T00:00:00.000Z'),
+          3: null,
+        },
+      }),
+    ];
+    const [card] = assembleCollapsedBookCards(rows, [], [], [], []);
+
+    expect(card!.collapsedSeries!.coverUpdatedAtByBookId).toEqual({
+      1: '2024-01-15T00:00:00.000Z',
+      2: '2024-02-01T00:00:00.000Z',
+      3: null,
+    });
+  });
+
   it('passes through firstVolumeBookId, latestVolumeBookId, and firstUnreadBookId', () => {
     const rows = [makeCollapsedRow(5, { firstVolumeBookId: 10, latestVolumeBookId: 30, firstUnreadBookId: 20 })];
     const [card] = assembleCollapsedBookCards(rows, [], [], [], []);
@@ -524,6 +544,19 @@ describe('collapseBookCards', () => {
     const result = collapseBookCards(cards);
 
     expect(result[0]!.collapsedSeries!.coverBookIds).toEqual([2, 3]);
+  });
+
+  it('includes child cover timestamps when collapsing book cards client-side', () => {
+    const cards = [
+      makeBookCard(1, { seriesName: 'S', seriesIndex: 1, updatedAt: '2024-02-01T00:00:00.000Z' }),
+      makeBookCard(2, { seriesName: 'S', seriesIndex: 2, updatedAt: null, addedAt: '2024-03-01T00:00:00.000Z' }),
+    ];
+    const result = collapseBookCards(cards);
+
+    expect(result[0]!.collapsedSeries!.coverUpdatedAtByBookId).toEqual({
+      1: '2024-02-01T00:00:00.000Z',
+      2: '2024-03-01T00:00:00.000Z',
+    });
   });
 
   it('falls back to all sorted books when none have covers', () => {

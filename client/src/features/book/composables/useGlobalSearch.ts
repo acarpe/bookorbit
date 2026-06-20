@@ -8,6 +8,7 @@ export interface GlobalSearchResult {
   authors: string[]
   libraryId: number
   libraryName: string
+  updatedAt: string | null
   formats: string[]
 }
 

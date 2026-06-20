@@ -40,7 +40,7 @@ const isSearchOpen = ref(false)
 
 let debounceTimer: ReturnType<typeof setTimeout>
 
-const activeSrc = computed(() => previewSrc.value ?? coverUrl(props.book.id, 'cover'))
+const activeSrc = computed(() => previewSrc.value ?? coverUrl(props.book.id, 'cover', props.book.updatedAt ?? props.book.addedAt))
 const hasPending = computed(() => !!pendingFile.value || !!pendingUrl.value)
 const primaryFile = computed(() => props.book.files.find((f) => f.role === 'primary') ?? props.book.files[0] ?? null)
 const isPrimaryAudio = computed(() => primaryFile.value?.format != null && FORMAT_TO_GROUP[primaryFile.value.format] === 'audio')
