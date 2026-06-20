@@ -1,5 +1,6 @@
 vi.mock('fs/promises', () => ({
   readFile: vi.fn(),
+  stat: vi.fn(),
 }));
 
 vi.mock('pdf-lib', () => ({
@@ -17,19 +18,26 @@ vi.mock('./pdf-cover', () => ({
   extractPdfCover: vi.fn(),
 }));
 
-import { readFile } from 'fs/promises';
+vi.mock('./pdf-parse-worker-runner', () => ({
+  parsePdfFileInWorker: vi.fn(),
+}));
+
+import { readFile, stat } from 'fs/promises';
 import type { MockedFunction } from 'vitest';
 import { PDFDocument } from 'pdf-lib';
 
 import { extractPdfCover } from './pdf-cover';
-import { parsePdfFile, PDF_BUFFER_WARNING_BYTES } from './pdf-parser';
+import { parsePdfFile, PDF_BUFFER_WARNING_BYTES, type PdfParsed } from './pdf-parser';
+import { parsePdfFileInWorker } from './pdf-parse-worker-runner';
 import { extractXmpXml, parseXmp } from './pdf-xmp-reader';
 
 const mockReadFile = readFile as MockedFunction<typeof readFile>;
+const mockStat = stat as MockedFunction<typeof stat>;
 const mockPdfLoad = PDFDocument.load as MockedFunction<typeof PDFDocument.load>;
 const mockExtractXmpXml = extractXmpXml as MockedFunction<typeof extractXmpXml>;
 const mockParseXmp = parseXmp as MockedFunction<typeof parseXmp>;
 const mockExtractPdfCover = extractPdfCover as MockedFunction<typeof extractPdfCover>;
+const mockParsePdfFileInWorker = parsePdfFileInWorker as MockedFunction<typeof parsePdfFileInWorker>;
 
 function makePdfDoc(overrides: Partial<Record<string, unknown>> = {}) {
   return {
@@ -44,15 +52,49 @@ function makePdfDoc(overrides: Partial<Record<string, unknown>> = {}) {
   };
 }
 
+function makeParsed(overrides: Partial<PdfParsed> = {}): PdfParsed {
+  return {
+    title: 'Worker Title',
+    subtitle: null,
+    authors: [{ name: 'Worker Author', sortName: null }],
+    description: null,
+    publisher: null,
+    publishedYear: null,
+    language: null,
+    genres: [],
+    tags: [],
+    isbn10: null,
+    isbn13: null,
+    seriesName: null,
+    seriesIndex: null,
+    rating: null,
+    pageCount: 100,
+    googleBooksId: null,
+    goodreadsId: null,
+    amazonId: null,
+    hardcoverId: null,
+    openLibraryId: null,
+    ranobedbId: null,
+    koboId: null,
+    lubimyczytacId: null,
+    aladinId: null,
+    itunesId: null,
+    coverBuffer: null,
+    ...overrides,
+  };
+}
+
 describe('parsePdfFile', () => {
   beforeEach(() => {
     vi.resetAllMocks();
 
+    mockStat.mockResolvedValue({ size: PDF_BUFFER_WARNING_BYTES - 1 } as never);
     mockReadFile.mockResolvedValue(Buffer.from('%PDF-1.7') as never);
     mockPdfLoad.mockResolvedValue(makePdfDoc() as never);
     mockExtractXmpXml.mockReturnValue(null);
     mockParseXmp.mockReturnValue(null);
     mockExtractPdfCover.mockResolvedValue(Buffer.from([0xff, 0xd8, 0xff]));
+    mockParsePdfFileInWorker.mockResolvedValue({ parsed: makeParsed(), warnings: [] });
   });
 
   it('prefers XMP metadata and includes extracted cover when requested', async () => {
@@ -143,11 +185,12 @@ describe('parsePdfFile', () => {
   });
 
   it('emits a warning when a large PDF must be buffered in memory', async () => {
-    mockReadFile.mockResolvedValue(Buffer.alloc(PDF_BUFFER_WARNING_BYTES) as never);
+    mockStat.mockResolvedValue({ size: PDF_BUFFER_WARNING_BYTES } as never);
     const onWarning = vi.fn();
 
-    await parsePdfFile('/books/large.pdf', { onWarning });
+    const parsed = await parsePdfFile('/books/large.pdf', { onWarning });
 
+    expect(parsed).toEqual(expect.objectContaining({ title: 'Worker Title' }));
     expect(onWarning).toHaveBeenCalledWith(
       expect.objectContaining({
         code: 'buffered-large-pdf',
@@ -156,6 +199,60 @@ describe('parsePdfFile', () => {
         thresholdBytes: PDF_BUFFER_WARNING_BYTES,
       }),
     );
+    expect(mockParsePdfFileInWorker).toHaveBeenCalledWith({
+      absolutePath: '/books/large.pdf',
+      extractCover: false,
+    });
+    expect(mockReadFile).not.toHaveBeenCalled();
+    expect(mockPdfLoad).not.toHaveBeenCalled();
+  });
+
+  it('replays large PDF worker warnings through the caller warning handler', async () => {
+    mockStat.mockResolvedValue({ size: PDF_BUFFER_WARNING_BYTES + 1 } as never);
+    mockParsePdfFileInWorker.mockResolvedValue({
+      parsed: makeParsed(),
+      warnings: [
+        {
+          code: 'cover-extraction-failed',
+          absolutePath: '/books/large.pdf',
+          errorClass: 'Error',
+          errorMessage: 'pdftoppm missing',
+        },
+      ],
+    });
+    const onWarning = vi.fn();
+
+    await parsePdfFile('/books/large.pdf', { extractCover: true, onWarning });
+
+    expect(mockParsePdfFileInWorker).toHaveBeenCalledWith({
+      absolutePath: '/books/large.pdf',
+      extractCover: true,
+    });
+    expect(onWarning).toHaveBeenCalledWith(expect.objectContaining({ code: 'buffered-large-pdf' }));
+    expect(onWarning).toHaveBeenCalledWith(
+      expect.objectContaining({
+        code: 'cover-extraction-failed',
+        errorMessage: 'pdftoppm missing',
+      }),
+    );
+  });
+
+  it('returns null and emits a parse warning when the large PDF worker fails', async () => {
+    mockStat.mockResolvedValue({ size: PDF_BUFFER_WARNING_BYTES + 1 } as never);
+    mockParsePdfFileInWorker.mockRejectedValue(new Error('worker failed'));
+    const onWarning = vi.fn();
+
+    await expect(parsePdfFile('/books/large.pdf', { onWarning })).resolves.toBeNull();
+    expect(onWarning).toHaveBeenCalledWith(
+      expect.objectContaining({
+        code: 'parse-failed',
+        absolutePath: '/books/large.pdf',
+        errorClass: 'Error',
+        errorMessage: 'worker failed',
+      }),
+    );
+    expect(mockReadFile).not.toHaveBeenCalled();
+    expect(mockPdfLoad).not.toHaveBeenCalled();
   });
 
   it('falls back to the native PDF page count when XMP omits bookorbit:pageCount', async () => {
