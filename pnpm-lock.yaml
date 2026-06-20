@@ -13832,20 +13832,6 @@ packages:
       }
     engines: { node: ">=18.17" }
 
-  undici@7.24.7:
-    resolution:
-      {
-        integrity: sha512-H/nlJ/h0ggGC+uRL3ovD+G0i4bqhvsDOpbDv7At5eFLlj2b41L8QliGbnl2H7SnDiYhENphh1tQFJZf+MyfLsQ==,
-      }
-    engines: { node: ">=20.18.1" }
-
-  undici@7.25.0:
-    resolution:
-      {
-        integrity: sha512-xXnp4kTyor2Zq+J1FfPI6Eq3ew5h6Vl0F/8d9XU5zZQf1tX9s2Su1/3PiMmUANFULpmksxkClamIZcaUqryHsQ==,
-      }
-    engines: { node: ">=20.18.1" }
-
   undici@7.28.0:
     resolution:
       {
@@ -17709,7 +17695,7 @@ snapshots:
       p-filter: 4.1.0
       semantic-release: 25.0.5(typescript@5.9.3)
       tinyglobby: 0.2.16
-      undici: 7.25.0
+      undici: 7.28.0
       url-join: 5.0.0
     transitivePeerDependencies:
       - supports-color
@@ -19134,7 +19120,7 @@ snapshots:
       parse5: 7.3.0
       parse5-htmlparser2-tree-adapter: 7.1.0
       parse5-parser-stream: 7.1.2
-      undici: 7.24.7
+      undici: 7.28.0
       whatwg-mimetype: 4.0.0
 
   chokidar@4.0.3:
@@ -23010,10 +22996,6 @@ snapshots:
   undici-types@8.3.0: {}
 
   undici@6.27.0: {}
-
-  undici@7.24.7: {}
-
-  undici@7.25.0: {}
 
   undici@7.28.0: {}
 
