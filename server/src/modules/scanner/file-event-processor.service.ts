@@ -12,9 +12,12 @@ export type FileEventResult =
   | { type: 'book-missing'; libraryId: number; bookIds: number[] }
   | { type: 'book-restored'; libraryId: number; bookIds: number[] }
   | { type: 'book-moved'; libraryId: number; bookIds: number[] }
+  | { type: 'book-transferred'; fromLibraryId: number; toLibraryId: number; bookIds: number[] }
   | { type: 'noop' };
 
 type FsStat = BigIntStats;
+
+const DUPLICATE_MOVE_REPAIR_WINDOW_MS = 30 * 60 * 1000;
 
 @Injectable()
 export class FileEventProcessorService {
@@ -51,6 +54,8 @@ export class FileEventProcessorService {
       // If the file was truly deleted (not renamed), the next full scan will prune it.
       await this.scannerRepo.updateBookPrimaryFile(file.bookId, null);
       await this.scannerRepo.markBooksAsMissing([file.bookId]);
+      const moved = await this.tryResolveDuplicateMove(file.bookId, file.id);
+      if (moved) return moved;
       this.logger.log(
         `[scanner.file_event.unlink] [end] libraryId=${rowLibraryId} bookId=${file.bookId} path="${sanitizeLogValue(absolutePath)}" action=mark_missing_selected_removed - selected content file removed`,
       );
@@ -207,10 +212,9 @@ export class FileEventProcessorService {
           });
         }
         const cached = settingsCache.get(book.libraryId)!;
-        const result = await this.tryRestoreBook(
-          book as { id: number; libraryId: number; libraryFolderId: number; folderPath: string },
-          cached.formatPriority,
-        );
+        const result =
+          (await this.tryResolveDuplicateMove(book.id)) ??
+          (await this.tryRestoreBook(book as { id: number; libraryId: number; libraryFolderId: number; folderPath: string }, cached.formatPriority));
         if (result.type !== 'noop') results.push(result);
       }
 
@@ -262,6 +266,54 @@ export class FileEventProcessorService {
     return { type: 'book-restored', libraryId: book.libraryId, bookIds: [book.id] };
   }
 
+  private async tryResolveDuplicateMove(bookId: number, preferredFileId?: number): Promise<FileEventResult | null> {
+    const sourceBook = await this.scannerRepo.findBookById(bookId);
+    if (!sourceBook || sourceBook.status !== 'missing') return null;
+
+    const sourceUpdatedAt = this.toTimestamp(sourceBook.updatedAt);
+    if (!sourceUpdatedAt) return null;
+
+    const sourceFiles = (await this.scannerRepo.findBookFilesByBookId(bookId))
+      .filter((file) => file.role === 'content' && file.fileHash && file.relPath)
+      .sort((a, b) => Number(b.id === preferredFileId) - Number(a.id === preferredFileId));
+
+    for (const sourceFile of sourceFiles) {
+      const sourceExists = await this.pathIsFile(sourceFile.absolutePath);
+      if (sourceExists) continue;
+
+      const candidates = await this.scannerRepo.findPresentDuplicateBookFilesByHash(sourceFile.fileHash!, bookId);
+      const viable: typeof candidates = [];
+      for (const candidate of candidates) {
+        if (candidate.file.relPath !== sourceFile.relPath) continue;
+        if (candidate.file.absolutePath === sourceFile.absolutePath) continue;
+        if (!this.isWithinMoveWindow(sourceUpdatedAt, candidate.bookAddedAt)) continue;
+        if (!(await this.pathIsFile(candidate.file.absolutePath))) continue;
+        viable.push(candidate);
+      }
+
+      if (viable.length !== 1) continue;
+
+      const candidate = viable[0]!;
+      const moved = await this.scannerRepo.replaceDuplicateBookWithMovedBook({
+        sourceBookId: bookId,
+        sourceFileId: sourceFile.id,
+        duplicateBookId: candidate.bookId,
+        duplicateFileId: candidate.file.id,
+      });
+      if (!moved) continue;
+
+      this.logger.log(
+        `[scanner.file_event.duplicate_move] [end] libraryId=${moved.libraryId} bookId=${bookId} duplicateBookId=${moved.duplicateBookId} from="${sanitizeLogValue(sourceFile.absolutePath)}" to="${sanitizeLogValue(candidate.file.absolutePath)}" - duplicate import reconciled as moved book`,
+      );
+      if (sourceBook.libraryId !== moved.libraryId) {
+        return { type: 'book-transferred', fromLibraryId: sourceBook.libraryId, toLibraryId: moved.libraryId, bookIds: [bookId] };
+      }
+      return { type: 'book-moved', libraryId: moved.libraryId, bookIds: [bookId] };
+    }
+
+    return null;
+  }
+
   private async detectMovedFile(newAbsolutePath: string, fileStat: FsStat, scopeLibraryId?: number): Promise<FileEventResult> {
     const ino = clampIno(fileStat.ino);
     if (ino === 0) return { type: 'noop' };
@@ -285,7 +337,13 @@ export class FileEventProcessorService {
       return { type: 'noop' };
     }
 
-    const newFolderPath = dirname(newAbsolutePath) === libraryFolderPath ? newAbsolutePath : dirname(newAbsolutePath);
+    const settings = await this.scannerRepo.findLibrarySettings(rowLibraryId);
+    const newFolderPath =
+      settings?.organizationMode === 'book_per_file'
+        ? newAbsolutePath
+        : dirname(newAbsolutePath) === libraryFolderPath
+          ? newAbsolutePath
+          : dirname(newAbsolutePath);
     if (newFolderPath !== oldFolderPath) {
       const targetBooks = await this.scannerRepo.findBooksByFolderPath(newFolderPath, rowLibraryId);
       const hasFolderCollision = targetBooks.some((book) => book.id !== file.bookId && book.folderPath === newFolderPath);
@@ -316,6 +374,25 @@ export class FileEventProcessorService {
 
   private statToFileInfo(s: FsStat): { ino: number; sizeBytes: number; mtime: Date } {
     return { ino: clampIno(s.ino), sizeBytes: Number(s.size), mtime: s.mtime };
+  }
+
+  private async pathIsFile(path: string): Promise<boolean> {
+    try {
+      const s = await stat(path, { bigint: true });
+      return s.isFile();
+    } catch {
+      return false;
+    }
+  }
+
+  private isWithinMoveWindow(sourceUpdatedAt: number, candidateAddedAt: Date): boolean {
+    const candidateTime = this.toTimestamp(candidateAddedAt);
+    return candidateTime != null && Math.abs(sourceUpdatedAt - candidateTime) <= DUPLICATE_MOVE_REPAIR_WINDOW_MS;
+  }
+
+  private toTimestamp(value: Date | string): number | null {
+    const timestamp = value instanceof Date ? value.getTime() : new Date(value).getTime();
+    return Number.isFinite(timestamp) ? timestamp : null;
   }
 
   private async detectMovedBooksInDir(dirPath: string, scopeLibraryId?: number): Promise<FileEventResult> {

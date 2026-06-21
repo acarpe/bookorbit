@@ -2,7 +2,14 @@ import { ConflictException, Injectable, Logger, NotFoundException, OnApplication
 import { createHash } from 'crypto';
 import { sanitizeLogValue } from '../../common/utils/log-sanitize.utils';
 
-import type { BookMissingEvent, CoverRefreshedEvent, CoverRefreshProgressEvent, ScanBooksAddedEvent, ScanProgressEvent } from '@bookorbit/types';
+import type {
+  BookMissingEvent,
+  BookTransferredEvent,
+  CoverRefreshedEvent,
+  CoverRefreshProgressEvent,
+  ScanBooksAddedEvent,
+  ScanProgressEvent,
+} from '@bookorbit/types';
 import { NotificationType } from '@bookorbit/types';
 import { AchievementEventsService, ACHIEVEMENT_EVENT_LIBRARY_CATALOG_CHANGED } from '../achievement/achievement-events.service';
 import { BookMetadataFetchOrchestratorService } from '../book-metadata-fetch/book-metadata-fetch-orchestrator.service';
@@ -33,6 +40,7 @@ interface BookEntry {
   id: number;
   status: string;
   folderPath: string;
+  primaryFileId?: number | null;
 }
 
 interface FileByPathEntry {
@@ -95,6 +103,7 @@ const COVER_REFRESH_BATCH_SIZE = 5;
 const BOOK_EMIT_BUFFER_SIZE = 20;
 const BOOK_EMIT_FLUSH_INTERVAL_MS = 1000;
 const BOOK_STATUS_NOTIFY_DEBOUNCE_MS = 1000;
+const BOOK_MISSING_NOTIFY_DEBOUNCE_MS = 5000;
 const WATCHER_NOTIFY_DEBOUNCE_MS = 30_000;
 const TARGETED_BOOK_SCAN_MAX_CONCURRENCY = 8;
 const MISSING_FILE_STAT_BATCH_SIZE = 50;
@@ -195,6 +204,8 @@ export class ScannerService implements OnApplicationBootstrap {
   // ── Missing book notification buffer (debounced, 1s) ──────────────────────
   private readonly booksUnavailableNotifyBuffer = new Map<number, Set<number>>();
   private readonly booksUnavailableNotifyTimers = new Map<number, ReturnType<typeof setTimeout>>();
+  private readonly bookMissingEmitBuffer = new Map<number, Set<number>>();
+  private readonly bookMissingEmitTimers = new Map<number, ReturnType<typeof setTimeout>>();
 
   // ── Restored book notification buffer (debounced, 1s) ─────────────────────
   private readonly booksRestoredNotifyBuffer = new Map<number, Set<number>>();
@@ -219,7 +230,7 @@ export class ScannerService implements OnApplicationBootstrap {
   }
 
   private static buildLookupMaps(
-    knownBooks: Array<{ id: number; status: string; folderPath: string }>,
+    knownBooks: Array<{ id: number; status: string; folderPath: string; primaryFileId?: number | null }>,
     knownFiles: Array<{
       id: number;
       bookId: number;
@@ -232,7 +243,7 @@ export class ScannerService implements OnApplicationBootstrap {
     }>,
   ): ScanLookupMaps {
     const bookByFolderPath = new Map<string, BookEntry>(
-      knownBooks.map((b) => [b.folderPath, { id: b.id, status: b.status, folderPath: b.folderPath }]),
+      knownBooks.map((b) => [b.folderPath, { id: b.id, status: b.status, folderPath: b.folderPath, primaryFileId: b.primaryFileId }]),
     );
 
     const booksByParentDir = new Map<string, BookEntry[]>();
@@ -243,7 +254,7 @@ export class ScannerService implements OnApplicationBootstrap {
         arr = [];
         booksByParentDir.set(parentDir, arr);
       }
-      arr.push({ id: b.id, status: b.status, folderPath: b.folderPath });
+      arr.push({ id: b.id, status: b.status, folderPath: b.folderPath, primaryFileId: b.primaryFileId });
     }
 
     const fileByPath = new Map<string, FileByPathEntry>(
@@ -341,8 +352,73 @@ export class ScannerService implements OnApplicationBootstrap {
     if (existing) clearTimeout(existing);
     this.booksUnavailableNotifyTimers.set(
       libraryId,
-      setTimeout(() => this.flushBooksUnavailableNotification(libraryId), BOOK_STATUS_NOTIFY_DEBOUNCE_MS),
+      setTimeout(() => this.flushBooksUnavailableNotification(libraryId), BOOK_MISSING_NOTIFY_DEBOUNCE_MS),
     );
+  }
+
+  bufferBookMissingEvent(libraryId: number, bookIds: number[]): void {
+    if (bookIds.length === 0) return;
+    const current = this.bookMissingEmitBuffer.get(libraryId) ?? new Set<number>();
+    for (const bookId of bookIds) current.add(bookId);
+    this.bookMissingEmitBuffer.set(libraryId, current);
+
+    const existing = this.bookMissingEmitTimers.get(libraryId);
+    if (existing) clearTimeout(existing);
+    this.bookMissingEmitTimers.set(
+      libraryId,
+      setTimeout(() => {
+        this.flushBookMissingEvent(libraryId).catch((err) => {
+          this.logger.warn(
+            `[scanner.emit_book_missing] [fail] libraryId=${libraryId} errorClass=${err instanceof Error ? err.name : 'Error'} error="${sanitizeLogValue(err instanceof Error ? err.message : String(err))}" - failed to emit missing books`,
+          );
+        });
+      }, BOOK_MISSING_NOTIFY_DEBOUNCE_MS),
+    );
+  }
+
+  cancelBooksUnavailableNotification(libraryId: number, bookIds: number[]): void {
+    if (bookIds.length === 0) return;
+    this.cancelBookMissingEvent(libraryId, bookIds);
+
+    const current = this.booksUnavailableNotifyBuffer.get(libraryId);
+    if (!current) return;
+
+    for (const bookId of bookIds) current.delete(bookId);
+    if (current.size > 0) return;
+
+    this.booksUnavailableNotifyBuffer.delete(libraryId);
+    const existing = this.booksUnavailableNotifyTimers.get(libraryId);
+    if (existing) clearTimeout(existing);
+    this.booksUnavailableNotifyTimers.delete(libraryId);
+  }
+
+  private cancelBookMissingEvent(libraryId: number, bookIds: number[]): void {
+    const current = this.bookMissingEmitBuffer.get(libraryId);
+    if (!current) return;
+
+    for (const bookId of bookIds) current.delete(bookId);
+    if (current.size > 0) return;
+
+    this.bookMissingEmitBuffer.delete(libraryId);
+    const existing = this.bookMissingEmitTimers.get(libraryId);
+    if (existing) clearTimeout(existing);
+    this.bookMissingEmitTimers.delete(libraryId);
+  }
+
+  private async flushBookMissingEvent(libraryId: number): Promise<void> {
+    const existing = this.bookMissingEmitTimers.get(libraryId);
+    if (existing) clearTimeout(existing);
+    this.bookMissingEmitTimers.delete(libraryId);
+
+    const bookIds = [...(this.bookMissingEmitBuffer.get(libraryId) ?? [])];
+    this.bookMissingEmitBuffer.delete(libraryId);
+    if (bookIds.length === 0) return;
+
+    const rows = await this.scannerRepo.findBooksByIds(bookIds);
+    const stillMissingIds = rows.filter((book) => book.libraryId === libraryId && book.status === 'missing').map((book) => book.id);
+    if (stillMissingIds.length === 0) return;
+
+    this.scanGateway.emitBookMissing({ libraryId, bookIds: stillMissingIds } satisfies BookMissingEvent);
   }
 
   private flushBooksUnavailableNotification(libraryId: number): void {
@@ -371,6 +447,8 @@ export class ScannerService implements OnApplicationBootstrap {
 
   bufferBooksRestoredNotification(libraryId: number, bookIds: number[]): void {
     if (bookIds.length === 0) return;
+    this.cancelBooksUnavailableNotification(libraryId, bookIds);
+
     const current = this.booksRestoredNotifyBuffer.get(libraryId) ?? new Set<number>();
     for (const bookId of bookIds) current.add(bookId);
     this.booksRestoredNotifyBuffer.set(libraryId, current);
@@ -814,7 +892,7 @@ export class ScannerService implements OnApplicationBootstrap {
     const knownBooks = await this.scannerRepo.findBooksByFolderPath(folderPath, libraryId);
     const knownFiles = await this.scannerRepo.findBookFilesByBookIds(knownBooks.map((b) => b.id));
     return ScannerService.buildLookupMaps(
-      knownBooks.map((b) => ({ id: b.id, status: b.status, folderPath: b.folderPath })),
+      knownBooks.map((b) => ({ id: b.id, status: b.status, folderPath: b.folderPath, primaryFileId: b.primaryFileId })),
       knownFiles.map((f) => ({
         id: f.id,
         bookId: f.bookId,
@@ -1430,7 +1508,8 @@ export class ScannerService implements OnApplicationBootstrap {
     //   - Extraction only fires when at least one configured metadata source is new, reassigned, or changed.
 
     const metadataSources = this.buildMetadataExtractionSources(registeredFiles, winner, metadataPrecedence);
-    const shouldExtractMetadata = metadataSources.some((source) => hasMetadataSourceChanged(source.file));
+    const shouldExtractMetadata =
+      metadataSources.some((source) => hasMetadataSourceChanged(source.file)) || (book.primaryFileId === null && winner !== null);
     const audioContentFiles = contentFiles.filter((f) => f.format !== null && isAudioFormat(f.format!));
     const changedAudioFiles = audioContentFiles.filter(hasMetadataSourceChanged);
     const winnerIsAudio = winner !== null && winner.format !== null && isAudioFormat(winner.format);
@@ -1558,8 +1637,8 @@ export class ScannerService implements OnApplicationBootstrap {
     candidate: BookCandidate,
     libraryId: number,
     libraryFolderId: number,
-    bookByFolderPath: Map<string, { id: number; status: string; folderPath: string }>,
-    booksByParentDir: Map<string, Array<{ id: number; status: string; folderPath: string }>>,
+    bookByFolderPath: Map<string, BookEntry>,
+    booksByParentDir: Map<string, BookEntry[]>,
     fileByPath: Map<string, FileByPathEntry>,
     fileByIno: Map<number, FileByInoEntry>,
     counts: ScanCounts,
@@ -1626,8 +1705,9 @@ export class ScannerService implements OnApplicationBootstrap {
             `[scanner.upsert_book] [fail] libraryId=${libraryId} bookId=${book.id} action=schedule_metadata_fetch errorClass=${err.name} error="${sanitizeLogValue(err.message)}" - metadata fetch schedule failed`,
           ),
         );
-      bookByFolderPath.set(candidate.folderPath, { id: book.id, status: book.status, folderPath: book.folderPath });
-      return book;
+      const entry = { id: book.id, status: book.status, folderPath: book.folderPath, primaryFileId: book.primaryFileId ?? null };
+      bookByFolderPath.set(candidate.folderPath, entry);
+      return entry;
     }
 
     if (existing.status === 'missing') {
@@ -1718,6 +1798,7 @@ export class ScannerService implements OnApplicationBootstrap {
       id: sourceBook.id,
       status: restored ? 'present' : sourceBook.status,
       folderPath: candidate.folderPath,
+      primaryFileId: sourceBook.primaryFileId,
     };
     bookByFolderPath.delete(sourceBook.folderPath);
     bookByFolderPath.set(candidate.folderPath, moved);
@@ -1765,9 +1846,9 @@ export class ScannerService implements OnApplicationBootstrap {
     candidate: BookCandidate,
     libraryId: number,
     libraryFolderId: number,
-    bookByFolderPath: Map<string, { id: number; status: string; folderPath: string }>,
+    bookByFolderPath: Map<string, BookEntry>,
     counts: ScanCounts,
-  ): Promise<{ id: number; status: string; folderPath: string } | null> {
+  ): Promise<BookEntry | null> {
     const contentFiles = candidate.files.filter((file) => {
       const role = file.role ?? classifyFile(file.absolutePath).role;
       return role === 'content' && file.sizeBytes > 0;
@@ -1775,12 +1856,14 @@ export class ScannerService implements OnApplicationBootstrap {
     if (contentFiles.length === 0) return null;
 
     let sourceBookId: number | null = null;
+    let sourceLibraryId: number | null = null;
 
     for (const file of contentFiles) {
       if (file.ino === 0) continue;
       const byIno = await this.scannerRepo.findMissingBookFileWithContextByIno(file.ino);
       if (!byIno) continue;
       sourceBookId = byIno.file.bookId;
+      sourceLibraryId = byIno.libraryId;
       break;
     }
 
@@ -1789,10 +1872,10 @@ export class ScannerService implements OnApplicationBootstrap {
         if (file.ino === 0) continue;
         const byIno = await this.scannerRepo.findBookFileWithContextByIno(file.ino);
         if (!byIno || byIno.file.absolutePath === file.absolutePath) continue;
-        if (byIno.libraryId === libraryId) continue;
         const previousPathStat = await stat(byIno.file.absolutePath).catch(() => null);
         if (previousPathStat?.isFile()) continue;
         sourceBookId = byIno.file.bookId;
+        sourceLibraryId = byIno.libraryId;
         break;
       }
     }
@@ -1811,15 +1894,16 @@ export class ScannerService implements OnApplicationBootstrap {
         const byHash = await this.scannerRepo.findMissingBookFileWithContextByHash(fileHash);
         if (byHash) {
           sourceBookId = byHash.file.bookId;
+          sourceLibraryId = byHash.libraryId;
           break;
         }
 
         const byHashAny = await this.scannerRepo.findBookFileWithContextByHash(fileHash);
         if (!byHashAny || byHashAny.file.absolutePath === file.absolutePath) continue;
-        if (byHashAny.libraryId === libraryId) continue;
         const previousPathStat = await stat(byHashAny.file.absolutePath).catch(() => null);
         if (previousPathStat?.isFile()) continue;
         sourceBookId = byHashAny.file.bookId;
+        sourceLibraryId = byHashAny.libraryId;
         break;
       }
     }
@@ -1830,6 +1914,16 @@ export class ScannerService implements OnApplicationBootstrap {
     if (!moved) return null;
 
     counts.updatedCount++;
+    const previousLibraryId = moved.previousLibraryId ?? sourceLibraryId;
+    if (previousLibraryId != null) this.cancelBooksUnavailableNotification(previousLibraryId, [sourceBookId]);
+    const libraryChanged = moved.libraryChanged ?? (previousLibraryId != null && previousLibraryId !== libraryId);
+    if (libraryChanged && previousLibraryId != null && previousLibraryId !== libraryId) {
+      this.scanGateway.emitBookTransferred({
+        fromLibraryId: previousLibraryId,
+        toLibraryId: libraryId,
+        bookIds: [moved.id],
+      } satisfies BookTransferredEvent);
+    }
     const transferred = { id: moved.id, status: moved.status, folderPath: moved.folderPath };
     bookByFolderPath.set(candidate.folderPath, transferred);
     this.logger.log(
@@ -2198,7 +2292,7 @@ export class ScannerService implements OnApplicationBootstrap {
       }
     }
 
-    const created = await this.scannerRepo.createBookFile({
+    const fileData = {
       bookId,
       libraryFolderId,
       absolutePath: fileStat.absolutePath,
@@ -2210,7 +2304,34 @@ export class ScannerService implements OnApplicationBootstrap {
       format,
       role,
       sortOrder,
-    });
+    };
+    let created: Awaited<ReturnType<ScannerRepository['createBookFile']>>;
+    try {
+      created = await this.scannerRepo.createBookFile(fileData);
+    } catch (err) {
+      const concurrent = await this.scannerRepo.findBookFileByAbsolutePath(fileStat.absolutePath);
+      if (!concurrent) throw err;
+      return this.resolveExistingFilePath(
+        {
+          id: concurrent.file.id,
+          bookId: concurrent.file.bookId,
+          ino: concurrent.file.ino,
+          sizeBytes: concurrent.file.sizeBytes,
+          mtime: concurrent.file.mtime,
+          fileHash: concurrent.file.fileHash,
+          sortOrder: concurrent.file.sortOrder,
+        },
+        fileStat,
+        format,
+        role,
+        sortOrder,
+        bookId,
+        libraryFolderId,
+        fileByPath,
+        fileByIno,
+        counts,
+      );
+    }
     counts.addedCount++;
     fileByPath.set(fileStat.absolutePath, {
       id: created.id,

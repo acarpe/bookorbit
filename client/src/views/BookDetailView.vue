@@ -55,7 +55,7 @@ watch(
   },
 )
 
-const { onBookMissing, onBookRestored, onBookMoved } = useBookEvents()
+const { onBookMissing, onBookRestored, onBookMoved, onBookTransferred } = useBookEvents()
 onBookMissing((bookIds) => {
   if (detail.value && bookIds.includes(detail.value.id)) {
     detail.value = { ...detail.value, status: 'missing' }
@@ -66,6 +66,9 @@ onBookRestored((bookIds) => {
 })
 onBookMoved((bookIds) => {
   if (detail.value && bookIds.includes(detail.value.id)) fetch(detail.value.id)
+})
+onBookTransferred((event) => {
+  if (detail.value && event.bookIds.includes(detail.value.id)) fetch(detail.value.id)
 })
 
 watch(bookId, (id) => fetch(id), { immediate: true })

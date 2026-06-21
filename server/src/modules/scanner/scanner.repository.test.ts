@@ -45,15 +45,19 @@ function makeDb() {
     return state.proxy;
   };
 
+  const db: any = {};
+  Object.assign(db, {
+    select: vi.fn(() => next('select')),
+    insert: vi.fn(() => next('insert')),
+    update: vi.fn(() => next('update')),
+    delete: vi.fn(() => next('delete')),
+    transaction: vi.fn((callback: (tx: unknown) => unknown) => callback(db)),
+  });
+
   return {
     queues,
     chains,
-    db: {
-      select: vi.fn(() => next('select')),
-      insert: vi.fn(() => next('insert')),
-      update: vi.fn(() => next('update')),
-      delete: vi.fn(() => next('delete')),
-    },
+    db,
   };
 }
 
@@ -154,7 +158,7 @@ describe('ScannerRepository', () => {
 
   it('queries book/file lookups with optional scope variants', async () => {
     const { repo, queues } = makeRepo();
-    queues.select.push([{ id: 1, status: 'present', folderPath: '/books/A' }]);
+    queues.select.push([{ id: 1, status: 'present', folderPath: '/books/A', primaryFileId: 90 }]);
     queues.select.push([{ bookId: 1, absolutePath: '/books/A/book.epub', format: 'epub' }]);
     queues.select.push([{ id: 7, absolutePath: '/books/A/book.epub' }]);
     queues.select.push([{ id: 90, bookId: 1, absolutePath: '/books/A/book.epub', ino: 999, sizeBytes: 10, mtime: new Date(), fileHash: 'x' }]);
@@ -167,7 +171,7 @@ describe('ScannerRepository', () => {
     queues.select.push([{ id: 11, folderPath: '/books/A', status: 'missing' }]);
     queues.select.push([{ id: 12, folderPath: '/books/B', status: 'missing' }]);
 
-    await expect(repo.findBooksByLibraryFolder(4)).resolves.toEqual([{ id: 1, status: 'present', folderPath: '/books/A' }]);
+    await expect(repo.findBooksByLibraryFolder(4)).resolves.toEqual([{ id: 1, status: 'present', folderPath: '/books/A', primaryFileId: 90 }]);
     await expect(repo.findPrimaryBookFilesByLibrary(4)).resolves.toEqual([{ bookId: 1, absolutePath: '/books/A/book.epub', format: 'epub' }]);
     await expect(repo.findPrimaryBookFilesByBookId(1)).resolves.toEqual([{ id: 7, absolutePath: '/books/A/book.epub' }]);
     await expect(repo.findBookFilesByLibraryFolder(4)).resolves.toEqual([
@@ -213,8 +217,9 @@ describe('ScannerRepository', () => {
       { id: 2, status: 'missing' },
     ]);
     queues.update.push([]);
+    queues.select.push([{ id: 99, libraryId: 5, libraryFolderId: 6, folderPath: '/source/Book', status: 'missing' }]);
     queues.update.push([{ id: 99, libraryId: 7, libraryFolderId: 8, folderPath: '/dest/Book', status: 'present' }]);
-    queues.update.push([]);
+    queues.select.push([]);
 
     await expect(repo.findMissingBooksForLibraries([7, 8])).resolves.toEqual([
       { id: 1, status: 'missing' },
@@ -227,10 +232,12 @@ describe('ScannerRepository', () => {
       libraryFolderId: 8,
       folderPath: '/dest/Book',
       status: 'present',
+      previousLibraryId: 5,
+      libraryChanged: true,
     });
     await expect(repo.moveBookToLibrary(100, 7, 8, '/dest/Missing')).resolves.toBeNull();
 
-    expect(db.update).toHaveBeenCalledTimes(3);
+    expect(db.update).toHaveBeenCalledTimes(2);
   });
 
   it('supports context lookups by inode/hash and file deletion', async () => {
@@ -270,9 +277,11 @@ describe('ScannerRepository', () => {
     const { repo, queues } = makeRepo();
     queues.select.push([{ id: 44, folderPath: '/books/Found' }]);
     queues.select.push([]);
+    queues.select.push([{ id: 44, libraryId: 1, status: 'missing' }]);
 
     await expect(repo.findBookById(44)).resolves.toEqual({ id: 44, folderPath: '/books/Found' });
     await expect(repo.findBookById(45)).resolves.toBeNull();
+    await expect(repo.findBooksByIds([44, 45])).resolves.toEqual([{ id: 44, libraryId: 1, status: 'missing' }]);
   });
 
   it('returns empty card data for empty input and aggregates card data for requested books', async () => {

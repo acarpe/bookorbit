@@ -13,12 +13,12 @@ vi.mock('fs/promises', () => ({
   unlink: vi.fn(),
 }));
 
-vi.mock('@parcel/watcher', () => ({
-  subscribe: vi.fn(),
+vi.mock('chokidar', () => ({
+  watch: vi.fn(),
 }));
 
 import { mkdir, readdir, realpath, unlink } from 'fs/promises';
-import { subscribe } from '@parcel/watcher';
+import { watch } from 'chokidar';
 
 import { isPrimaryFormat } from '../scanner/lib/classify';
 import { waitForStability } from '../scanner/lib/stability';
@@ -41,6 +41,19 @@ function makeService(bookDockPath = '/data/book-dock') {
   };
   const service = new BookDockWatcherService(config as never, ingestService as never, repo as never, gateway as never);
   return { service, ingestService, repo, gateway };
+}
+
+function makeReadyWatcher(overrides: { close?: ReturnType<typeof vi.fn> } = {}) {
+  const watcher = {
+    on: vi.fn().mockReturnThis(),
+    once: vi.fn().mockImplementation((eventName: string, handler: () => void) => {
+      if (eventName === 'ready') handler();
+      return watcher;
+    }),
+    off: vi.fn().mockReturnThis(),
+    close: overrides.close ?? vi.fn().mockResolvedValue(undefined),
+  };
+  return watcher;
 }
 
 describe('BookDockWatcherService', () => {
@@ -72,18 +85,20 @@ describe('BookDockWatcherService', () => {
 
   it('startWatcher ensures directory exists and subscribes for file events', async () => {
     const { service } = makeService();
-    vi.mocked(subscribe).mockResolvedValue({ unsubscribe: vi.fn() } as never);
+    vi.mocked(watch).mockReturnValue(makeReadyWatcher() as never);
 
     await (service as any).startWatcher();
 
     expect(mkdir).toHaveBeenCalledWith('/data/book-dock', { recursive: true });
     expect(realpath).toHaveBeenCalledWith('/data/book-dock');
-    expect(subscribe).toHaveBeenCalledWith('/data/book-dock', expect.any(Function));
+    expect(watch).toHaveBeenCalledWith('/data/book-dock', { ignoreInitial: true });
   });
 
   it('startWatcher swallows watcher boot errors', async () => {
     const { service } = makeService();
-    vi.mocked(subscribe).mockRejectedValue(new Error('watch init failed'));
+    vi.mocked(watch).mockImplementation(() => {
+      throw new Error('watch init failed');
+    });
 
     await expect((service as any).startWatcher()).resolves.toBeUndefined();
   });
@@ -142,14 +157,14 @@ describe('BookDockWatcherService', () => {
 
   it('onModuleDestroy clears timers and unsubscribes active watcher', async () => {
     const { service } = makeService();
-    const unsubscribe = vi.fn().mockResolvedValue(undefined);
-    (service as any).subscription = { unsubscribe };
+    const close = vi.fn().mockResolvedValue(undefined);
+    (service as any).subscription = { close };
     const timer = setTimeout(() => undefined, 1_000);
     (service as any).pendingTimers.set('/tmp/file.epub', { timer, type: 'create' });
 
     await service.onModuleDestroy();
 
-    expect(unsubscribe).toHaveBeenCalledTimes(1);
+    expect(close).toHaveBeenCalledTimes(1);
     expect((service as any).pendingTimers.size).toBe(0);
     expect((service as any).subscription).toBeNull();
   });

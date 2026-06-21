@@ -305,23 +305,6 @@ watch(
   { immediate: true },
 )
 
-const { onBookMissing, onBookRestored, onBookMoved } = useBookEvents()
-
-function applyStatusToLoadedBooks(bookIds: number[], status: BookCard['status']) {
-  const targets = new Set(bookIds)
-  updateBooks(books.value.filter((book) => targets.has(book.id) && book.status !== status).map((book) => ({ ...book, status })))
-}
-
-onBookMissing((bookIds) => {
-  applyStatusToLoadedBooks(bookIds, 'missing')
-})
-onBookRestored((bookIds) => {
-  applyStatusToLoadedBooks(bookIds, 'present')
-})
-onBookMoved((bookIds) => {
-  applyStatusToLoadedBooks(bookIds, 'present')
-})
-
 const filterOpen = ref(false)
 const mobileControlsExpanded = ref(false)
 
@@ -426,6 +409,50 @@ const {
 } = useBookTableShell({
   books,
   querySelection,
+})
+
+const { onBookMissing, onBookRestored, onBookMoved, onBookTransferred } = useBookEvents()
+const TRANSFER_REFRESH_DEBOUNCE_MS = 300
+let transferRefreshTimer: ReturnType<typeof setTimeout> | null = null
+
+function scheduleTransferRefresh(targetLibraryId: number) {
+  if (transferRefreshTimer) clearTimeout(transferRefreshTimer)
+  transferRefreshTimer = setTimeout(() => {
+    transferRefreshTimer = null
+    if (libraryId.value !== targetLibraryId) return
+    resetBooks()
+    refreshBuckets()
+  }, TRANSFER_REFRESH_DEBOUNCE_MS)
+}
+
+onUnmounted(() => {
+  if (transferRefreshTimer) clearTimeout(transferRefreshTimer)
+})
+
+function applyStatusToLoadedBooks(bookIds: number[], status: BookCard['status']) {
+  const targets = new Set(bookIds)
+  updateBooks(books.value.filter((book) => targets.has(book.id) && book.status !== status).map((book) => ({ ...book, status })))
+}
+
+onBookMissing((bookIds) => {
+  applyStatusToLoadedBooks(bookIds, 'missing')
+})
+onBookRestored((bookIds) => {
+  applyStatusToLoadedBooks(bookIds, 'present')
+})
+onBookMoved((bookIds) => {
+  applyStatusToLoadedBooks(bookIds, 'present')
+})
+onBookTransferred((event) => {
+  if (libraryId.value === event.fromLibraryId) {
+    const transferred = new Set(event.bookIds)
+    books.value = books.value.filter((book) => !transferred.has(book.id))
+    deselectAll(event.bookIds)
+    if (querySelection.value) querySelection.value = null
+    scheduleTransferRefresh(event.fromLibraryId)
+  } else if (libraryId.value === event.toLibraryId) {
+    scheduleTransferRefresh(event.toLibraryId)
+  }
 })
 
 const bookGridRef = ref<{ scrollToIndex: (index: number) => void } | null>(null)

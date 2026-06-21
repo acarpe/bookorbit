@@ -34,6 +34,7 @@ vi.mock('@/features/book/composables/useBookEvents', () => ({
     onBookMissing: () => undefined,
     onBookRestored: () => undefined,
     onBookMoved: () => undefined,
+    onBookTransferred: () => undefined,
   }),
 }))
 

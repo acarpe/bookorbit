@@ -47,7 +47,7 @@ ENV KOBO_CLOUDSCRAPER_PYTHON=/opt/bookorbit-python/bin/python
 COPY server/requirements/kobo-cloudscraper.txt /tmp/kobo-cloudscraper-requirements.txt
 
 RUN apk upgrade --no-cache && \
-    apk add --no-cache poppler-utils su-exec ffmpeg python3 py3-pip && \
+    apk add --no-cache poppler-utils su-exec ffmpeg python3 py3-pip tini && \
     python3 -m venv /opt/bookorbit-python && \
     /opt/bookorbit-python/bin/python -m pip install --no-cache-dir -r /tmp/kobo-cloudscraper-requirements.txt && \
     rm -f /tmp/kobo-cloudscraper-requirements.txt && \
@@ -66,6 +66,7 @@ RUN chmod +x /app/entrypoint.sh /app/bin/kepubify/* && mkdir -p /books /data/cov
 EXPOSE 3000
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
-  CMD node -e "const p=process.env.PORT||3000;fetch('http://127.0.0.1:'+p+'/api/v1/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+  CMD ["node", "-e", "const p=process.env.PORT||3000;fetch('http://127.0.0.1:'+p+'/api/v1/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
 
+ENTRYPOINT ["/sbin/tini", "-s", "--"]
 CMD ["sh", "/app/entrypoint.sh"]
