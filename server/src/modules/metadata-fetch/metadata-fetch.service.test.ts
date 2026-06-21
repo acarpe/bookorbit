@@ -313,6 +313,8 @@ describe('MetadataFetchService', () => {
       koboId: 'beautiful-ugly-3',
       comicvineId: 'cv-1',
       ranobedbId: null,
+      lubimyczytacId: 'lc-1',
+      aladinId: null,
     });
     metadataFetchRepository.hasLibraryAccess.mockResolvedValue(true);
 
@@ -329,6 +331,8 @@ describe('MetadataFetchService', () => {
       [MetadataProviderKey.KOBO]: 'beautiful-ugly-3',
       [MetadataProviderKey.COMICVINE]: 'cv-1',
       [MetadataProviderKey.RANOBEDB]: undefined,
+      [MetadataProviderKey.LUBIMYCZYTAC]: 'lc-1',
+      [MetadataProviderKey.ALADIN]: undefined,
     });
     expect(metadataFetchRepository.hasLibraryAccess).toHaveBeenCalledWith(5, 7);
   });
@@ -346,6 +350,8 @@ describe('MetadataFetchService', () => {
       koboId: null,
       comicvineId: null,
       ranobedbId: null,
+      lubimyczytacId: null,
+      aladinId: null,
     });
 
     await expect(service.getStoredProviderIds(99, makeUser({ isSuperuser: true }))).resolves.toEqual({
@@ -359,6 +365,8 @@ describe('MetadataFetchService', () => {
       [MetadataProviderKey.KOBO]: undefined,
       [MetadataProviderKey.COMICVINE]: undefined,
       [MetadataProviderKey.RANOBEDB]: undefined,
+      [MetadataProviderKey.LUBIMYCZYTAC]: undefined,
+      [MetadataProviderKey.ALADIN]: undefined,
     });
     expect(metadataFetchRepository.hasLibraryAccess).not.toHaveBeenCalled();
   });
@@ -382,6 +390,8 @@ describe('MetadataFetchService', () => {
       koboId: null,
       comicvineId: null,
       ranobedbId: null,
+      lubimyczytacId: null,
+      aladinId: null,
     });
     metadataFetchRepository.hasLibraryAccess.mockResolvedValue(false);
 

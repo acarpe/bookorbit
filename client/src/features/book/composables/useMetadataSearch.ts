@@ -20,8 +20,9 @@ export function useMetadataSearch() {
 
   let abortController: AbortController | null = null
 
-  async function loadProviders() {
-    const res = await api('/api/v1/metadata-fetch/providers')
+  async function loadProviders(bookId?: number) {
+    const query = bookId != null ? `?bookId=${bookId}` : ''
+    const res = await api(`/api/v1/metadata-fetch/providers${query}`)
     if (res.ok) providers.value = (await res.json()) as MetadataProviderInfo[]
   }
 
@@ -39,7 +40,8 @@ export function useMetadataSearch() {
     for (const k of Object.keys(providerCounts)) delete providerCounts[k as MetadataProviderKey]
     hasSearched.value = true
     isStreaming.value = true
-    abortController = new AbortController()
+    const controller = new AbortController()
+    abortController = controller
 
     const query = new URLSearchParams()
     if (params.title) query.set('title', params.title)
@@ -51,7 +53,7 @@ export function useMetadataSearch() {
 
     try {
       const res = await api(`/api/v1/metadata-fetch/stream?${query}`, {
-        signal: abortController.signal,
+        signal: controller.signal,
       })
       if (!res.ok || !res.body) return
 
@@ -80,8 +82,10 @@ export function useMetadataSearch() {
     } catch (e) {
       if (e instanceof Error && e.name === 'AbortError') return
     } finally {
-      isStreaming.value = false
-      abortController = null
+      if (abortController === controller) {
+        isStreaming.value = false
+        abortController = null
+      }
     }
   }
 

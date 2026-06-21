@@ -18,6 +18,11 @@ interface TimedProviderResult {
   timedOut: boolean;
 }
 
+export interface StoredProviderContext {
+  libraryId: number;
+  providerIds: Partial<Record<MetadataProviderKey, string>>;
+}
+
 @Injectable()
 export class MetadataFetchService {
   private static readonly PROVIDER_TIMEOUT_MS = PROVIDER_TIMEOUTS.SCRAPE;
@@ -45,6 +50,24 @@ export class MetadataFetchService {
   }
 
   async getStoredProviderIds(bookId: number, user: RequestUser): Promise<Partial<Record<MetadataProviderKey, string>>> {
+    const context = await this.getStoredProviderContext(bookId, user);
+    return context.providerIds;
+  }
+
+  async getStoredProviderContext(bookId: number, user: RequestUser): Promise<StoredProviderContext> {
+    const row = await this.getAccessibleStoredProviderIdsRow(bookId, user);
+    return {
+      libraryId: row.libraryId,
+      providerIds: this.mapStoredProviderIds(row),
+    };
+  }
+
+  async getAccessibleBookLibraryId(bookId: number, user: RequestUser): Promise<number> {
+    const row = await this.getAccessibleStoredProviderIdsRow(bookId, user);
+    return row.libraryId;
+  }
+
+  private async getAccessibleStoredProviderIdsRow(bookId: number, user: RequestUser): Promise<StoredProviderIdsRow> {
     const row = await this.metadataFetchRepository.findStoredProviderIdsRow(bookId);
     if (!row) {
       throw new NotFoundException(`Book ${bookId} not found`);
@@ -57,7 +80,7 @@ export class MetadataFetchService {
       }
     }
 
-    return this.mapStoredProviderIds(row);
+    return row;
   }
 
   private mapStoredProviderIds(row: StoredProviderIdsRow): Partial<Record<MetadataProviderKey, string>> {

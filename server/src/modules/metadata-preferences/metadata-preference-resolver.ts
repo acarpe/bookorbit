@@ -103,8 +103,8 @@ export class MetadataPreferenceResolver {
       const fallbackFiltered = fallback.providers.filter((k) => registered.has(k));
 
       // Preserve explicit provider selections; only drop unavailable providers.
-      // If filtering removes all providers, fall back to the field default set.
-      fields[field] = { ...fp, providers: filtered.length ? filtered : fallbackFiltered };
+      // If filtering removes all listed providers, fall back to the field default set.
+      fields[field] = { ...fp, providers: filtered.length || fp.providers.length === 0 ? filtered : fallbackFiltered };
     }
     const options = this.normalizeOptions(preferences?.options, defaults.options!);
     return { fields, options };

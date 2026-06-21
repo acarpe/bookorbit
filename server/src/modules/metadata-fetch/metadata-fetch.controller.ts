@@ -8,12 +8,14 @@ import { RequirePermission } from '../../common/decorators/require-permission.de
 import { LookupMetadataDto } from './dto/lookup-metadata.dto';
 import { MetadataSearchDto } from './dto/metadata-search.dto';
 import { MetadataFetchService } from './metadata-fetch.service';
+import { MetadataFetchPipeline } from './metadata-fetch-pipeline';
 import { ProviderRegistry } from './provider-registry';
 import { MetadataSearchParams } from './providers/metadata-search-params';
 import { ProviderConfigService } from '../metadata-preferences/provider-config.service';
 import { MetadataPreferencesService } from '../metadata-preferences/metadata-preferences.service';
 import { createGenreBlocklistTokenSet, filterCandidateGenresAgainstBlocklist } from '../../common/utils/genre-blocklist.utils';
 import { ProviderThrottleTracker } from './provider-throttle.tracker';
+import { ListMetadataProvidersDto } from './dto/list-metadata-providers.dto';
 
 function normalizeSearchTitle(title: string | undefined): string | undefined {
   if (!title) return title;
@@ -25,6 +27,7 @@ function normalizeSearchTitle(title: string | undefined): string | undefined {
 export class MetadataFetchController {
   constructor(
     private readonly metadataFetchService: MetadataFetchService,
+    private readonly pipeline: MetadataFetchPipeline,
     private readonly registry: ProviderRegistry,
     private readonly providerConfig: ProviderConfigService,
     private readonly throttleTracker: ProviderThrottleTracker,
@@ -32,16 +35,10 @@ export class MetadataFetchController {
   ) {}
 
   @Get('providers')
-  async listProviders(): Promise<MetadataProviderInfo[]> {
-    const config = await this.providerConfig.getConfig();
-    return this.registry
-      .all()
-      .filter((p) => config[p.key]?.enabled !== false)
-      .map((p) => ({
-        key: p.key,
-        label: p.label,
-        identifiable: p.identifiable,
-      }));
+  async listProviders(@Query() dto: ListMetadataProvidersDto, @CurrentUser() user: RequestUser): Promise<MetadataProviderInfo[]> {
+    const libraryId = dto.bookId ? await this.metadataFetchService.getAccessibleBookLibraryId(dto.bookId, user) : undefined;
+    const providerKeys = await this.resolveEnabledProviderKeys(undefined, libraryId);
+    return this.providerInfosForKeys(providerKeys);
   }
 
   @Get('providers/runtime')
@@ -56,7 +53,8 @@ export class MetadataFetchController {
 
   @Sse('stream')
   async stream(@Query() dto: MetadataSearchDto, @CurrentUser() user: RequestUser): Promise<Observable<MessageEvent>> {
-    const existingProviderIds = dto.bookId ? await this.metadataFetchService.getStoredProviderIds(dto.bookId, user) : {};
+    const storedContext = dto.bookId ? await this.metadataFetchService.getStoredProviderContext(dto.bookId, user) : null;
+    const existingProviderIds = storedContext?.providerIds ?? {};
     const requestedAudiobookProvider = (dto.providers ?? []).some(
       (provider) => provider === MetadataProviderKey.AUDIBLE || provider === MetadataProviderKey.AUDNEXUS,
     );
@@ -70,7 +68,10 @@ export class MetadataFetchController {
       isAudiobook,
     };
 
-    const [preferences, providerKeys] = await Promise.all([this.metadataPreferences.getGlobal(), this.resolveEnabledProviderKeys(dto.providers)]);
+    const [preferences, providerKeys] = await Promise.all([
+      this.metadataPreferences.getGlobal(),
+      this.resolveEnabledProviderKeys(dto.providers, storedContext?.libraryId),
+    ]);
     const blockedGenreTokens = createGenreBlocklistTokenSet(preferences.options?.genres.blocklist);
 
     return this.metadataFetchService
@@ -92,7 +93,17 @@ export class MetadataFetchController {
     return filterCandidateGenresAgainstBlocklist(candidate, blockedGenreTokens);
   }
 
-  private async resolveEnabledProviderKeys(requestedProviders: MetadataProviderKey[] | undefined): Promise<MetadataProviderKey[]> {
+  private async resolveEnabledProviderKeys(
+    requestedProviders: MetadataProviderKey[] | undefined,
+    libraryId?: number,
+  ): Promise<MetadataProviderKey[]> {
+    if (libraryId !== undefined) {
+      const effectiveProviderKeys = await this.pipeline.getEffectiveProviderKeys(libraryId);
+      if (requestedProviders === undefined) return effectiveProviderKeys;
+      const requested = new Set(requestedProviders);
+      return effectiveProviderKeys.filter((providerKey) => requested.has(providerKey));
+    }
+
     const config = await this.providerConfig.getConfig();
     const registeredProviders = this.registry.all();
     const enabledProviders = new Set(
@@ -100,5 +111,17 @@ export class MetadataFetchController {
     );
     const providerKeys = requestedProviders ?? registeredProviders.map((provider) => provider.key);
     return providerKeys.filter((providerKey) => enabledProviders.has(providerKey));
+  }
+
+  private providerInfosForKeys(providerKeys: MetadataProviderKey[]): MetadataProviderInfo[] {
+    const keySet = new Set(providerKeys);
+    return this.registry
+      .all()
+      .filter((p) => keySet.has(p.key))
+      .map((p) => ({
+        key: p.key,
+        label: p.label,
+        identifiable: p.identifiable,
+      }));
   }
 }

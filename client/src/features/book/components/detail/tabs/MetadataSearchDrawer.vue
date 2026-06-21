@@ -63,7 +63,7 @@ const drawerSubtitle = computed(() =>
 )
 
 onMounted(() => {
-  loadProviders()
+  loadProviders(props.book.id)
 })
 
 function handleClose() {
@@ -74,7 +74,7 @@ function handleSearch(params: { title: string; author: string; isbn: string }) {
   const isAudiobook = props.book.files.some((f) => f.format != null && isAudioFormat(f.format))
   selectedCandidate.value = null
   view.value = 'search'
-  search({ ...params, isAudiobook })
+  search({ ...params, bookId: props.book.id, isAudiobook })
 }
 
 function handleSelect(candidate: MetadataCandidate) {

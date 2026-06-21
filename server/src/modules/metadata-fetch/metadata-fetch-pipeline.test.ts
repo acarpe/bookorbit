@@ -561,6 +561,53 @@ describe('MetadataFetchPipeline', () => {
     expect(preferencesService.getForLibrary).toHaveBeenCalledWith(10, global);
     expect(result.title).toBe('Library Title');
   });
+
+  it('returns effective provider keys from library overrides and enabled provider config', async () => {
+    const global = createPreferences();
+    const resolvedPrefs = createPreferences((fields) => {
+      for (const field of ALL_METADATA_FIELDS) {
+        fields[field] = {
+          enabled: false,
+          providers: [MetadataProviderKey.OPEN_LIBRARY],
+          mergeStrategy: 'overwriteIfProvided',
+        };
+      }
+      fields.title = {
+        enabled: true,
+        providers: [MetadataProviderKey.KOBO, MetadataProviderKey.COMICVINE, MetadataProviderKey.GOOGLE],
+        mergeStrategy: 'overwriteIfProvided',
+      };
+      fields.authors = {
+        enabled: true,
+        providers: [MetadataProviderKey.KOBO],
+        mergeStrategy: 'overwriteIfProvided',
+      };
+    });
+
+    providerConfig.getConfig.mockResolvedValue(
+      makeProviderConfig({
+        comicvine: { enabled: false, apiKey: '' },
+      }),
+    );
+    preferencesService.getGlobal.mockResolvedValue(global);
+    preferencesService.getForLibrary.mockResolvedValue({
+      libraryId: 10,
+      overrides: { title: resolvedPrefs.fields.title, authors: resolvedPrefs.fields.authors },
+      effective: resolvedPrefs,
+    });
+    resolver.resolve.mockReturnValue(resolvedPrefs);
+    resolver.withForwardCompatibility.mockReturnValue(resolvedPrefs);
+    registry.all.mockReturnValue([
+      { key: MetadataProviderKey.GOOGLE },
+      { key: MetadataProviderKey.COMICVINE },
+      { key: MetadataProviderKey.KOBO },
+    ] as never);
+
+    const result = await pipeline.getEffectiveProviderKeys(10);
+
+    expect(preferencesService.getForLibrary).toHaveBeenCalledWith(10, global);
+    expect(result).toEqual([MetadataProviderKey.KOBO, MetadataProviderKey.GOOGLE]);
+  });
 });
 
 function makeProviderConfig(overrides: Partial<ProviderConfigurations> = {}): ProviderConfigurations {
@@ -577,5 +624,6 @@ function makeProviderConfig(overrides: Partial<ProviderConfigurations> = {}): Pr
     ranobedb: { enabled: true, ...overrides.ranobedb },
     kobo: { enabled: true, country: 'us', language: 'en', ...overrides.kobo },
     lubimyczytac: { enabled: false, ...overrides.lubimyczytac },
+    aladin: { enabled: false, ttbKey: '', ...overrides.aladin },
   };
 }

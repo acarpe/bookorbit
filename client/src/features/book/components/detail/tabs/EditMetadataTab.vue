@@ -2,10 +2,11 @@
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { Check, ChevronDown, FileCheck, HardDriveDownload, HardDriveUpload, Loader2, Lock, LockOpen, RefreshCw, Sparkles, Star, X } from '@lucide/vue'
 import { toast } from 'vue-sonner'
-import type { BookDetail, BookMetadataLockField, WriteResult } from '@bookorbit/types'
+import type { BookDetail, BookMetadataLockField, MetadataProviderInfo, WriteResult } from '@bookorbit/types'
 import { BOOK_FILE_WRITE_FIELD_LABELS, FORMAT_TO_GROUP } from '@bookorbit/types'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { api } from '@/lib/api'
 import ChipInput from '@/components/ui/ChipInput.vue'
 import CoverEditorPanel from './CoverEditorPanel.vue'
 import MetadataSearchDrawer from './MetadataSearchDrawer.vue'
@@ -26,6 +27,7 @@ import InputWithSuggestions from '@/components/ui/InputWithSuggestions.vue'
 import { RATING_STARS, getRatingStarClass } from '@/features/book/lib/rating-stars'
 import { buildFileMetadataPatch } from '@/features/book/lib/file-metadata-patch'
 import { metadataRefreshEmptyMessage } from '@/features/book/lib/metadata-refresh-feedback'
+import { filterProviderIdFields, isProviderIdFieldAvailable, isProviderIdFormField } from '@/features/book/lib/provider-id-fields'
 
 const AUTO_FILL_EMPTY_TOAST_DURATION_MS = 10_000
 
@@ -148,21 +150,22 @@ const searchComicMetadata = async (q: string): Promise<string[]> => (q.trim() ? 
 const coverPanel = ref<InstanceType<typeof CoverEditorPanel> | null>(null)
 const searchOpen = ref(false)
 const providerIdsOpen = ref(true)
+const availableMetadataProviders = ref<MetadataProviderInfo[] | null>(null)
+const visibleProviderIdFields = computed(() => filterProviderIdFields(availableMetadataProviders.value))
+let providerLoadToken = 0
 
-const providerIdFields = [
-  { field: 'googleBooksId' as const, label: 'Google Books' },
-  { field: 'goodreadsId' as const, label: 'Goodreads' },
-  { field: 'amazonId' as const, label: 'Amazon' },
-  { field: 'hardcoverId' as const, label: 'Hardcover' },
-  { field: 'openLibraryId' as const, label: 'OpenLibrary' },
-  { field: 'itunesId' as const, label: 'iTunes' },
-  { field: 'audibleId' as const, label: 'Audible' },
-  { field: 'koboId' as const, label: 'Kobo' },
-  { field: 'comicvineId' as const, label: 'ComicVine' },
-  { field: 'ranobedbId' as const, label: 'RanobeDB' },
-  { field: 'lubimyczytacId' as const, label: 'LubimyCzytac' },
-  { field: 'aladinId' as const, label: 'Aladin' },
-]
+async function loadAvailableMetadataProviders(bookId: number) {
+  const token = ++providerLoadToken
+  availableMetadataProviders.value = null
+  try {
+    const res = await api(`/api/v1/metadata-fetch/providers?bookId=${bookId}`)
+    if (!res.ok) return
+    const providers = (await res.json()) as MetadataProviderInfo[]
+    if (token === providerLoadToken) availableMetadataProviders.value = providers
+  } catch {
+    // non-fatal: keep all provider ID fields visible when provider availability cannot be loaded
+  }
+}
 
 function setIntField(field: 'publishedYear' | 'pageCount' | 'durationSeconds', e: Event) {
   const val = (e.target as HTMLInputElement).value
@@ -179,6 +182,14 @@ watch(
   (book) => {
     load(book)
     loadLocks(book)
+  },
+  { immediate: true },
+)
+
+watch(
+  () => props.book.id,
+  (bookId) => {
+    void loadAvailableMetadataProviders(bookId)
   },
   { immediate: true },
 )
@@ -281,6 +292,7 @@ function applyPrimarySeriesPatch(field: 'seriesName' | 'seriesIndex', value: unk
 
 function applyDirectPatchField(field: (typeof DIRECT_PATCH_FIELDS)[number], value: unknown, skippedFields: BookMetadataLockField[]): boolean {
   if (value === undefined) return false
+  if (isProviderIdFormField(field) && !isProviderIdFieldAvailable(field, availableMetadataProviders.value)) return false
   if (field === 'seriesName' || field === 'seriesIndex') {
     return applyPrimarySeriesPatch(field, value, skippedFields)
   }
@@ -1029,7 +1041,7 @@ function handleCoverChanged(source: 'extracted' | 'custom' | null) {
       </div>
 
       <!-- Provider IDs -->
-      <div class="rounded-lg border border-border overflow-hidden">
+      <div v-if="visibleProviderIdFields.length > 0" class="rounded-lg border border-border overflow-hidden">
         <button
           type="button"
           class="w-full flex items-center justify-between px-3 py-2 bg-muted/40 hover:bg-muted/70 transition-colors"
@@ -1040,7 +1052,7 @@ function handleCoverChanged(source: 'extracted' | 'custom' | null) {
         </button>
         <div v-if="providerIdsOpen" class="p-3">
           <div class="grid grid-cols-2 sm:flex sm:gap-3 sm:overflow-x-auto gap-2 p-px">
-            <div v-for="{ field, label } in providerIdFields" :key="field" class="min-w-0 sm:min-w-30 sm:flex-1">
+            <div v-for="{ field, label } in visibleProviderIdFields" :key="field" class="min-w-0 sm:min-w-30 sm:flex-1">
               <MetadataFieldLabel :label="label" :field="field" :locked="isLocked(field)" :is-updating="isUpdatingLock" @toggle="handleLockToggle">
                 <input
                   v-model="form[field]"

@@ -33,6 +33,19 @@ type ProviderSelectionDiagnostics = Pick<
   'activeProviders' | 'fieldRuleProviders' | 'disabledFieldRuleProviders' | 'enabledUnreferencedProviders' | 'throttledProviders'
 >;
 
+type ConfiguredProviderSelection = Pick<
+  MetadataFetchDiagnostics,
+  'fieldRuleProviders' | 'disabledFieldRuleProviders' | 'enabledUnreferencedProviders'
+> & {
+  configuredFieldRuleProviders: MetadataProviderKey[];
+};
+
+type ProviderPreferenceContext = {
+  preferences: MetadataFetchPreferences;
+  registeredKeys: MetadataProviderKey[];
+  providerConfig: ProviderConfigurations;
+};
+
 @Injectable()
 export class MetadataFetchPipeline {
   private readonly logger = new Logger(MetadataFetchPipeline.name);
@@ -68,6 +81,11 @@ export class MetadataFetchPipeline {
     return this.runInternal(params, existingFields, libraryId);
   }
 
+  async getEffectiveProviderKeys(libraryId?: number): Promise<MetadataProviderKey[]> {
+    const { preferences, registeredKeys, providerConfig } = await this.resolveProviderPreferenceContext(libraryId);
+    return this.deriveConfiguredProviderSelection(preferences, registeredKeys, providerConfig).configuredFieldRuleProviders;
+  }
+
   private async runInternal(
     params: MetadataSearchParams,
     existingFields: Partial<Record<MetadataField, unknown>>,
@@ -78,11 +96,7 @@ export class MetadataFetchPipeline {
     providerIds: ResolvedProviderIds;
     diagnostics: MetadataFetchDiagnostics;
   }> {
-    const [global, providerConfig] = await Promise.all([this.preferencesService.getGlobal(), this.providerConfig.getConfig()]);
-    const overrides = libraryId ? (await this.preferencesService.getForLibrary(libraryId, global)).overrides : null;
-    const registeredKeys = this.registry.all().map((p) => p.key) as MetadataProviderKey[];
-    const preferences: MetadataFetchPreferences = this.resolver.withForwardCompatibility(this.resolver.resolve(global, overrides), registeredKeys);
-
+    const { preferences, registeredKeys, providerConfig } = await this.resolveProviderPreferenceContext(libraryId);
     const providerSelection = this.deriveProviderSet(preferences, registeredKeys, providerConfig);
     const candidates = providerSelection.activeProviders.length
       ? await firstValueFrom(this.fetchService.search(params, providerSelection.activeProviders).pipe(toArray()), {
@@ -99,11 +113,20 @@ export class MetadataFetchPipeline {
     return { resolved, sources, providerIds, diagnostics };
   }
 
-  private deriveProviderSet(
+  private async resolveProviderPreferenceContext(libraryId?: number): Promise<ProviderPreferenceContext> {
+    const [global, providerConfig] = await Promise.all([this.preferencesService.getGlobal(), this.providerConfig.getConfig()]);
+    const overrides = libraryId ? (await this.preferencesService.getForLibrary(libraryId, global)).overrides : null;
+    const registeredKeys = this.registry.all().map((p) => p.key) as MetadataProviderKey[];
+    const preferences: MetadataFetchPreferences = this.resolver.withForwardCompatibility(this.resolver.resolve(global, overrides), registeredKeys);
+
+    return { preferences, registeredKeys, providerConfig };
+  }
+
+  private deriveConfiguredProviderSelection(
     preferences: MetadataFetchPreferences,
     registeredKeys: MetadataProviderKey[],
     providerConfig: ProviderConfigurations,
-  ): ProviderSelectionDiagnostics {
+  ): ConfiguredProviderSelection {
     const registered = new Set(registeredKeys);
     const fieldRuleProviders = new Set<MetadataProviderKey>();
     const configuredFieldRuleProviders = new Set<MetadataProviderKey>();
@@ -122,9 +145,28 @@ export class MetadataFetchPipeline {
       }
     }
 
+    const enabledUnreferencedProviders = registeredKeys.filter(
+      (providerKey) => providerConfig[providerKey]?.enabled !== false && !fieldRuleProviders.has(providerKey),
+    );
+
+    return {
+      fieldRuleProviders: [...fieldRuleProviders],
+      configuredFieldRuleProviders: [...configuredFieldRuleProviders],
+      disabledFieldRuleProviders: [...disabledFieldRuleProviders],
+      enabledUnreferencedProviders,
+    };
+  }
+
+  private deriveProviderSet(
+    preferences: MetadataFetchPreferences,
+    registeredKeys: MetadataProviderKey[],
+    providerConfig: ProviderConfigurations,
+  ): ProviderSelectionDiagnostics {
+    const configuredProviderSelection = this.deriveConfiguredProviderSelection(preferences, registeredKeys, providerConfig);
+
     const activeProviders: MetadataProviderKey[] = [];
     const throttledProviders: MetadataProviderKey[] = [];
-    for (const key of configuredFieldRuleProviders) {
+    for (const key of configuredProviderSelection.configuredFieldRuleProviders) {
       if (this.throttleTracker.isThrottled(key)) {
         throttledProviders.push(key);
         this.logger.warn(
@@ -135,15 +177,11 @@ export class MetadataFetchPipeline {
       }
     }
 
-    const enabledUnreferencedProviders = registeredKeys.filter(
-      (providerKey) => providerConfig[providerKey]?.enabled !== false && !fieldRuleProviders.has(providerKey),
-    );
-
     return {
       activeProviders,
-      fieldRuleProviders: [...fieldRuleProviders],
-      disabledFieldRuleProviders: [...disabledFieldRuleProviders],
-      enabledUnreferencedProviders,
+      fieldRuleProviders: configuredProviderSelection.fieldRuleProviders,
+      disabledFieldRuleProviders: configuredProviderSelection.disabledFieldRuleProviders,
+      enabledUnreferencedProviders: configuredProviderSelection.enabledUnreferencedProviders,
       throttledProviders,
     };
   }

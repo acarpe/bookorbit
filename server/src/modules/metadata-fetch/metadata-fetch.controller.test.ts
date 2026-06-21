@@ -6,6 +6,7 @@ import type { RequestUser } from '../../common/types/request-user';
 import { LookupMetadataDto } from './dto/lookup-metadata.dto';
 import { MetadataSearchDto } from './dto/metadata-search.dto';
 import { MetadataFetchController } from './metadata-fetch.controller';
+import { MetadataFetchPipeline } from './metadata-fetch-pipeline';
 import { MetadataFetchService } from './metadata-fetch.service';
 import { ProviderRegistry } from './provider-registry';
 import { ProviderConfigService } from '../metadata-preferences/provider-config.service';
@@ -15,6 +16,7 @@ import { ProviderThrottleTracker } from './provider-throttle.tracker';
 
 describe('MetadataFetchController', () => {
   let service: Mocked<MetadataFetchService>;
+  let pipeline: Mocked<MetadataFetchPipeline>;
   let registry: Mocked<ProviderRegistry>;
   let providerConfig: Mocked<ProviderConfigService>;
   let metadataPreferences: Mocked<MetadataPreferencesService>;
@@ -34,8 +36,14 @@ describe('MetadataFetchController', () => {
     service = {
       search: vi.fn(),
       getStoredProviderIds: vi.fn(),
+      getStoredProviderContext: vi.fn(),
+      getAccessibleBookLibraryId: vi.fn(),
       lookupById: vi.fn(),
     } as unknown as Mocked<MetadataFetchService>;
+
+    pipeline = {
+      getEffectiveProviderKeys: vi.fn(),
+    } as unknown as Mocked<MetadataFetchPipeline>;
 
     registry = {
       all: vi.fn(),
@@ -56,7 +64,7 @@ describe('MetadataFetchController', () => {
     } as unknown as Mocked<ProviderThrottleTracker>;
     registry.all.mockReturnValue(providerInfos as never);
 
-    controller = new MetadataFetchController(service, registry, providerConfig, throttleTracker, metadataPreferences);
+    controller = new MetadataFetchController(service, pipeline, registry, providerConfig, throttleTracker, metadataPreferences);
     user = {
       id: 7,
       username: 'reader',
@@ -79,14 +87,34 @@ describe('MetadataFetchController', () => {
       { key: MetadataProviderKey.OPEN_LIBRARY, label: 'OpenLibrary', identifiable: false },
     ] as never);
 
-    await expect(controller.listProviders()).resolves.toEqual([
+    await expect(controller.listProviders({}, user)).resolves.toEqual([
       { key: MetadataProviderKey.GOOGLE, label: 'Google Books', identifiable: true },
       { key: MetadataProviderKey.OPEN_LIBRARY, label: 'OpenLibrary', identifiable: false },
     ]);
   });
 
+  it('returns provider metadata scoped to the current book library when bookId is provided', async () => {
+    service.getAccessibleBookLibraryId.mockResolvedValue(9);
+    pipeline.getEffectiveProviderKeys.mockResolvedValue([MetadataProviderKey.KOBO, MetadataProviderKey.GOOGLE]);
+    registry.all.mockReturnValue([
+      { key: MetadataProviderKey.GOOGLE, label: 'Google Books', identifiable: true },
+      { key: MetadataProviderKey.OPEN_LIBRARY, label: 'OpenLibrary', identifiable: false },
+      { key: MetadataProviderKey.KOBO, label: 'Kobo', identifiable: true },
+    ] as never);
+
+    const result = await controller.listProviders({ bookId: 12 }, user);
+
+    expect(service.getAccessibleBookLibraryId).toHaveBeenCalledWith(12, user);
+    expect(pipeline.getEffectiveProviderKeys).toHaveBeenCalledWith(9);
+    expect(result).toEqual([
+      { key: MetadataProviderKey.GOOGLE, label: 'Google Books', identifiable: true },
+      { key: MetadataProviderKey.KOBO, label: 'Kobo', identifiable: true },
+    ]);
+  });
+
   it('streams metadata candidates and enriches search params with stored provider ids when bookId is present', async () => {
-    service.getStoredProviderIds.mockResolvedValue({ [MetadataProviderKey.GOOGLE]: 'vol-1' });
+    service.getStoredProviderContext.mockResolvedValue({ libraryId: 5, providerIds: { [MetadataProviderKey.GOOGLE]: 'vol-1' } });
+    pipeline.getEffectiveProviderKeys.mockResolvedValue([MetadataProviderKey.GOOGLE, MetadataProviderKey.OPEN_LIBRARY]);
     service.search.mockReturnValue(
       of(
         { provider: MetadataProviderKey.GOOGLE, providerId: 'vol-1', title: 'First' },
@@ -105,7 +133,8 @@ describe('MetadataFetchController', () => {
     const stream = await controller.stream(dto, user);
     const events = await firstValueFrom(stream.pipe(toArray()));
 
-    expect(service.getStoredProviderIds).toHaveBeenCalledWith(12, user);
+    expect(service.getStoredProviderContext).toHaveBeenCalledWith(12, user);
+    expect(pipeline.getEffectiveProviderKeys).toHaveBeenCalledWith(5);
     expect(service.search).toHaveBeenCalledWith(
       {
         title: 'Dune',
@@ -144,7 +173,7 @@ describe('MetadataFetchController', () => {
     const stream = await controller.stream(dto, user);
     await firstValueFrom(stream.pipe(toArray()));
 
-    expect(service.getStoredProviderIds).not.toHaveBeenCalled();
+    expect(service.getStoredProviderContext).not.toHaveBeenCalled();
     expect(service.search).toHaveBeenCalledWith(
       {
         title: 'Dune',
@@ -202,7 +231,14 @@ describe('MetadataFetchController', () => {
   });
 
   it('infers audiobook search from stored audible ids when providers are not specified', async () => {
-    service.getStoredProviderIds.mockResolvedValue({ [MetadataProviderKey.AUDIBLE]: 'B0ABC12345' });
+    service.getStoredProviderContext.mockResolvedValue({ libraryId: 8, providerIds: { [MetadataProviderKey.AUDIBLE]: 'B0ABC12345' } });
+    pipeline.getEffectiveProviderKeys.mockResolvedValue([
+      MetadataProviderKey.GOOGLE,
+      MetadataProviderKey.OPEN_LIBRARY,
+      MetadataProviderKey.AUDIBLE,
+      MetadataProviderKey.AUDNEXUS,
+      MetadataProviderKey.KOBO,
+    ]);
     service.search.mockReturnValue(of({ provider: MetadataProviderKey.AUDNEXUS, providerId: 'B0ABC12345', title: 'Audio Result' }));
 
     const dto: MetadataSearchDto = {
@@ -315,5 +351,6 @@ function makeProviderConfig(overrides: Partial<ProviderConfigurations> = {}): Pr
     ranobedb: { enabled: false, ...overrides.ranobedb },
     kobo: { enabled: true, country: 'us', language: 'en', ...overrides.kobo },
     lubimyczytac: { enabled: false, ...overrides.lubimyczytac },
+    aladin: { enabled: false, ttbKey: '', ...overrides.aladin },
   };
 }

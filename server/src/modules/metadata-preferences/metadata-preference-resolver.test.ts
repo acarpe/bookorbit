@@ -190,4 +190,22 @@ describe('MetadataPreferenceResolver', () => {
     expect(result.fields.title.providers).toEqual([MetadataProviderKey.GOOGLE]);
     expect(result.fields.subtitle.providers).toEqual([MetadataProviderKey.GOOGLE]);
   });
+
+  it('preserves explicit empty provider selections when applying forward compatibility', () => {
+    const defaults = resolver.getDefaultPreferences();
+    const preferences: MetadataFetchPreferences = {
+      fields: {
+        ...defaults.fields,
+        title: {
+          enabled: true,
+          providers: [],
+          mergeStrategy: 'fillMissing',
+        },
+      },
+    };
+
+    const result = resolver.withForwardCompatibility(preferences, [MetadataProviderKey.GOOGLE]);
+
+    expect(result.fields.title.providers).toEqual([]);
+  });
 });
