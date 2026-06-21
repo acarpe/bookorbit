@@ -24,6 +24,19 @@ export const ENTITY_CAPABILITIES: Record<EntityType, EntityTypeCapabilities> = {
 };
 
 // Browse
+export type BrowseEntitySortBy = "name" | "bookCount";
+export type BrowseEntitySortOrder = "asc" | "desc";
+export type BrowseEntityBookCountFilter = "any" | "empty";
+
+export interface BrowseEntitiesParams {
+  search?: string;
+  page?: number;
+  pageSize?: number;
+  sortBy?: BrowseEntitySortBy;
+  sortOrder?: BrowseEntitySortOrder;
+  bookCount?: BrowseEntityBookCountFilter;
+}
+
 export interface BrowseEntityItem {
   id: number | string;
   name: string;

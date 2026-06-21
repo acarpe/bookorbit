@@ -524,6 +524,7 @@ describe('EntityManagerService', () => {
         pageSize: 25,
         sortBy: 'name',
         sortOrder: 'asc',
+        bookCount: 'any',
         contentFilters: EMPTY_CONTENT_FILTER_RULES,
       });
       expect(result.items).toHaveLength(1);
@@ -536,7 +537,14 @@ describe('EntityManagerService', () => {
       const { service, strategies } = makeService();
       (strategies.tag.browse as any).mockResolvedValue({ items: [], total: 0 });
 
-      await service.browse('tag', mockUser, { search: 'fic', page: 2, pageSize: 50, sortBy: 'bookCount', sortOrder: 'desc' });
+      await service.browse('tag', mockUser, {
+        search: 'fic',
+        page: 2,
+        pageSize: 50,
+        sortBy: 'bookCount',
+        sortOrder: 'desc',
+        bookCount: 'empty',
+      });
 
       expect(strategies.tag.browse).toHaveBeenCalledWith({
         libraryIds: [1, 2],
@@ -545,8 +553,18 @@ describe('EntityManagerService', () => {
         pageSize: 50,
         sortBy: 'bookCount',
         sortOrder: 'desc',
+        bookCount: 'empty',
         contentFilters: EMPTY_CONTENT_FILTER_RULES,
       });
+    });
+
+    it('does not pass empty book count filtering to inline strategies', async () => {
+      const { service, strategies } = makeService();
+      (strategies.publisher.browse as any).mockResolvedValue({ items: [], total: 0 });
+
+      await service.browse('publisher', mockUser, { bookCount: 'empty' });
+
+      expect(strategies.publisher.browse).toHaveBeenCalledWith(expect.objectContaining({ bookCount: 'any' }));
     });
   });
 
@@ -668,10 +686,25 @@ describe('EntityManagerService', () => {
     it('does not clean dismissed pairs for soft delete', async () => {
       const { service, strategies, repo } = makeService();
       (strategies.genre.deleteEntity as any).mockResolvedValue({ name: 'Fantasy', affectedBookIds: [] });
+      (strategies.genre.getBookCount as any).mockResolvedValue(2);
 
       await service.deleteEntity('genre', mockUser, 5, 'soft', false);
 
+      expect(strategies.genre.deleteEntity).toHaveBeenCalledWith({ entityId: 5, mode: 'soft', libraryIds: [1, 2] });
       expect(repo.deleteDismissedPairsForEntity).not.toHaveBeenCalled();
+    });
+
+    it('uses hard delete for zero-book first-class entities requested as soft delete', async () => {
+      const { service, strategies, repo, duplicateCompute } = makeService();
+      (strategies.author.deleteEntity as any).mockResolvedValue({ name: 'Unused', affectedBookIds: [] });
+      (strategies.author.getBookCount as any).mockResolvedValue(0);
+
+      const result = await service.deleteEntity('author', mockUser, 5, 'soft', false);
+
+      expect(strategies.author.deleteEntity).toHaveBeenCalledWith({ entityId: 5, mode: 'hard', libraryIds: [1, 2] });
+      expect(repo.deleteDismissedPairsForEntity).toHaveBeenCalledWith('author', 5);
+      expect(duplicateCompute.invalidateCandidatesForEntities).toHaveBeenCalledWith('author', [5]);
+      expect(result.mode).toBe('hard');
     });
 
     it('cleans inline dismissed pairs for inline entities', async () => {

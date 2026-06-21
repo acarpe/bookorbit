@@ -1,5 +1,5 @@
 import { BadRequestException, Inject, Injectable, NotFoundException } from '@nestjs/common';
-import { and, asc, count, desc, eq, ilike, inArray, sql } from 'drizzle-orm';
+import { and, asc, count, desc, eq, exists, ilike, inArray, notExists, or, sql } from 'drizzle-orm';
 import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
 
 import { DB } from '../../../db';
@@ -142,40 +142,60 @@ export class AuthorStrategy implements EntityStrategy {
             .where(and(inArray(books.libraryId, params.libraryIds), ...cfClauses))
         : null;
 
-    const [countResult, itemRows] = await Promise.all([
-      this.db
-        .select({ total: sql<number>`count(distinct ${authors.id})::int` })
-        .from(authors)
-        .where(nameCondition),
-      this.db
-        .select({
-          id: authors.id,
-          name: authors.name,
-          sortName: authors.sortName,
-          hasPhoto: authors.hasPhoto,
-          bookCount: bookCountExpr,
-        })
-        .from(authors)
-        .leftJoin(
-          bookAuthors,
-          libraryBookIds
-            ? and(eq(bookAuthors.authorId, authors.id), inArray(bookAuthors.bookId, libraryBookIds))
-            : eq(bookAuthors.authorId, authors.id),
+    const joinCondition = libraryBookIds
+      ? and(eq(bookAuthors.authorId, authors.id), inArray(bookAuthors.bookId, libraryBookIds))
+      : and(eq(bookAuthors.authorId, authors.id), sql`false`);
+
+    const hasScopedBooks = libraryBookIds
+      ? exists(
+          this.db
+            .select({ one: sql`1` })
+            .from(bookAuthors)
+            .where(and(eq(bookAuthors.authorId, authors.id), inArray(bookAuthors.bookId, libraryBookIds))),
         )
-        .where(nameCondition)
-        .groupBy(authors.id, authors.name, authors.sortName, authors.hasPhoto)
-        .orderBy(
-          params.sortBy === 'bookCount'
-            ? params.sortOrder === 'asc'
-              ? asc(bookCountExpr)
-              : desc(bookCountExpr)
-            : params.sortOrder === 'asc'
-              ? asc(authors.name)
-              : desc(authors.name),
-        )
-        .limit(params.pageSize)
-        .offset((params.page - 1) * params.pageSize),
-    ]);
+      : undefined;
+    const isGloballyEmpty = notExists(
+      this.db
+        .select({ one: sql`1` })
+        .from(bookAuthors)
+        .where(eq(bookAuthors.authorId, authors.id)),
+    );
+    const visibilityCondition =
+      params.bookCount === 'empty' ? isGloballyEmpty : hasScopedBooks ? or(hasScopedBooks, isGloballyEmpty) : isGloballyEmpty;
+
+    const countQuery = this.db
+      .select({ total: sql<number>`count(distinct ${authors.id})::int` })
+      .from(authors)
+      .where(and(nameCondition, visibilityCondition));
+
+    const itemQuery = this.db
+      .select({
+        id: authors.id,
+        name: authors.name,
+        sortName: authors.sortName,
+        hasPhoto: authors.hasPhoto,
+        bookCount: bookCountExpr,
+      })
+      .from(authors)
+      .leftJoin(bookAuthors, joinCondition)
+      .where(and(nameCondition, visibilityCondition))
+      .groupBy(authors.id, authors.name, authors.sortName, authors.hasPhoto)
+      .$dynamic();
+
+    itemQuery
+      .orderBy(
+        params.sortBy === 'bookCount'
+          ? params.sortOrder === 'asc'
+            ? asc(bookCountExpr)
+            : desc(bookCountExpr)
+          : params.sortOrder === 'asc'
+            ? asc(authors.name)
+            : desc(authors.name),
+      )
+      .limit(params.pageSize)
+      .offset((params.page - 1) * params.pageSize);
+
+    const [countResult, itemRows] = await Promise.all([countQuery, itemQuery]);
 
     return {
       items: itemRows.map((r) => ({ id: r.id, name: r.name, bookCount: r.bookCount, sortName: r.sortName, hasPhoto: r.hasPhoto })),

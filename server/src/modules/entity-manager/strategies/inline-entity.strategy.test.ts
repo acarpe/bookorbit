@@ -74,7 +74,7 @@ describe('InlineEntityStrategy', () => {
         .mockResolvedValueOnce({ rows: [{ name: 'Alice', bookCount: 3 }] });
       const strategy = makeStrategy({ execute });
 
-      const result = await strategy.browse({ libraryIds: [1], page: 1, pageSize: 25, sortBy: 'name', sortOrder: 'asc' });
+      const result = await strategy.browse({ libraryIds: [1], page: 1, pageSize: 25, sortBy: 'name', sortOrder: 'asc', bookCount: 'any' });
 
       expect(execute).toHaveBeenCalledTimes(2);
       expect(result).toEqual({ items: [{ id: 'Alice', name: 'Alice', bookCount: 3 }], total: 2 });
@@ -84,7 +84,7 @@ describe('InlineEntityStrategy', () => {
       const execute = vi.fn().mockResolvedValueOnce({ rows: [] }).mockResolvedValueOnce({ rows: [] });
       const strategy = makeStrategy({ execute });
 
-      const result = await strategy.browse({ libraryIds: [1], page: 1, pageSize: 25, sortBy: 'name', sortOrder: 'asc' });
+      const result = await strategy.browse({ libraryIds: [1], page: 1, pageSize: 25, sortBy: 'name', sortOrder: 'asc', bookCount: 'any' });
 
       expect(result.total).toBe(0);
       expect(result.items).toEqual([]);

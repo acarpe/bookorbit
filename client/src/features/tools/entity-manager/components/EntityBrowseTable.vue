@@ -1,8 +1,16 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { ChevronLeft, ChevronRight, GitMerge, MoreHorizontal, Pencil, Search, Scissors, Trash2, X } from 'lucide-vue-next'
-import type { BrowseEntityItem, EntityTypeCapabilities } from '@bookorbit/types'
+import type {
+  BrowseEntityBookCountFilter,
+  BrowseEntityItem,
+  BrowseEntitySortBy,
+  BrowseEntitySortOrder,
+  EntityTypeCapabilities,
+} from '@bookorbit/types'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
+
+type BrowseSortOption = 'name-asc' | 'name-desc' | 'bookCount-asc' | 'bookCount-desc'
 
 const props = defineProps<{
   items: BrowseEntityItem[]
@@ -11,6 +19,9 @@ const props = defineProps<{
   pageSize: number
   totalPages: number
   search: string
+  sortBy: BrowseEntitySortBy
+  sortOrder: BrowseEntitySortOrder
+  bookCount: BrowseEntityBookCountFilter
   loading: boolean
   selectedIds: Set<number | string>
   capabilities: EntityTypeCapabilities
@@ -20,6 +31,8 @@ const props = defineProps<{
 const emit = defineEmits<{
   'update:page': [value: number]
   'update:search': [value: string]
+  'update:bookCount': [value: BrowseEntityBookCountFilter]
+  sortChange: [sortBy: BrowseEntitySortBy, sortOrder: BrowseEntitySortOrder]
   select: [id: number | string, event: MouseEvent]
   rename: [item: BrowseEntityItem]
   delete: [item: BrowseEntityItem]
@@ -32,6 +45,28 @@ const emit = defineEmits<{
 
 function handleSearchInput(event: Event): void {
   emit('update:search', (event.target as HTMLInputElement).value)
+}
+
+function handleSortChange(event: Event): void {
+  const value = (event.target as HTMLSelectElement).value as BrowseSortOption
+  switch (value) {
+    case 'name-desc':
+      emit('sortChange', 'name', 'desc')
+      break
+    case 'bookCount-asc':
+      emit('sortChange', 'bookCount', 'asc')
+      break
+    case 'bookCount-desc':
+      emit('sortChange', 'bookCount', 'desc')
+      break
+    default:
+      emit('sortChange', 'name', 'asc')
+      break
+  }
+}
+
+function handleEmptyOnlyChange(event: Event): void {
+  emit('update:bookCount', (event.target as HTMLInputElement).checked ? 'empty' : 'any')
 }
 
 function handlePrevPage(): void {
@@ -66,8 +101,14 @@ function handleBulkMerge(): void {
   emit('bulkMerge')
 }
 
+function handleClearSelection(): void {
+  emit('clearSelection')
+}
+
 const hasSelection = computed(() => props.selectedIds.size > 0)
 const canMerge = computed(() => props.selectedIds.size >= 2)
+const sortValue = computed<BrowseSortOption>(() => `${props.sortBy}-${props.sortOrder}` as BrowseSortOption)
+const emptyOnly = computed(() => props.bookCount === 'empty')
 </script>
 
 <template>
@@ -86,10 +127,24 @@ const canMerge = computed(() => props.selectedIds.size >= 2)
           />
         </div>
         <div class="flex items-center gap-2 flex-wrap">
+          <select
+            :value="sortValue"
+            class="h-8 rounded-md border border-border bg-background px-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+            @change="handleSortChange"
+          >
+            <option value="name-asc">Name A-Z</option>
+            <option value="name-desc">Name Z-A</option>
+            <option value="bookCount-asc">Fewest books</option>
+            <option value="bookCount-desc">Most books</option>
+          </select>
+          <label v-if="!isInline" class="inline-flex h-8 items-center gap-2 rounded-md border border-border px-2 text-sm text-muted-foreground">
+            <input type="checkbox" class="rounded accent-primary" :checked="emptyOnly" @change="handleEmptyOnlyChange" />
+            <span>Empty only</span>
+          </label>
           <button
             v-if="hasSelection"
             class="inline-flex items-center gap-1 h-8 px-2 rounded-md hover:bg-muted text-muted-foreground hover:text-foreground transition-colors mr-1"
-            @click="emit('clearSelection')"
+            @click="handleClearSelection"
           >
             <X class="h-3.5 w-3.5" />
             <span class="text-sm font-medium">Clear</span>

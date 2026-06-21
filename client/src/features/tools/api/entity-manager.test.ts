@@ -39,13 +39,14 @@ describe('browseEntities', () => {
     const data = { items: [], total: 0 }
     mockedApi.mockResolvedValue(mockOkResponse(data))
 
-    const result = await browseEntities('genre', { page: 1, pageSize: 20, sortBy: 'name' })
+    const result = await browseEntities('genre', { page: 1, pageSize: 20, sortBy: 'name', bookCount: 'empty' })
 
     const url = mockedApi.mock.calls[0][0] as string
     expect(url).toContain(`${BASE}/genre/browse`)
     expect(url).toContain('page=1')
     expect(url).toContain('pageSize=20')
     expect(url).toContain('sortBy=name')
+    expect(url).toContain('bookCount=empty')
     expect(result).toEqual(data)
   })
 

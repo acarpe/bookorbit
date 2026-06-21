@@ -25,14 +25,25 @@ const showBulkDelete = ref(false)
 const showBrowseMerge = ref(false)
 
 const selectedBrowseItems = computed(() => Array.from(em.selectedItemsMap.value.values()))
+const deleteDefaultMode = computed<'soft' | 'hard'>(() => (deleteTarget.value?.bookCount === 0 ? 'hard' : 'soft'))
+const bulkDeleteDefaultMode = computed<'soft' | 'hard'>(() =>
+  selectedBrowseItems.value.length > 0 && selectedBrowseItems.value.every((item) => item.bookCount === 0) ? 'hard' : 'soft',
+)
 
 let searchDebounce: ReturnType<typeof setTimeout> | null = null
+
+function refreshBrowseFromFirstPage(): void {
+  if (em.browsePage.value === 1) {
+    em.fetchBrowse()
+    return
+  }
+  em.browsePage.value = 1
+}
 
 watch(em.browseSearch, () => {
   if (searchDebounce) clearTimeout(searchDebounce)
   searchDebounce = setTimeout(() => {
-    em.browsePage.value = 1
-    em.fetchBrowse()
+    refreshBrowseFromFirstPage()
   }, 300)
 })
 
@@ -100,6 +111,17 @@ function handleUpdateSearch(value: string): void {
 
 function handleUpdatePage(value: number): void {
   em.browsePage.value = value
+}
+
+function handleBrowseSortChange(sortBy: 'name' | 'bookCount', sortOrder: 'asc' | 'desc'): void {
+  em.browseSortBy.value = sortBy
+  em.browseSortOrder.value = sortOrder
+  refreshBrowseFromFirstPage()
+}
+
+function handleUpdateBookCount(value: 'any' | 'empty'): void {
+  em.browseBookCount.value = em.isInline.value ? 'any' : value
+  refreshBrowseFromFirstPage()
 }
 
 async function handleMerge(targetId: number | string, sourceIds: (number | string)[], writeFiles: boolean): Promise<void> {
@@ -334,12 +356,17 @@ async function handleBulkDeleteConfirm(mode: 'soft' | 'hard' | 'inline', writeFi
           :page-size="em.browsePageSize.value"
           :total-pages="em.browseTotalPages.value"
           :search="em.browseSearch.value"
+          :sort-by="em.browseSortBy.value"
+          :sort-order="em.browseSortOrder.value"
+          :book-count="em.browseBookCount.value"
           :loading="em.browseLoading.value"
           :selected-ids="em.selectedIds.value"
           :capabilities="em.capabilities.value"
           :is-inline="em.isInline.value"
           @update:page="handleUpdatePage"
           @update:search="handleUpdateSearch"
+          @update:book-count="handleUpdateBookCount"
+          @sort-change="handleBrowseSortChange"
           @select="handleSelectItem"
           @rename="handleRename"
           @delete="handleDelete"
@@ -365,6 +392,7 @@ async function handleBulkDeleteConfirm(mode: 'soft' | 'hard' | 'inline', writeFi
       v-if="deleteTarget"
       :entity-name="deleteTarget.name"
       :is-inline="em.isInline.value"
+      :default-mode="deleteDefaultMode"
       :loading="em.operationLoading.value"
       @confirm="handleDeleteConfirm"
       @cancel="deleteTarget = null"
@@ -382,6 +410,7 @@ async function handleBulkDeleteConfirm(mode: 'soft' | 'hard' | 'inline', writeFi
       v-if="showBulkDelete"
       :count="em.selectedIds.value.size"
       :is-inline="em.isInline.value"
+      :default-mode="bulkDeleteDefaultMode"
       :loading="em.operationLoading.value"
       @confirm="handleBulkDeleteConfirm"
       @cancel="showBulkDelete = false"

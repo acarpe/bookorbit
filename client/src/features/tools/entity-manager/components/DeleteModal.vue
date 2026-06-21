@@ -5,6 +5,7 @@ import { AlertTriangle, X } from 'lucide-vue-next'
 const props = defineProps<{
   entityName: string
   isInline: boolean
+  defaultMode?: 'soft' | 'hard'
   loading: boolean
 }>()
 
@@ -13,7 +14,7 @@ const emit = defineEmits<{
   cancel: []
 }>()
 
-const deleteMode = ref<'soft' | 'hard'>(props.isInline ? 'hard' : 'soft')
+const deleteMode = ref<'soft' | 'hard'>(props.isInline ? 'hard' : (props.defaultMode ?? 'soft'))
 const writeFiles = ref(false)
 
 function handleConfirm(): void {

@@ -29,9 +29,10 @@ function makeSelectChain(rows: unknown[]) {
   const where = vi.fn().mockReturnValue({ orderBy, limit });
   const innerJoin = vi.fn();
   innerJoin.mockReturnValue({ where, innerJoin });
-  const from = vi.fn().mockReturnValue({ where, innerJoin });
+  const leftJoin = vi.fn().mockReturnValue({ where });
+  const from = vi.fn().mockReturnValue({ where, innerJoin, leftJoin });
   const select = vi.fn().mockReturnValue({ from });
-  return { select, from, innerJoin, where, orderBy, limit };
+  return { select, from, innerJoin, leftJoin, where, orderBy, limit };
 }
 
 function makeWhereRowsSelectChain(rows: unknown[]) {
@@ -56,6 +57,11 @@ function makeUpdateTx() {
 }
 
 describe('SeriesStrategy', () => {
+  function thenableRows(rows: unknown[]) {
+    const promise = Promise.resolve(rows);
+    return { then: promise.then.bind(promise) };
+  }
+
   it('does not compute candidate pairs without a library scope', async () => {
     const transaction = vi.fn();
     const strategy = makeStrategy({ transaction });
@@ -125,40 +131,87 @@ describe('SeriesStrategy', () => {
     expect(transaction).not.toHaveBeenCalled();
   });
 
-  it('browses table-backed series within accessible libraries', async () => {
+  it('browses table-backed series with left joined memberships so empty rows can appear', async () => {
+    const subqueryWhere = vi.fn().mockReturnValue({ _isSubquery: true });
+    const subqueryFrom = vi.fn().mockReturnValue({ where: subqueryWhere });
+
+    const relationWhere = vi.fn().mockReturnValue({ _isRelationSubquery: true });
+    const relationFrom = vi.fn().mockReturnValue({ where: relationWhere });
+
     const countWhere = vi.fn().mockResolvedValue([{ total: 1 }]);
-    const countInnerJoin = vi.fn();
-    countInnerJoin.mockReturnValue({ innerJoin: countInnerJoin, where: countWhere });
-    const countFrom = vi.fn().mockReturnValue({ innerJoin: countInnerJoin });
+    const countFrom = vi.fn().mockReturnValue({ where: countWhere });
 
     const offset = vi.fn().mockResolvedValue([{ id: 42, name: 'Dune', bookCount: 6 }]);
     const limit = vi.fn().mockReturnValue({ offset });
     const orderBy = vi.fn().mockReturnValue({ limit });
-    const groupBy = vi.fn().mockReturnValue({ orderBy });
+    const dynamic = { having: vi.fn(), orderBy, ...thenableRows([{ id: 42, name: 'Dune', bookCount: 6 }]) };
+    const groupBy = vi.fn().mockReturnValue({ $dynamic: vi.fn().mockReturnValue(dynamic) });
     const itemWhere = vi.fn().mockReturnValue({ groupBy });
-    const itemInnerJoin = vi.fn();
-    itemInnerJoin.mockReturnValue({ innerJoin: itemInnerJoin, where: itemWhere });
-    const itemFrom = vi.fn().mockReturnValue({ innerJoin: itemInnerJoin });
+    const itemLeftJoin = vi.fn().mockReturnValue({ where: itemWhere });
+    const itemFrom = vi.fn().mockReturnValue({ leftJoin: itemLeftJoin });
 
-    const select = vi.fn().mockReturnValueOnce({ from: countFrom }).mockReturnValueOnce({ from: itemFrom });
+    const select = vi
+      .fn()
+      .mockReturnValueOnce({ from: subqueryFrom })
+      .mockReturnValueOnce({ from: relationFrom })
+      .mockReturnValueOnce({ from: relationFrom })
+      .mockReturnValueOnce({ from: countFrom })
+      .mockReturnValueOnce({ from: itemFrom });
     const strategy = makeStrategy({ select });
 
-    const result = await strategy.browse({ libraryIds: [1], search: 'Dune', page: 1, pageSize: 25, sortBy: 'bookCount', sortOrder: 'desc' });
-
-    expect(result).toEqual({ items: [{ id: 42, name: 'Dune', bookCount: 6 }], total: 1 });
-    expect(select).toHaveBeenCalledTimes(2);
-  });
-
-  it('returns an empty browse result without library access', async () => {
-    const select = vi.fn();
-    const strategy = makeStrategy({ select });
-
-    await expect(strategy.browse({ libraryIds: [], page: 1, pageSize: 25, sortBy: 'name', sortOrder: 'asc' })).resolves.toEqual({
-      items: [],
-      total: 0,
+    const result = await strategy.browse({
+      libraryIds: [1],
+      search: 'Dune',
+      page: 1,
+      pageSize: 25,
+      sortBy: 'bookCount',
+      sortOrder: 'desc',
+      bookCount: 'any',
     });
 
-    expect(select).not.toHaveBeenCalled();
+    expect(result).toEqual({ items: [{ id: 42, name: 'Dune', bookCount: 6 }], total: 1 });
+    expect(select).toHaveBeenCalledTimes(5);
+    expect(relationWhere).toHaveBeenCalledTimes(2);
+    expect(itemLeftJoin).toHaveBeenCalledTimes(1);
+  });
+
+  it('returns zero-book series when filtering to empty entities', async () => {
+    const subqueryWhere = vi.fn().mockReturnValue({ _isSubquery: true });
+    const subqueryFrom = vi.fn().mockReturnValue({ where: subqueryWhere });
+
+    const relationWhere = vi.fn().mockReturnValue({ _isRelationSubquery: true });
+    const relationFrom = vi.fn().mockReturnValue({ where: relationWhere });
+
+    const countWhere = vi.fn().mockResolvedValue([{ total: 1 }]);
+    const countFrom = vi.fn().mockReturnValue({ where: countWhere });
+
+    const offset = vi.fn().mockResolvedValue([{ id: 99, name: 'Unused', bookCount: 0 }]);
+    const limit = vi.fn().mockReturnValue({ offset });
+    const orderBy = vi.fn().mockReturnValue({ limit });
+    const dynamic = { having: vi.fn(), orderBy, ...thenableRows([{ id: 99, name: 'Unused', bookCount: 0 }]) };
+    const groupBy = vi.fn().mockReturnValue({ $dynamic: vi.fn().mockReturnValue(dynamic) });
+    const itemWhere = vi.fn().mockReturnValue({ groupBy });
+    const itemLeftJoin = vi.fn().mockReturnValue({ where: itemWhere });
+    const itemFrom = vi.fn().mockReturnValue({ leftJoin: itemLeftJoin });
+
+    const select = vi
+      .fn()
+      .mockReturnValueOnce({ from: subqueryFrom })
+      .mockReturnValueOnce({ from: relationFrom })
+      .mockReturnValueOnce({ from: relationFrom })
+      .mockReturnValueOnce({ from: countFrom })
+      .mockReturnValueOnce({ from: itemFrom });
+    const strategy = makeStrategy({ select });
+
+    await expect(
+      strategy.browse({ libraryIds: [1], page: 1, pageSize: 25, sortBy: 'bookCount', sortOrder: 'asc', bookCount: 'empty' }),
+    ).resolves.toEqual({
+      items: [{ id: 99, name: 'Unused', bookCount: 0 }],
+      total: 1,
+    });
+
+    expect(relationWhere).toHaveBeenCalledTimes(2);
+    expect(dynamic.having).not.toHaveBeenCalled();
   });
 
   it('merges source series memberships into a target for scoped books only', async () => {
@@ -260,9 +313,9 @@ describe('SeriesStrategy', () => {
     expect(statements.some((statement) => statement.includes('UPDATE book_metadata bm'))).toBe(true);
   });
 
-  it('does not start a delete transaction when no scoped books are affected', async () => {
-    const transaction = vi.fn();
-    const strategy = makeStrategy({ transaction });
+  it('hard deletes an unused series row when no scoped books are affected', async () => {
+    const execute = vi.fn().mockResolvedValue(undefined);
+    const strategy = makeStrategy({ execute });
     vi.spyOn(strategy, 'findEntityById').mockResolvedValue({ id: 2, name: 'Old' });
     vi.spyOn(strategy as never, 'findAffectedBookIdsInLibraries').mockResolvedValue([]);
 
@@ -271,7 +324,7 @@ describe('SeriesStrategy', () => {
       affectedBookIds: [],
     });
 
-    expect(transaction).not.toHaveBeenCalled();
+    expect(execute).toHaveBeenCalledTimes(1);
   });
 
   it('throws when deleting a missing series', async () => {

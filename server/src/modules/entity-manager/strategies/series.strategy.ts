@@ -1,5 +1,5 @@
 import { BadRequestException, Inject, Injectable, NotFoundException } from '@nestjs/common';
-import { SQL, and, asc, count, desc, eq, ilike, inArray, sql } from 'drizzle-orm';
+import { SQL, and, asc, count, desc, eq, exists, ilike, inArray, notExists, or, sql } from 'drizzle-orm';
 import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
 
 import { buildContentFilterClauses } from '../../../common/utils/content-filter-sql.utils';
@@ -113,43 +113,64 @@ export class SeriesStrategy implements EntityStrategy {
   }
 
   async browse(params: BrowseParams): Promise<BrowseResult> {
-    if (params.libraryIds.length === 0) return { items: [], total: 0 };
-
     const filterClauses = params.contentFilters ? buildContentFilterClauses(params.contentFilters, this.db) : [];
-    const conditions = [inArray(books.libraryId, params.libraryIds), ...filterClauses];
-    if (params.search) {
-      conditions.push(ilike(bookSeries.name, `%${escapeLike(params.search)}%`) as never);
-    }
-
-    const where = and(...conditions)!;
+    const bookSubquery =
+      params.libraryIds.length > 0
+        ? this.db
+            .select({ id: books.id })
+            .from(books)
+            .where(and(inArray(books.libraryId, params.libraryIds), ...filterClauses))
+        : null;
+    const nameCondition = params.search ? (ilike(bookSeries.name, `%${escapeLike(params.search)}%`) as never) : undefined;
+    const joinCondition = bookSubquery
+      ? and(eq(bookSeriesMemberships.seriesId, bookSeries.id), inArray(bookSeriesMemberships.bookId, bookSubquery))
+      : and(eq(bookSeriesMemberships.seriesId, bookSeries.id), sql`false`);
     const bookCountExpr = sql<number>`count(distinct ${bookSeriesMemberships.bookId})::int`;
 
-    const [countResult, itemRows] = await Promise.all([
-      this.db
-        .select({ total: sql<number>`count(distinct ${bookSeries.id})::int` })
-        .from(bookSeries)
-        .innerJoin(bookSeriesMemberships, eq(bookSeriesMemberships.seriesId, bookSeries.id))
-        .innerJoin(books, eq(books.id, bookSeriesMemberships.bookId))
-        .where(where),
-      this.db
-        .select({ id: bookSeries.id, name: bookSeries.name, bookCount: bookCountExpr })
-        .from(bookSeries)
-        .innerJoin(bookSeriesMemberships, eq(bookSeriesMemberships.seriesId, bookSeries.id))
-        .innerJoin(books, eq(books.id, bookSeriesMemberships.bookId))
-        .where(where)
-        .groupBy(bookSeries.id, bookSeries.name)
-        .orderBy(
-          params.sortBy === 'bookCount'
-            ? params.sortOrder === 'asc'
-              ? asc(bookCountExpr)
-              : desc(bookCountExpr)
-            : params.sortOrder === 'asc'
-              ? asc(bookSeries.name)
-              : desc(bookSeries.name),
+    const hasScopedBooks = bookSubquery
+      ? exists(
+          this.db
+            .select({ one: sql`1` })
+            .from(bookSeriesMemberships)
+            .where(and(eq(bookSeriesMemberships.seriesId, bookSeries.id), inArray(bookSeriesMemberships.bookId, bookSubquery))),
         )
-        .limit(params.pageSize)
-        .offset((params.page - 1) * params.pageSize),
-    ]);
+      : undefined;
+    const isGloballyEmpty = notExists(
+      this.db
+        .select({ one: sql`1` })
+        .from(bookSeriesMemberships)
+        .where(eq(bookSeriesMemberships.seriesId, bookSeries.id)),
+    );
+    const visibilityCondition =
+      params.bookCount === 'empty' ? isGloballyEmpty : hasScopedBooks ? or(hasScopedBooks, isGloballyEmpty) : isGloballyEmpty;
+
+    const countQuery = this.db
+      .select({ total: sql<number>`count(distinct ${bookSeries.id})::int` })
+      .from(bookSeries)
+      .where(and(nameCondition, visibilityCondition));
+
+    const itemQuery = this.db
+      .select({ id: bookSeries.id, name: bookSeries.name, bookCount: bookCountExpr })
+      .from(bookSeries)
+      .leftJoin(bookSeriesMemberships, joinCondition)
+      .where(and(nameCondition, visibilityCondition))
+      .groupBy(bookSeries.id, bookSeries.name)
+      .$dynamic();
+
+    itemQuery
+      .orderBy(
+        params.sortBy === 'bookCount'
+          ? params.sortOrder === 'asc'
+            ? asc(bookCountExpr)
+            : desc(bookCountExpr)
+          : params.sortOrder === 'asc'
+            ? asc(bookSeries.name)
+            : desc(bookSeries.name),
+      )
+      .limit(params.pageSize)
+      .offset((params.page - 1) * params.pageSize);
+
+    const [countResult, itemRows] = await Promise.all([countQuery, itemQuery]);
 
     return {
       items: itemRows.map((row) => ({ id: row.id, name: row.name, bookCount: row.bookCount })),
@@ -227,6 +248,8 @@ export class SeriesStrategy implements EntityStrategy {
         await this.syncPrimaryMetadataForBooks(affectedBookIds, tx as unknown as Db);
         await this.deleteUnusedSeriesRows([entityId], tx as unknown as Db);
       });
+    } else if (input.mode === 'hard') {
+      await this.deleteUnusedSeriesRows([entityId], this.db);
     }
 
     return { name: entity.name, affectedBookIds };

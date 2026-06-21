@@ -238,7 +238,10 @@ describe('useEntityManager', () => {
 
       await fetchBrowse()
 
-      expect(mockBrowseEntities).toHaveBeenCalledWith('author', expect.objectContaining({ page: 1, pageSize: 25, sortBy: 'name', sortOrder: 'asc' }))
+      expect(mockBrowseEntities).toHaveBeenCalledWith(
+        'author',
+        expect.objectContaining({ page: 1, pageSize: 25, sortBy: 'name', sortOrder: 'asc', bookCount: 'any' }),
+      )
       expect(browseItems.value).toEqual(items)
       expect(browseTotal.value).toBe(10)
     })
@@ -285,17 +288,29 @@ describe('useEntityManager', () => {
 
     it('passes search, sortBy, sortOrder parameters', async () => {
       mockBrowseEntities.mockResolvedValue(makeBrowseResponse([]))
-      const { fetchBrowse, browseSearch, browseSortBy, browseSortOrder } = useEntityManager()
+      const { fetchBrowse, browseSearch, browseSortBy, browseSortOrder, browseBookCount } = useEntityManager()
       browseSearch.value = 'tolkien'
       browseSortBy.value = 'bookCount'
       browseSortOrder.value = 'desc'
+      browseBookCount.value = 'empty'
 
       await fetchBrowse()
 
       expect(mockBrowseEntities).toHaveBeenCalledWith(
         'author',
-        expect.objectContaining({ search: 'tolkien', sortBy: 'bookCount', sortOrder: 'desc' }),
+        expect.objectContaining({ search: 'tolkien', sortBy: 'bookCount', sortOrder: 'desc', bookCount: 'empty' }),
       )
+    })
+
+    it('sends any book count filtering for inline entity types', async () => {
+      mockBrowseEntities.mockResolvedValue(makeBrowseResponse([]))
+      const { fetchBrowse, entityType, browseBookCount } = useEntityManager()
+      entityType.value = 'publisher'
+      browseBookCount.value = 'empty'
+
+      await fetchBrowse()
+
+      expect(mockBrowseEntities).toHaveBeenCalledWith('publisher', expect.objectContaining({ bookCount: 'any' }))
     })
   })
 

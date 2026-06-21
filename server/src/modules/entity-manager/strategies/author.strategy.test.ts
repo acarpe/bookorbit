@@ -37,6 +37,11 @@ function makeSelectChain(rows: unknown[]) {
 }
 
 describe('AuthorStrategy', () => {
+  function thenableRows(rows: unknown[]) {
+    const promise = Promise.resolve(rows);
+    return { then: promise.then.bind(promise) };
+  }
+
   describe('findCandidatePairs', () => {
     it('runs two executes inside a transaction', async () => {
       const rows = [{ idA: 1, idB: 2, nameA: 'Tolkien', nameB: 'Tolkein', simScore: 0.9 }];
@@ -123,7 +128,9 @@ describe('AuthorStrategy', () => {
       const itemOffset = vi.fn().mockResolvedValue(itemRows);
       const itemLimit = vi.fn().mockReturnValue({ offset: itemOffset });
       const itemOrderBy = vi.fn().mockReturnValue({ limit: itemLimit });
-      const itemGroupBy = vi.fn().mockReturnValue({ orderBy: itemOrderBy });
+      const itemDynamic = { having: vi.fn(), orderBy: itemOrderBy, ...thenableRows(itemRows) };
+      const itemDynamicFactory = vi.fn().mockReturnValue(itemDynamic);
+      const itemGroupBy = vi.fn().mockReturnValue({ $dynamic: itemDynamicFactory });
       const itemWhere = vi.fn().mockReturnValue({ groupBy: itemGroupBy });
       const itemLeftJoin = vi.fn().mockReturnValue({ where: itemWhere });
       const itemFrom = vi.fn().mockReturnValue({ leftJoin: itemLeftJoin, where: itemWhere });
@@ -131,11 +138,17 @@ describe('AuthorStrategy', () => {
       const subqueryWhere = vi.fn().mockReturnValue('SUBQUERY_PLACEHOLDER');
       const subqueryFrom = vi.fn().mockReturnValue({ where: subqueryWhere });
 
+      const relationWhere = vi.fn().mockReturnValue({ _isRelationSubquery: true });
+      const relationFrom = vi.fn().mockReturnValue({ where: relationWhere });
+
       let callCount = 0;
       const select = vi.fn().mockImplementation(() => {
         callCount++;
-        if (callCount === 1) return { from: countFrom };
-        if (callCount === 2 && hasLibraryIds) return { from: subqueryFrom };
+        if (callCount === 1 && hasLibraryIds) return { from: subqueryFrom };
+        if ((hasLibraryIds && (callCount === 2 || callCount === 3)) || (!hasLibraryIds && callCount === 1)) {
+          return { from: relationFrom };
+        }
+        if ((callCount === 2 && !hasLibraryIds) || (callCount === 4 && hasLibraryIds)) return { from: countFrom };
         return { from: itemFrom };
       });
 
@@ -150,39 +163,39 @@ describe('AuthorStrategy', () => {
       const { select } = makeBrowseDb([{ total: 2 }], itemRows, false);
       const strategy = makeStrategy({ select });
 
-      const result = await strategy.browse({ libraryIds: [], page: 1, pageSize: 25, sortBy: 'name', sortOrder: 'asc' });
+      const result = await strategy.browse({ libraryIds: [], page: 1, pageSize: 25, sortBy: 'name', sortOrder: 'asc', bookCount: 'any' });
 
       expect(result.total).toBe(2);
       expect(result.items).toHaveLength(2);
       expect(result.items[0]).toMatchObject({ id: 1, name: 'Tolkien', bookCount: 5 });
-      expect(select).toHaveBeenCalledTimes(2);
+      expect(select).toHaveBeenCalledTimes(3);
     });
 
     it('uses a subquery leftJoin condition when libraryIds are provided', async () => {
       const { select, itemLeftJoin } = makeBrowseDb([{ total: 0 }], [], true);
       const strategy = makeStrategy({ select });
 
-      await strategy.browse({ libraryIds: [5], page: 1, pageSize: 10, sortBy: 'name', sortOrder: 'asc' });
+      await strategy.browse({ libraryIds: [5], page: 1, pageSize: 10, sortBy: 'name', sortOrder: 'asc', bookCount: 'any' });
 
       expect(itemLeftJoin).toHaveBeenCalledTimes(1);
-      expect(select).toHaveBeenCalledTimes(3);
+      expect(select).toHaveBeenCalledTimes(5);
     });
 
     it('joins without a subquery filter when libraryIds is empty', async () => {
       const { select, itemLeftJoin } = makeBrowseDb([{ total: 0 }], [], false);
       const strategy = makeStrategy({ select });
 
-      await strategy.browse({ libraryIds: [], page: 1, pageSize: 10, sortBy: 'name', sortOrder: 'asc' });
+      await strategy.browse({ libraryIds: [], page: 1, pageSize: 10, sortBy: 'name', sortOrder: 'asc', bookCount: 'any' });
 
       expect(itemLeftJoin).toHaveBeenCalledTimes(1);
-      expect(select).toHaveBeenCalledTimes(2);
+      expect(select).toHaveBeenCalledTimes(3);
     });
 
     it('returns zero total when countResult is empty', async () => {
       const { select } = makeBrowseDb([], [], false);
       const strategy = makeStrategy({ select });
 
-      const result = await strategy.browse({ libraryIds: [], page: 1, pageSize: 10, sortBy: 'name', sortOrder: 'asc' });
+      const result = await strategy.browse({ libraryIds: [], page: 1, pageSize: 10, sortBy: 'name', sortOrder: 'asc', bookCount: 'any' });
 
       expect(result.total).toBe(0);
     });

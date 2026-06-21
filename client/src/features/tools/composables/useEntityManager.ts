@@ -4,6 +4,7 @@ import {
   ENTITY_CAPABILITIES,
   INLINE_ENTITY_TYPES,
   type BrowseEntityItem,
+  type BrowseEntityBookCountFilter,
   type DuplicateCluster,
   type DuplicateScanStatus,
   type DismissedPairInfo,
@@ -51,6 +52,7 @@ export function useEntityManager() {
   const browseSearch = ref('')
   const browseSortBy = ref<'name' | 'bookCount'>('name')
   const browseSortOrder = ref<'asc' | 'desc'>('asc')
+  const browseBookCount = ref<BrowseEntityBookCountFilter>('any')
   const browseLoading = ref(false)
 
   // Selection state
@@ -154,6 +156,9 @@ export function useEntityManager() {
   watch(entityType, () => {
     clearScan()
     clearBrowse()
+    if (isInline.value) {
+      browseBookCount.value = 'any'
+    }
     showDismissed.value = false
     dismissedPairs.value = []
     stopStatusPoll()
@@ -208,6 +213,7 @@ export function useEntityManager() {
         pageSize: browsePageSize.value,
         sortBy: browseSortBy.value,
         sortOrder: browseSortOrder.value,
+        bookCount: isInline.value ? 'any' : browseBookCount.value,
       })
       browseItems.value = result.items
       browseTotal.value = result.total
@@ -451,6 +457,7 @@ export function useEntityManager() {
     browseSearch,
     browseSortBy,
     browseSortOrder,
+    browseBookCount,
     browseLoading,
     browseTotalPages,
     fetchBrowse,

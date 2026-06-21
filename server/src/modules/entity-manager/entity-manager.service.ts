@@ -203,7 +203,7 @@ export class EntityManagerService {
   async browse(
     entityType: EntityType,
     user: RequestUser,
-    params: { search?: string; page?: number; pageSize?: number; sortBy?: string; sortOrder?: string },
+    params: { search?: string; page?: number; pageSize?: number; sortBy?: string; sortOrder?: string; bookCount?: string },
   ): Promise<BrowseEntitiesResponse> {
     const strategy = this.getStrategy(entityType);
     const libraryIds = await this.libraryService.findAccessibleLibraryIds(user);
@@ -215,6 +215,7 @@ export class EntityManagerService {
       pageSize: params.pageSize ?? 25,
       sortBy: (params.sortBy as 'name' | 'bookCount') || 'name',
       sortOrder: (params.sortOrder as 'asc' | 'desc') || 'asc',
+      bookCount: strategy.isInline ? 'any' : (params.bookCount as 'any' | 'empty') || 'any',
       contentFilters: user.isSuperuser ? undefined : user.contentFilters,
     });
 
@@ -326,11 +327,12 @@ export class EntityManagerService {
     try {
       const strategy = this.getStrategy(entityType);
       const libraryIds = await this.libraryService.findAccessibleLibraryIds(user);
-      const result = await strategy.deleteEntity({ entityId, mode, libraryIds });
+      const effectiveMode = !strategy.isInline && mode === 'soft' && (await strategy.getBookCount(entityId)) === 0 ? 'hard' : mode;
+      const result = await strategy.deleteEntity({ entityId, mode: effectiveMode, libraryIds });
 
       if (strategy.isInline) {
         await this.repo.deleteInlineDismissedPairsForValue(entityType, entityId as string);
-      } else if (mode === 'hard') {
+      } else if (effectiveMode === 'hard') {
         await this.repo.deleteDismissedPairsForEntity(entityType, entityId as number);
         await this.duplicateCompute.invalidateCandidatesForEntities(entityType, [entityId as number]);
       }
@@ -343,7 +345,7 @@ export class EntityManagerService {
         `[${event}] [end] userId=${user.id} entityType=${entityType} durationMs=${Date.now() - startedAt} affectedBooks=${result.affectedBookIds.length} - delete completed`,
       );
 
-      return { entityId, name: result.name, affectedBookCount: result.affectedBookIds.length, mode };
+      return { entityId, name: result.name, affectedBookCount: result.affectedBookIds.length, mode: effectiveMode };
     } catch (err) {
       const error = logErrorFields(err);
       this.logger.warn(

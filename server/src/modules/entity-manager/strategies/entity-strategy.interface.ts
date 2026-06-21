@@ -1,4 +1,4 @@
-import type { EntityType } from '@bookorbit/types';
+import type { BrowseEntityBookCountFilter, BrowseEntitySortBy, BrowseEntitySortOrder, EntityType } from '@bookorbit/types';
 
 export interface RawCandidatePair {
   idA: number | string;
@@ -17,8 +17,9 @@ export interface BrowseParams {
   search?: string;
   page: number;
   pageSize: number;
-  sortBy: 'name' | 'bookCount';
-  sortOrder: 'asc' | 'desc';
+  sortBy: BrowseEntitySortBy;
+  sortOrder: BrowseEntitySortOrder;
+  bookCount: BrowseEntityBookCountFilter;
   contentFilters?: import('@bookorbit/types').ContentFilterRules;
 }
 
