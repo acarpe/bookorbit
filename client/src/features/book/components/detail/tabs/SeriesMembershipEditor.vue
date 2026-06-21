@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { ArrowDown, ArrowUp, Plus, Trash2 } from 'lucide-vue-next'
 import InputWithSuggestions from '@/components/ui/InputWithSuggestions.vue'
 import type { EditableSeriesMembership } from '../../../composables/useMetadataEditor'
@@ -15,6 +15,31 @@ const emit = defineEmits<{ 'update:modelValue': [EditableSeriesMembership[]] }>(
 const visibleMemberships = computed<EditableSeriesMembership[]>(() =>
   props.modelValue.length > 0 ? props.modelValue : [{ seriesName: '', seriesIndex: null }],
 )
+
+const rowKeys = ref<string[]>([])
+let nextRowKey = 0
+
+function createRowKey() {
+  nextRowKey += 1
+  return `series-membership-${nextRowKey}`
+}
+
+function syncRowKeys() {
+  const visibleLength = Math.max(1, props.modelValue.length)
+  if (rowKeys.value.length < visibleLength) {
+    rowKeys.value = [...rowKeys.value, ...Array.from({ length: visibleLength - rowKeys.value.length }, () => createRowKey())]
+    return
+  }
+  if (rowKeys.value.length > visibleLength) {
+    rowKeys.value = rowKeys.value.slice(0, visibleLength)
+  }
+}
+
+watch(() => props.modelValue.length, syncRowKeys, { immediate: true })
+
+function getRowKey(index: number) {
+  return rowKeys.value[index] ?? `series-membership-fallback-${index}`
+}
 
 function updateMembership(index: number, patch: Partial<EditableSeriesMembership>) {
   if (props.disabled) return
@@ -37,15 +62,17 @@ function updateSeriesIndex(index: number, event: Event) {
 
 function addMembership() {
   if (props.disabled) return
+  if (props.modelValue.length > 0) {
+    rowKeys.value = [...rowKeys.value, createRowKey()]
+  }
   emit('update:modelValue', [...props.modelValue, { seriesName: '', seriesIndex: null }])
 }
 
 function removeMembership(index: number) {
   if (props.disabled) return
-  emit(
-    'update:modelValue',
-    props.modelValue.filter((_, i) => i !== index),
-  )
+  const next = props.modelValue.filter((_, i) => i !== index)
+  rowKeys.value = next.length > 0 ? rowKeys.value.filter((_, i) => i !== index) : [createRowKey()]
+  emit('update:modelValue', next)
 }
 
 function moveMembership(index: number, offset: -1 | 1) {
@@ -56,6 +83,12 @@ function moveMembership(index: number, offset: -1 | 1) {
   const [item] = next.splice(index, 1)
   if (!item) return
   next.splice(target, 0, item)
+  const nextKeys = [...rowKeys.value]
+  const [key] = nextKeys.splice(index, 1)
+  if (key) {
+    nextKeys.splice(target, 0, key)
+    rowKeys.value = nextKeys
+  }
   emit('update:modelValue', next)
 }
 </script>
@@ -64,7 +97,7 @@ function moveMembership(index: number, offset: -1 | 1) {
   <div class="flex flex-col gap-2">
     <div
       v-for="(membership, index) in visibleMemberships"
-      :key="modelValue.length === 0 ? 'empty-series-row' : `${index}:${membership.seriesName}`"
+      :key="getRowKey(index)"
       class="grid grid-cols-[2rem_minmax(0,1fr)_5.5rem_auto] items-center gap-2"
     >
       <button
