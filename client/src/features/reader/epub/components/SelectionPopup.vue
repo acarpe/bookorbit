@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { ref } from 'vue'
-import { BookA, Copy, FileText, Highlighter, Languages, Search, Trash2 } from '@lucide/vue'
+import { BookA, Check, Copy, FileText, Highlighter, Languages, Search, Trash2 } from '@lucide/vue'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { copyToClipboard } from '@/lib/clipboard'
 
 const props = defineProps<{
   visible: boolean
@@ -23,6 +24,7 @@ const emit = defineEmits<{
 }>()
 
 const showColorPicker = ref(false)
+const copied = ref(false)
 
 const colors = [
   { hex: '#FACC15', label: 'Yellow' },
@@ -58,8 +60,11 @@ function applyHighlight(color: string, style: string) {
   showColorPicker.value = false
 }
 
-function onCopy() {
-  navigator.clipboard.writeText(props.selectedText).catch(() => {})
+async function onCopy() {
+  await copyToClipboard(props.selectedText)
+  copied.value = true
+  await new Promise((resolve) => setTimeout(resolve, 1500))
+  copied.value = false
   emit('copy')
 }
 </script>
@@ -82,13 +87,15 @@ function onCopy() {
             <Tooltip>
               <TooltipTrigger as-child>
                 <button
-                  class="flex items-center justify-center w-8 h-8 rounded-lg hover:bg-muted transition-colors text-muted-foreground hover:text-foreground"
+                  class="flex items-center justify-center w-8 h-8 rounded-lg hover:bg-muted transition-colors"
+                  :class="copied ? 'text-green-500' : 'text-muted-foreground hover:text-foreground'"
                   @click="onCopy"
                 >
-                  <Copy :size="15" />
+                  <Check v-if="copied" :size="15" />
+                  <Copy v-else :size="15" />
                 </button>
               </TooltipTrigger>
-              <TooltipContent>Copy</TooltipContent>
+              <TooltipContent>{{ copied ? 'Copied!' : 'Copy' }}</TooltipContent>
             </Tooltip>
 
             <Tooltip>

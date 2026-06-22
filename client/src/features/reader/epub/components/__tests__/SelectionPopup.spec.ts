@@ -12,8 +12,9 @@ const globalStubs = {
 }
 
 describe('SelectionPopup', () => {
-  it('copies selected text to clipboard and emits copy', async () => {
-    const writeText = vi.fn<(value: string) => Promise<void>>().mockResolvedValue()
+  it('copies selected text to clipboard and emits copy after feedback delay', async () => {
+    vi.useFakeTimers()
+    const writeText = vi.fn<(value: string) => Promise<void>>().mockResolvedValue(undefined)
     Object.defineProperty(navigator, 'clipboard', {
       configurable: true,
       value: { writeText },
@@ -31,9 +32,16 @@ describe('SelectionPopup', () => {
     })
 
     await wrapper.findAll('button')[0]!.trigger('click')
+    await vi.runAllTicks()
 
     expect(writeText).toHaveBeenCalledWith('Important quote')
+    // copy is not emitted yet — waiting for the 1500ms feedback window
+    expect(wrapper.emitted('copy')).toBeUndefined()
+
+    await vi.runAllTimersAsync()
+
     expect(wrapper.emitted('copy')?.length).toBe(1)
+    vi.useRealTimers()
   })
 
   it('emits highlight from picker apply and from second highlight click', async () => {
