@@ -4,6 +4,7 @@ import { Plus, Trash2, Copy, Check, Pencil, X, Tablet } from '@lucide/vue'
 import { toast } from 'vue-sonner'
 import ToggleSwitch from '@/components/ui/ToggleSwitch.vue'
 import SettingsPageHeader from './SettingsPageHeader.vue'
+import { copyToClipboard } from '@/lib/clipboard'
 import { useKoboDevices } from '@/features/kobo/composables/useKoboDevices'
 import { useKoboSettings } from '@/features/kobo/composables/useKoboSettings'
 import type { KoboDevice } from '@bookorbit/types'
@@ -111,8 +112,12 @@ function dismissToken() {
 
 async function copyToken() {
   if (!newDeviceSyncUrl.value) return
-  await navigator.clipboard.writeText(newDeviceSyncUrl.value)
-  toast.success('Sync URL copied to clipboard')
+  const copied = await copyToClipboard(newDeviceSyncUrl.value)
+  if (copied) {
+    toast.success('Sync URL copied to clipboard')
+  } else {
+    toast.error('Failed to copy sync URL')
+  }
 }
 
 function startRename(device: KoboDevice) {

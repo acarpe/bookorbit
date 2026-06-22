@@ -15,6 +15,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { Badge } from '@/components/ui/badge'
 import ToggleSwitch from '@/components/ui/ToggleSwitch.vue'
 import SettingsPageHeader from './SettingsPageHeader.vue'
+import { copyToClipboard } from '@/lib/clipboard'
 
 const props = withDefaults(defineProps<{ embedded?: boolean }>(), { embedded: false })
 
@@ -167,18 +168,31 @@ function getLibraryIconComponent(name: string | null | undefined) {
 }
 
 async function copyToken(token: string) {
-  await navigator.clipboard.writeText(`{${token}}`)
-  toast.success(`{${token}} copied to clipboard`)
+  const value = `{${token}}`
+  const copied = await copyToClipboard(value)
+  if (copied) {
+    toast.success(`${value} copied to clipboard`)
+  } else {
+    toast.error('Failed to copy token')
+  }
 }
 
 async function copyPattern(pattern: string) {
-  await navigator.clipboard.writeText(pattern)
-  toast.success('Pattern copied to clipboard')
+  const copied = await copyToClipboard(pattern)
+  if (copied) {
+    toast.success('Pattern copied to clipboard')
+  } else {
+    toast.error('Failed to copy pattern')
+  }
 }
 
 async function copyText(text: string, label: string) {
-  await navigator.clipboard.writeText(text)
-  toast.success(`${label} copied to clipboard`)
+  const copied = await copyToClipboard(text)
+  if (copied) {
+    toast.success(`${label} copied to clipboard`)
+  } else {
+    toast.error(`Failed to copy ${label.toLowerCase()}`)
+  }
 }
 
 function syncPreviewGlobal(value: string) {

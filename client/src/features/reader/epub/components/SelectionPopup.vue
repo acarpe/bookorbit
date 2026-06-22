@@ -61,7 +61,9 @@ function applyHighlight(color: string, style: string) {
 }
 
 async function onCopy() {
-  await copyToClipboard(props.selectedText)
+  const didCopy = await copyToClipboard(props.selectedText)
+  if (!didCopy) return
+
   copied.value = true
   await new Promise((resolve) => setTimeout(resolve, 1500))
   copied.value = false

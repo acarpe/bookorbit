@@ -1,19 +1,40 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { onUnmounted, ref } from 'vue'
 import { X } from '@lucide/vue'
+import { copyToClipboard } from '@/lib/clipboard'
 
 defineProps<{ resetUrl: string }>()
 const emit = defineEmits<{ close: [] }>()
 
 const copied = ref(false)
+const copyFailed = ref(false)
+let copyFeedbackTimer: ReturnType<typeof setTimeout> | null = null
 
-function copy(url: string) {
-  navigator.clipboard.writeText(url).then(() => {
-    copied.value = true
-    setTimeout(() => {
-      copied.value = false
-    }, 2000)
-  })
+function resetCopyFeedbackAfterDelay() {
+  if (copyFeedbackTimer) clearTimeout(copyFeedbackTimer)
+  copyFeedbackTimer = setTimeout(() => {
+    copied.value = false
+    copyFailed.value = false
+    copyFeedbackTimer = null
+  }, 2000)
+}
+
+onUnmounted(() => {
+  if (copyFeedbackTimer) clearTimeout(copyFeedbackTimer)
+})
+
+async function copy(url: string) {
+  const didCopy = await copyToClipboard(url)
+  if (!didCopy) {
+    copied.value = false
+    copyFailed.value = true
+    resetCopyFeedbackAfterDelay()
+    return
+  }
+
+  copyFailed.value = false
+  copied.value = true
+  resetCopyFeedbackAfterDelay()
 }
 </script>
 
@@ -39,7 +60,7 @@ function copy(url: string) {
           @click="copy(resetUrl)"
           class="rounded-md bg-primary px-3 py-2 text-xs font-medium text-primary-foreground hover:bg-primary/90 transition-colors whitespace-nowrap"
         >
-          {{ copied ? 'Copied!' : 'Copy' }}
+          {{ copied ? 'Copied!' : copyFailed ? 'Copy failed' : 'Copy' }}
         </button>
       </div>
 

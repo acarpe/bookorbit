@@ -4,6 +4,7 @@ import { Copy, Trash2, BookOpen, Smartphone, Check, Eye, EyeOff, RefreshCw, Chev
 import { toast } from 'vue-sonner'
 import SettingsPageHeader from './SettingsPageHeader.vue'
 import ToggleSwitch from '@/components/ui/ToggleSwitch.vue'
+import { copyToClipboard } from '@/lib/clipboard'
 import { useKoreaderSync } from '@/features/koreader/composables/useKoreaderSync'
 
 const props = withDefaults(defineProps<{ embedded?: boolean }>(), { embedded: false })
@@ -112,7 +113,12 @@ async function handleDelete() {
 }
 
 async function handleCopyUrl() {
-  await navigator.clipboard.writeText(syncUrl.value)
+  const copied = await copyToClipboard(syncUrl.value)
+  if (!copied) {
+    toast.error('Failed to copy sync URL')
+    return
+  }
+
   urlCopied.value = true
   toast.success('Sync URL copied to clipboard')
   if (urlCopiedTimer) clearTimeout(urlCopiedTimer)

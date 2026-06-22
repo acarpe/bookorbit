@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { onUnmounted, ref } from 'vue'
 import { Copy, FileEdit, Palette, Trash2, X, Check } from '@lucide/vue'
 import type { AnnotationItem } from '@bookorbit/types'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { copyToClipboard } from '@/lib/clipboard'
 import HighlightNoteEditor from './HighlightNoteEditor.vue'
 
 const props = defineProps<{
@@ -27,12 +28,21 @@ const editingNote = ref(false)
 const showColorPicker = ref(false)
 const confirmDelete = ref(false)
 const copied = ref(false)
+let copiedTimer: ReturnType<typeof setTimeout> | null = null
 
-function handleCopy() {
-  navigator.clipboard.writeText(props.highlight.text).catch(() => {})
+onUnmounted(() => {
+  if (copiedTimer) clearTimeout(copiedTimer)
+})
+
+async function handleCopy() {
+  const didCopy = await copyToClipboard(props.highlight.text)
+  if (!didCopy) return
+
   copied.value = true
-  setTimeout(() => {
+  if (copiedTimer) clearTimeout(copiedTimer)
+  copiedTimer = setTimeout(() => {
     copied.value = false
+    copiedTimer = null
   }, 1500)
 }
 

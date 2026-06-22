@@ -1,13 +1,14 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises, mount } from '@vue/test-utils'
 
-const { apiMock, loadTokensMock, createTokenMock, revokeTokenMock, setActiveMock, tokens, loading, error } = vi.hoisted(() => {
+const { apiMock, copyToClipboardMock, loadTokensMock, createTokenMock, revokeTokenMock, setActiveMock, tokens, loading, error } = vi.hoisted(() => {
   function makeRef<T>(value: T) {
     return { value, __v_isRef: true }
   }
 
   return {
     apiMock: vi.fn<(input: string) => Promise<{ ok: boolean; json: () => Promise<unknown> }>>(),
+    copyToClipboardMock: vi.fn<(text: string) => Promise<boolean>>(),
     loadTokensMock: vi.fn<() => Promise<void>>(),
     createTokenMock: vi.fn<() => Promise<unknown>>(),
     revokeTokenMock: vi.fn<() => Promise<void>>(),
@@ -20,6 +21,10 @@ const { apiMock, loadTokensMock, createTokenMock, revokeTokenMock, setActiveMock
 
 vi.mock('@/lib/api', () => ({
   api: apiMock,
+}))
+
+vi.mock('@/lib/clipboard', () => ({
+  copyToClipboard: copyToClipboardMock,
 }))
 
 vi.mock('@/features/settings/composables/useMagicLinks', () => ({
@@ -52,10 +57,21 @@ function mockSharedUsers(users: Array<{ id: number; username: string; name: stri
 function mountComponent(props: { withHeader?: boolean; withEmbeddedCreateAction?: boolean } = {}) {
   return mount(MagicLinksSettings, {
     props,
+    global: {
+      stubs: {
+        Tooltip: { template: '<div><slot /></div>' },
+        TooltipTrigger: { template: '<div><slot /></div>' },
+        TooltipContent: { template: '<div><slot /></div>' },
+      },
+    },
   })
 }
 
 describe('MagicLinksSettings', () => {
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
   beforeEach(() => {
     vi.clearAllMocks()
     tokens.value = []
@@ -65,6 +81,7 @@ describe('MagicLinksSettings', () => {
     createTokenMock.mockResolvedValue({ id: 1, token: 'raw-token', label: 'Demo', expiresAt: null })
     revokeTokenMock.mockResolvedValue(undefined)
     setActiveMock.mockResolvedValue(undefined)
+    copyToClipboardMock.mockResolvedValue(true)
     mockSharedUsers([])
   })
 
@@ -104,5 +121,50 @@ describe('MagicLinksSettings', () => {
     const createButton = wrapper.findAll('button').find((button) => button.text().includes('Create link'))
 
     expect(createButton).toBeUndefined()
+  })
+
+  it('keeps copied feedback for the latest copied magic link', async () => {
+    vi.useFakeTimers()
+    tokens.value = [
+      {
+        id: 1,
+        rawToken: 'first-token',
+        label: 'First',
+        username: 'first',
+        createdByUsername: 'admin',
+        expiresAt: null,
+        revokedAt: null,
+        isActive: true,
+        useCount: 0,
+        lastUsedAt: null,
+      },
+      {
+        id: 2,
+        rawToken: 'second-token',
+        label: 'Second',
+        username: 'second',
+        createdByUsername: 'admin',
+        expiresAt: null,
+        revokedAt: null,
+        isActive: true,
+        useCount: 0,
+        lastUsedAt: null,
+      },
+    ]
+    const wrapper = mountComponent({ withHeader: false })
+    await flushPromises()
+
+    const actionButtons = wrapper.findAll('button').filter((button) => button.classes().includes('p-1.5'))
+    await actionButtons[0]?.trigger('click')
+    await vi.advanceTimersByTimeAsync(1000)
+    await actionButtons[3]?.trigger('click')
+    await vi.advanceTimersByTimeAsync(1500)
+
+    expect(copyToClipboardMock).toHaveBeenLastCalledWith(expect.stringContaining('second-token'))
+    expect(wrapper.text()).toContain('Copied!')
+
+    await vi.advanceTimersByTimeAsync(500)
+    expect(wrapper.text()).not.toContain('Copied!')
+    vi.useRealTimers()
   })
 })

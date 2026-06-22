@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { Plus, Trash2, Copy, Check, Link, Pause, Play } from '@lucide/vue'
 import { api } from '@/lib/api'
+import { copyToClipboard } from '@/lib/clipboard'
 import { useMagicLinks } from '@/features/settings/composables/useMagicLinks'
 import SettingsPageHeader from '@/features/settings/SettingsPageHeader.vue'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
@@ -30,6 +31,7 @@ const creating = ref(false)
 const createError = ref<string | null>(null)
 
 const copiedId = ref<number | null>(null)
+let copiedTimer: ReturnType<typeof setTimeout> | null = null
 
 const revokeConfirmId = ref<number | null>(null)
 const revoking = ref(false)
@@ -50,6 +52,10 @@ async function loadSharedUsers() {
 
 onMounted(async () => {
   await Promise.all([loadTokens(), loadSharedUsers()])
+})
+
+onUnmounted(() => {
+  if (copiedTimer) clearTimeout(copiedTimer)
 })
 
 function openCreateForm() {
@@ -83,15 +89,19 @@ function getMagicUrl(rawToken: string): string {
 }
 
 async function copyMagicUrl(tokenId: number, rawToken: string) {
-  try {
-    await navigator.clipboard.writeText(getMagicUrl(rawToken))
-    copiedId.value = tokenId
-    setTimeout(() => {
-      copiedId.value = null
-    }, 2000)
-  } catch {
-    // no-op
+  const copied = await copyToClipboard(getMagicUrl(rawToken))
+  if (!copied) {
+    error.value = 'Failed to copy magic link'
+    return
   }
+
+  error.value = null
+  copiedId.value = tokenId
+  if (copiedTimer) clearTimeout(copiedTimer)
+  copiedTimer = setTimeout(() => {
+    copiedId.value = null
+    copiedTimer = null
+  }, 2000)
 }
 
 async function handleToggleActive(id: number, currentIsActive: boolean) {
