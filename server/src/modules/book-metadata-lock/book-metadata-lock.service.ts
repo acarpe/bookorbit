@@ -146,10 +146,14 @@ export class BookMetadataLockService {
     this.copyResolvedField(filteredResolved, resolved, 'publishedYear', 'publishedYear', lockedSet, skippedFields);
     this.copyResolvedField(filteredResolved, resolved, 'language', 'language', lockedSet, skippedFields);
     this.copyResolvedField(filteredResolved, resolved, 'pageCount', 'pageCount', lockedSet, skippedFields);
-    if (resolved.seriesName !== undefined || resolved.seriesIndex !== undefined) {
+    if (resolved.seriesMemberships !== undefined || resolved.seriesName !== undefined || resolved.seriesIndex !== undefined) {
       if (lockedSet.has('seriesName') || lockedSet.has('seriesIndex')) {
         if (lockedSet.has('seriesName')) skippedFields.add('seriesName');
         if (lockedSet.has('seriesIndex')) skippedFields.add('seriesIndex');
+      } else if (resolved.seriesMemberships !== undefined) {
+        filteredResolved.seriesMemberships = resolved.seriesMemberships;
+        if (resolved.seriesName !== undefined) filteredResolved.seriesName = resolved.seriesName;
+        if (resolved.seriesIndex !== undefined) filteredResolved.seriesIndex = resolved.seriesIndex;
       } else {
         if (resolved.seriesName !== undefined) filteredResolved.seriesName = resolved.seriesName;
         if (resolved.seriesIndex !== undefined) filteredResolved.seriesIndex = resolved.seriesIndex;

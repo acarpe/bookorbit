@@ -5,6 +5,7 @@ import type {
   MetadataCandidate,
   MetadataProviderInfo,
   MetadataProviderKey,
+  MetadataSeriesMembership,
   MetadataSource,
   ProviderIds,
 } from '@bookorbit/types'
@@ -79,6 +80,7 @@ export interface MetadataPatch {
   pageCount?: number | null
   seriesName?: string | null
   seriesIndex?: number | null
+  seriesMemberships?: MetadataSeriesMembership[] | null
   isbn10?: string | null
   isbn13?: string | null
   authors?: string[]
@@ -214,6 +216,25 @@ export function getCandidateValueFrom(candidate: MetadataCandidate, key: DiffFie
   if (key === 'narrators') return (candidate.narrators ?? []).join(', ')
   const val = candidate[key as keyof MetadataCandidate]
   return val != null ? String(val) : ''
+}
+
+function normalizeSeriesMemberships(values: readonly MetadataSeriesMembership[] | undefined): MetadataSeriesMembership[] {
+  if (!values?.length) return []
+
+  const seen = new Set<string>()
+  const out: MetadataSeriesMembership[] = []
+  for (const value of values) {
+    const seriesName = value.seriesName.trim()
+    const key = seriesName.toLowerCase()
+    if (!seriesName || seen.has(key)) continue
+
+    seen.add(key)
+    out.push({
+      seriesName,
+      seriesIndex: typeof value.seriesIndex === 'number' && Number.isFinite(value.seriesIndex) ? value.seriesIndex : null,
+    })
+  }
+  return out
 }
 
 export function useMetadataDiff(
@@ -413,12 +434,16 @@ export function useMetadataDiff(
     let coverUrl: string | undefined
     const comicPatch: Partial<ComicMetadataFields> = {}
     const allCandidates = toValue(candidates)
+    let pickedSeriesNameProvider: MetadataProviderKey | null = null
+    let pickedSeriesIndexProvider: MetadataProviderKey | null = null
 
     for (const [key, providerKey] of pickedSources) {
       const lockField = resolveLockField(key)
       if (lockField && lockedFieldSet.value.has(lockField)) continue
       const candidate = allCandidates.find((c) => c.provider === providerKey)
       if (!candidate) continue
+      if (key === 'seriesName') pickedSeriesNameProvider = providerKey
+      if (key === 'seriesIndex') pickedSeriesIndexProvider = providerKey
 
       if (isComicDiffFieldKey(key)) {
         const comicKey = COMIC_KEY_MAP[key]
@@ -468,6 +493,12 @@ export function useMetadataDiff(
       if (key === 'sourceUrl') continue
       const val = candidate[key as keyof MetadataCandidate]
       ;(formPatch as Record<string, unknown>)[key] = val != null ? String(val) : null
+    }
+
+    if (pickedSeriesNameProvider && pickedSeriesIndexProvider === pickedSeriesNameProvider) {
+      const candidate = allCandidates.find((c) => c.provider === pickedSeriesNameProvider)
+      const memberships = normalizeSeriesMemberships(candidate?.seriesMemberships)
+      if (memberships.length > 0) formPatch.seriesMemberships = memberships
     }
 
     if (Object.keys(comicPatch).length > 0) {

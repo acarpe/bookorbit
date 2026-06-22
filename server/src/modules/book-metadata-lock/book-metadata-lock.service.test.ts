@@ -99,6 +99,31 @@ describe('BookMetadataLockService', () => {
     expect('title' in result.resolved).toBe(false);
   });
 
+  it('filters resolved series memberships as a grouped series update', async () => {
+    const unlocked = makeService();
+    const memberships = [
+      { seriesName: 'Sword of Truth', seriesIndex: 11 },
+      { seriesName: 'Chainfire Trilogy', seriesIndex: 3 },
+    ];
+
+    await expect(
+      unlocked.service.filterResolvedMetadata(1, { seriesName: 'Sword of Truth', seriesIndex: 11, seriesMemberships: memberships }, {}),
+    ).resolves.toEqual({
+      resolved: { seriesName: 'Sword of Truth', seriesIndex: 11, seriesMemberships: memberships },
+      providerIds: {},
+      skippedFields: [],
+    });
+
+    const locked = makeService(['seriesIndex']);
+    await expect(
+      locked.service.filterResolvedMetadata(1, { seriesName: 'Sword of Truth', seriesIndex: 11, seriesMemberships: memberships }, {}),
+    ).resolves.toEqual({
+      resolved: {},
+      providerIds: {},
+      skippedFields: ['seriesIndex'],
+    });
+  });
+
   it('propagates repository errors', async () => {
     const lockRepo = {
       findLockedFields: vi.fn().mockRejectedValue(new Error('db failure')),

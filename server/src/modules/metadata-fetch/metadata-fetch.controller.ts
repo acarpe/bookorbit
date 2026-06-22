@@ -23,6 +23,10 @@ function normalizeSearchTitle(title: string | undefined): string | undefined {
   return title.trim().replace(/#0*(\d+)/g, '#$1');
 }
 
+function isAudiobookProvider(providerKey: MetadataProviderKey): boolean {
+  return providerKey === MetadataProviderKey.AUDIBLE || providerKey === MetadataProviderKey.AUDNEXUS;
+}
+
 @Controller('metadata-fetch')
 export class MetadataFetchController {
   constructor(
@@ -55,10 +59,14 @@ export class MetadataFetchController {
   async stream(@Query() dto: MetadataSearchDto, @CurrentUser() user: RequestUser): Promise<Observable<MessageEvent>> {
     const storedContext = dto.bookId ? await this.metadataFetchService.getStoredProviderContext(dto.bookId, user) : null;
     const existingProviderIds = storedContext?.providerIds ?? {};
-    const requestedAudiobookProvider = (dto.providers ?? []).some(
-      (provider) => provider === MetadataProviderKey.AUDIBLE || provider === MetadataProviderKey.AUDNEXUS,
-    );
-    const isAudiobook = requestedAudiobookProvider ? true : (dto.isAudiobook ?? Boolean(existingProviderIds[MetadataProviderKey.AUDIBLE]));
+    const [preferences, providerKeys] = await Promise.all([
+      this.metadataPreferences.getGlobal(),
+      this.resolveEnabledProviderKeys(dto.providers, storedContext?.libraryId),
+    ]);
+    const requestedAudiobookProvider = (dto.providers ?? []).some(isAudiobookProvider);
+    const onlyAudiobookProviders = providerKeys.length > 0 && providerKeys.every(isAudiobookProvider);
+    const isAudiobook =
+      requestedAudiobookProvider || onlyAudiobookProviders ? true : (dto.isAudiobook ?? Boolean(existingProviderIds[MetadataProviderKey.AUDIBLE]));
 
     const params: MetadataSearchParams = {
       title: normalizeSearchTitle(dto.title),
@@ -68,10 +76,6 @@ export class MetadataFetchController {
       isAudiobook,
     };
 
-    const [preferences, providerKeys] = await Promise.all([
-      this.metadataPreferences.getGlobal(),
-      this.resolveEnabledProviderKeys(dto.providers, storedContext?.libraryId),
-    ]);
     const blockedGenreTokens = createGenreBlocklistTokenSet(preferences.options?.genres.blocklist);
 
     return this.metadataFetchService

@@ -90,6 +90,23 @@ describe('useMetadataSearch', () => {
     expect(state.isStreaming.value).toBe(false)
   })
 
+  it('requests the sole available provider when no provider filter is selected', async () => {
+    apiMock.mockResolvedValue({ ok: false })
+
+    const scope = effectScope()
+    const state = scope.run(() => useMetadataSearch())!
+    state.providers.value = [provider(MetadataProviderKey.AUDIBLE)]
+    await state.search({ title: 'Confessor', author: 'Terry Goodkind', bookId: 42, isAudiobook: false })
+    scope.stop()
+
+    expect(apiMock).toHaveBeenCalledWith(
+      '/api/v1/metadata-fetch/stream?title=Confessor&author=Terry+Goodkind&bookId=42&isAudiobook=false&providers=audible',
+      {
+        signal: expect.any(AbortSignal),
+      },
+    )
+  })
+
   it('streams metadata candidates and counts providers', async () => {
     const google = candidate(MetadataProviderKey.GOOGLE, 'g1')
     const comicvine = candidate(MetadataProviderKey.COMICVINE, 'c1')

@@ -32,6 +32,11 @@ export interface ComicMetadataFields {
 
 export type MetadataProviderKey = (typeof MetadataProviderKey)[keyof typeof MetadataProviderKey];
 
+export interface MetadataSeriesMembership {
+  seriesName: string;
+  seriesIndex?: number | null;
+}
+
 export interface MetadataCandidate {
   provider: MetadataProviderKey;
   providerId: string;
@@ -47,6 +52,7 @@ export interface MetadataCandidate {
   isbn13?: string;
   seriesName?: string;
   seriesIndex?: number;
+  seriesMemberships?: MetadataSeriesMembership[];
   genres?: string[];
   coverUrl?: string;
   sourceUrl?: string;

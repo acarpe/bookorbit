@@ -1,4 +1,4 @@
-import { MetadataCandidate, MetadataProviderKey } from '@bookorbit/types';
+import { MetadataProviderKey, type MetadataCandidate, type MetadataSeriesMembership } from '@bookorbit/types';
 
 import { stripHtml } from '../provider-utils';
 import { AudibleProduct } from './audible.types';
@@ -21,6 +21,33 @@ function extractGenres(product: AudibleProduct): string[] | undefined {
   return genres.length ? genres : undefined;
 }
 
+function parseSeriesIndex(sequence: string | undefined): number | undefined {
+  if (sequence == null || sequence.trim() === '') return undefined;
+  const parsed = parseFloat(sequence);
+  return Number.isFinite(parsed) ? parsed : undefined;
+}
+
+function extractSeriesMemberships(product: AudibleProduct): MetadataSeriesMembership[] | undefined {
+  if (!product.series?.length) return undefined;
+
+  const memberships: MetadataSeriesMembership[] = [];
+  const seen = new Set<string>();
+  for (const series of product.series) {
+    const seriesName = series.title.trim();
+    const key = seriesName.toLowerCase();
+    if (!seriesName || seen.has(key)) continue;
+
+    const seriesIndex = parseSeriesIndex(series.sequence);
+    seen.add(key);
+    memberships.push({
+      seriesName,
+      ...(seriesIndex !== undefined ? { seriesIndex } : {}),
+    });
+  }
+
+  return memberships.length ? memberships : undefined;
+}
+
 export function mapAudibleProduct(product: AudibleProduct): MetadataCandidate {
   const coverUrl = product.product_images?.[1024] ?? product.product_images?.[500];
 
@@ -37,8 +64,8 @@ export function mapAudibleProduct(product: AudibleProduct): MetadataCandidate {
 
   const abridged = product.format_type != null ? product.format_type.toLowerCase() === 'abridged' : undefined;
 
-  const series = product.series?.[0];
-  const seriesIndex = series?.sequence != null ? parseFloat(series.sequence) : undefined;
+  const seriesMemberships = extractSeriesMemberships(product);
+  const primarySeries = seriesMemberships?.[0];
 
   return {
     provider: MetadataProviderKey.AUDIBLE,
@@ -55,8 +82,9 @@ export function mapAudibleProduct(product: AudibleProduct): MetadataCandidate {
     durationSeconds,
     abridged,
     audibleId: product.asin,
-    seriesName: series?.title,
-    seriesIndex: !isNaN(seriesIndex ?? NaN) ? seriesIndex : undefined,
+    seriesName: primarySeries?.seriesName,
+    seriesIndex: primarySeries?.seriesIndex ?? undefined,
+    seriesMemberships,
     genres: extractGenres(product),
   };
 }

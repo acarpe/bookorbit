@@ -167,6 +167,58 @@ describe('MetadataFetchService', () => {
     expect(google.search).toHaveBeenCalledWith(expect.objectContaining({ isbn: '9780441013593' }));
   });
 
+  it('falls back to title-only search for manual searches when title-author search returns no results', async () => {
+    const audible: MetadataProvider = {
+      key: MetadataProviderKey.AUDIBLE,
+      label: 'Audible',
+      identifiable: false,
+      search: vi
+        .fn()
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([candidate(MetadataProviderKey.AUDIBLE, 'B002V1NSN2', 'Confessor')]),
+    };
+    registry.select.mockReturnValue([audible]);
+
+    const results = await firstValueFrom(
+      service.search({ title: 'Confessor', author: 'Terry Goodkin', isbn: '9781662539374', isAudiobook: true }).pipe(toArray()),
+    );
+
+    expect(results).toEqual([candidate(MetadataProviderKey.AUDIBLE, 'B002V1NSN2', 'Confessor')]);
+    expect(audible.search).toHaveBeenCalledTimes(3);
+    expect(audible.search).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({ title: 'Confessor', author: 'Terry Goodkin', isbn: '9781662539374' }),
+    );
+    expect(audible.search).toHaveBeenNthCalledWith(2, expect.objectContaining({ title: 'Confessor', author: 'Terry Goodkin', isbn: undefined }));
+    expect(audible.search).toHaveBeenNthCalledWith(3, expect.objectContaining({ title: 'Confessor', author: undefined, isbn: undefined }));
+  });
+
+  it('does not use title-only fallback for capped automated searches', async () => {
+    const audible: MetadataProvider = {
+      key: MetadataProviderKey.AUDIBLE,
+      label: 'Audible',
+      identifiable: false,
+      search: vi.fn().mockResolvedValue([]),
+    };
+    registry.select.mockReturnValue([audible]);
+
+    const results = await firstValueFrom(
+      service
+        .search({
+          title: 'Confessor',
+          author: 'Terry Goodkin',
+          isbn: '9781662539374',
+          isAudiobook: true,
+          maxCandidatesPerProvider: 1,
+        })
+        .pipe(toArray()),
+    );
+
+    expect(results).toEqual([]);
+    expect(audible.search).toHaveBeenCalledTimes(2);
+  });
+
   it('uses lookupById for identifiable providers when existing provider ids are present', async () => {
     const google: IdentifiableProvider = {
       key: MetadataProviderKey.GOOGLE,

@@ -55,6 +55,31 @@ describe('GoodreadsMapper', () => {
     });
   });
 
+  it('uses only the first Goodreads Apollo bookSeries entry', () => {
+    const bookId = '604803';
+    const mockState: Record<string, any> = {
+      'Book:kca:604803': {
+        title: 'Confessor',
+        bookSeries: [
+          { userPosition: '11', series: { __ref: 'Series:kca:sword-of-truth' } },
+          { userPosition: '3', series: { __ref: 'Series:kca:chainfire-trilogy' } },
+        ],
+      },
+      'Series:kca:sword-of-truth': {
+        title: 'Sword of Truth',
+      },
+      'Series:kca:chainfire-trilogy': {
+        title: 'Chainfire Trilogy',
+      },
+    };
+
+    const result = mapGoodreadsApolloState(mockState, bookId);
+
+    expect(result?.seriesName).toBe('Sword of Truth');
+    expect(result?.seriesIndex).toBe(11);
+    expect(result?.seriesMemberships).toBeUndefined();
+  });
+
   it('should return null if book not found in state', () => {
     const result = mapGoodreadsApolloState({}, '12345');
     expect(result).toBeNull();

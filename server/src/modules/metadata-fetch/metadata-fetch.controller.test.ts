@@ -230,6 +230,24 @@ describe('MetadataFetchController', () => {
     );
   });
 
+  it('infers audiobook search when the effective provider set is only audiobook providers', async () => {
+    service.getStoredProviderContext.mockResolvedValue({ libraryId: 5, providerIds: {} });
+    pipeline.getEffectiveProviderKeys.mockResolvedValue([MetadataProviderKey.AUDIBLE]);
+    service.search.mockReturnValue(of({ provider: MetadataProviderKey.AUDIBLE, providerId: 'B002V1NSN2', title: 'Confessor' }));
+
+    const stream = await controller.stream({ bookId: 44, title: 'Confessor', author: 'Terry Goodkind' }, user);
+    await firstValueFrom(stream.pipe(toArray()));
+
+    expect(service.search).toHaveBeenCalledWith(
+      expect.objectContaining({
+        title: 'Confessor',
+        author: 'Terry Goodkind',
+        isAudiobook: true,
+      }),
+      [MetadataProviderKey.AUDIBLE],
+    );
+  });
+
   it('infers audiobook search from stored audible ids when providers are not specified', async () => {
     service.getStoredProviderContext.mockResolvedValue({ libraryId: 8, providerIds: { [MetadataProviderKey.AUDIBLE]: 'B0ABC12345' } });
     pipeline.getEffectiveProviderKeys.mockResolvedValue([

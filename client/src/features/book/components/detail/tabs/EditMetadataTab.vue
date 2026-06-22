@@ -14,7 +14,7 @@ import MetadataFieldLabel from './MetadataFieldLabel.vue'
 import SeriesMembershipEditor from './SeriesMembershipEditor.vue'
 import WriteAndRenameResultPanel from '../WriteAndRenameResultPanel.vue'
 import type { MetadataPatch } from '../../../composables/useMetadataDiff'
-import { type EditableSeriesMembership, useMetadataEditor } from '../../../composables/useMetadataEditor'
+import { type EditableSeriesMembership, normalizeSeriesMemberships, useMetadataEditor } from '../../../composables/useMetadataEditor'
 import { type MetadataRefreshPreview, useRefreshMetadata } from '../../../composables/useRefreshMetadata'
 import { type FileMetadata, useFileMetadata } from '../../../composables/useFileMetadata'
 import { useWriteAndRename } from '../../../composables/useWriteAndRename'
@@ -290,6 +290,25 @@ function applyPrimarySeriesPatch(field: 'seriesName' | 'seriesIndex', value: unk
   return true
 }
 
+function applySeriesMembershipPatch(formPatch: MetadataPatch, skippedFields: BookMetadataLockField[]): number {
+  if (formPatch.seriesMemberships === undefined) return 0
+  if (isSeriesLocked.value) {
+    if (isLocked('seriesName')) trackLockedField('seriesName', skippedFields)
+    if (isLocked('seriesIndex')) trackLockedField('seriesIndex', skippedFields)
+    return 0
+  }
+
+  setSeriesMemberships(
+    normalizeSeriesMemberships(
+      (formPatch.seriesMemberships ?? []).map((membership) => ({
+        seriesName: membership.seriesName,
+        seriesIndex: normalizeSeriesIndex(membership.seriesIndex),
+      })),
+    ),
+  )
+  return 1
+}
+
 function applyDirectPatchField(field: (typeof DIRECT_PATCH_FIELDS)[number], value: unknown, skippedFields: BookMetadataLockField[]): boolean {
   if (value === undefined) return false
   if (isProviderIdFormField(field) && !isProviderIdFieldAvailable(field, availableMetadataProviders.value)) return false
@@ -355,7 +374,10 @@ function applyAudioPatch(formPatch: MetadataPatch, skippedFields: BookMetadataLo
 function applyPatchToForm(formPatch: MetadataPatch, coverUrl: string | undefined): { skippedFields: BookMetadataLockField[]; updatedCount: number } {
   const skippedFields: BookMetadataLockField[] = []
   let updatedCount = 0
+  const hasSeriesMembershipPatch = formPatch.seriesMemberships !== undefined
+  updatedCount += applySeriesMembershipPatch(formPatch, skippedFields)
   for (const field of DIRECT_PATCH_FIELDS) {
+    if (hasSeriesMembershipPatch && (field === 'seriesName' || field === 'seriesIndex')) continue
     if (applyDirectPatchField(field, formPatch[field], skippedFields)) updatedCount++
   }
   updatedCount += applyComicPatch(formPatch, skippedFields)
@@ -453,6 +475,7 @@ function buildPreviewPatch(preview: MetadataRefreshPreview): MetadataPatch {
     pageCount: preview.pageCount,
     seriesName: preview.seriesName,
     seriesIndex: preview.seriesIndex,
+    seriesMemberships: preview.seriesMemberships,
     googleBooksId: preview.googleBooksId,
     goodreadsId: preview.goodreadsId,
     amazonId: preview.amazonId,

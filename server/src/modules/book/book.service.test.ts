@@ -999,6 +999,46 @@ describe('BookService', () => {
       expect((result.metadata as Record<string, unknown>).chapters).toBeUndefined();
     });
 
+    it('refreshMetadata preview includes series memberships', async () => {
+      const { service, bookRepo, pipeline } = makeService();
+      const user = makeUser();
+      bookRepo.findById.mockResolvedValue({
+        book: {
+          books: { id: 1, libraryId: 7 },
+          book_metadata: { title: 'Confessor', isbn13: null, isbn10: null },
+        },
+        authorRows: [{ id: 1, name: 'Terry Goodkind', sortName: null }],
+        genreRows: [],
+      });
+      pipeline.runWithSources.mockResolvedValue({
+        resolved: {
+          seriesName: 'Sword of Truth',
+          seriesIndex: 11,
+          seriesMemberships: [
+            { seriesName: 'Sword of Truth', seriesIndex: 11 },
+            { seriesName: 'Chainfire Trilogy', seriesIndex: 3 },
+          ],
+        },
+        sources: {},
+        providerIds: {},
+        diagnostics: makeMetadataFetchDiagnostics({ resolvedFieldCount: 3 }),
+      });
+
+      const result = await service.refreshMetadata(1, true, user);
+
+      expect(result).toEqual({
+        metadata: {
+          seriesName: 'Sword of Truth',
+          seriesIndex: 11,
+          seriesMemberships: [
+            { seriesName: 'Sword of Truth', seriesIndex: 11 },
+            { seriesName: 'Chainfire Trilogy', seriesIndex: 3 },
+          ],
+        },
+        diagnostics: makeMetadataFetchDiagnostics({ resolvedFieldCount: 3 }),
+      });
+    });
+
     it('refreshMetadata persists provider ids returned by pipeline', async () => {
       const { service, bookRepo, pipeline } = makeService();
       const user = makeUser();
@@ -1033,6 +1073,53 @@ describe('BookService', () => {
           title: 'Resolved',
           googleBooksId: 'g-id',
           openLibraryId: 'ol-id',
+        },
+        user,
+        { postSaveMode: 'schedule' },
+      );
+    });
+
+    it('refreshMetadata persists series memberships returned by pipeline', async () => {
+      const { service, bookRepo, pipeline } = makeService();
+      const user = makeUser();
+      bookRepo.findById.mockResolvedValue({
+        book: {
+          books: { id: 1, libraryId: 7 },
+          book_metadata: { title: 'Confessor', isbn13: null, isbn10: null },
+        },
+        authorRows: [{ id: 1, name: 'Terry Goodkind', sortName: null }],
+        genreRows: [],
+      });
+      pipeline.runWithSources.mockResolvedValue({
+        resolved: {
+          seriesName: 'Sword of Truth',
+          seriesIndex: 11,
+          seriesMemberships: [
+            { seriesName: 'Sword of Truth', seriesIndex: 11 },
+            { seriesName: 'Chainfire Trilogy', seriesIndex: 3 },
+          ],
+        },
+        sources: {},
+        providerIds: {},
+      });
+
+      const updateSpy = vi.spyOn(service, 'updateMetadata').mockResolvedValue({
+        book: { id: 1 },
+        write: null,
+        libraryAutoWriteEnabled: false,
+      } as never);
+
+      await service.refreshMetadata(1, false, user);
+
+      expect(updateSpy).toHaveBeenCalledWith(
+        1,
+        {
+          seriesName: 'Sword of Truth',
+          seriesIndex: 11,
+          seriesMemberships: [
+            { seriesName: 'Sword of Truth', seriesIndex: 11 },
+            { seriesName: 'Chainfire Trilogy', seriesIndex: 3 },
+          ],
         },
         user,
         { postSaveMode: 'schedule' },

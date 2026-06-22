@@ -49,7 +49,9 @@ export function useMetadataSearch() {
     if (params.isbn) query.set('isbn', params.isbn)
     if (params.bookId != null) query.set('bookId', String(params.bookId))
     if (params.isAudiobook != null) query.set('isAudiobook', String(params.isAudiobook))
-    if (selectedProviders.value.length) query.set('providers', selectedProviders.value.join(','))
+    const onlyProvider = providers.value.length === 1 ? providers.value[0] : undefined
+    const requestedProviders = selectedProviders.value.length ? selectedProviders.value : onlyProvider ? [onlyProvider.key] : []
+    if (requestedProviders.length) query.set('providers', requestedProviders.join(','))
 
     try {
       const res = await api(`/api/v1/metadata-fetch/stream?${query}`, {

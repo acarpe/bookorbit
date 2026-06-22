@@ -105,6 +105,56 @@ describe('useMetadataDiff', () => {
     expect(formPatch.goodreadsId).toBe('gr1')
   })
 
+  it('builds series memberships when series name and index are picked from the same provider', () => {
+    const audibleCandidate: MetadataCandidate = {
+      provider: 'audible',
+      providerId: 'B002V1NSN2',
+      title: 'Confessor',
+      seriesName: 'Sword of Truth',
+      seriesIndex: 11,
+      seriesMemberships: [
+        { seriesName: 'Sword of Truth', seriesIndex: 11 },
+        { seriesName: 'Chainfire Trilogy', seriesIndex: 3 },
+      ],
+    }
+    const candidates = ref([audibleCandidate])
+    const activeProvider = ref<MetadataProviderKey>('audible')
+    const { toggleField, buildPatch } = useMetadataDiff(mockCurrent, candidates, activeProvider, [
+      { key: 'audible' as MetadataProviderKey, label: 'Audible', identifiable: true },
+    ])
+
+    toggleField('seriesName')
+    toggleField('seriesIndex')
+
+    expect(buildPatch().formPatch.seriesMemberships).toEqual([
+      { seriesName: 'Sword of Truth', seriesIndex: 11 },
+      { seriesName: 'Chainfire Trilogy', seriesIndex: 3 },
+    ])
+  })
+
+  it('does not replace series memberships when only the series name is picked', () => {
+    const audibleCandidate: MetadataCandidate = {
+      provider: 'audible',
+      providerId: 'B002V1NSN2',
+      title: 'Confessor',
+      seriesName: 'Sword of Truth',
+      seriesIndex: 11,
+      seriesMemberships: [
+        { seriesName: 'Sword of Truth', seriesIndex: 11 },
+        { seriesName: 'Chainfire Trilogy', seriesIndex: 3 },
+      ],
+    }
+    const candidates = ref([audibleCandidate])
+    const activeProvider = ref<MetadataProviderKey>('audible')
+    const { toggleField, buildPatch } = useMetadataDiff(mockCurrent, candidates, activeProvider, [
+      { key: 'audible' as MetadataProviderKey, label: 'Audible', identifiable: true },
+    ])
+
+    toggleField('seriesName')
+
+    expect(buildPatch().formPatch.seriesMemberships).toBeUndefined()
+  })
+
   it('copyAll picks everything from active provider', () => {
     const candidates = ref([mockCandidate1, mockCandidate2])
     const activeProvider = ref<MetadataProviderKey>('google')

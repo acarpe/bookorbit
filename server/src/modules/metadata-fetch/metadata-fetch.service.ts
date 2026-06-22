@@ -151,16 +151,22 @@ export class MetadataFetchService {
 
   private async searchAndRankProvider(provider: MetadataProvider, params: MetadataSearchParams): Promise<MetadataCandidate[]> {
     const primary = filterAndRank(await provider.search(params), params);
-    const hasIsbn = hasText(params.isbn);
-    if (!hasIsbn) return primary;
-
     if (primary.length > 0) return primary;
 
+    const hasIsbn = hasText(params.isbn);
     const hasFallbackTerms = hasText(params.title) || hasText(params.author);
-    if (!hasFallbackTerms) return [];
+    if (hasIsbn && hasFallbackTerms) {
+      const fallbackParams: MetadataSearchParams = { ...params, isbn: undefined };
+      const fallback = filterAndRank(await provider.search(fallbackParams), fallbackParams);
+      if (fallback.length > 0) return fallback;
+    }
 
-    const fallbackParams: MetadataSearchParams = { ...params, isbn: undefined };
-    return filterAndRank(await provider.search(fallbackParams), fallbackParams);
+    if (params.maxCandidatesPerProvider === undefined && hasText(params.title) && hasText(params.author)) {
+      const titleOnlyParams: MetadataSearchParams = { ...params, author: undefined, isbn: undefined };
+      return filterAndRank(await provider.search(titleOnlyParams), titleOnlyParams);
+    }
+
+    return [];
   }
 
   private withTimeout(

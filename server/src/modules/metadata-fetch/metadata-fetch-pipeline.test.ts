@@ -535,6 +535,124 @@ describe('MetadataFetchPipeline', () => {
     expect(resolved.description).toBe('First description');
   });
 
+  it('passes through series memberships when series name and index resolve from the same provider', async () => {
+    const prefs = createPreferences((fields) => {
+      fields.seriesName = {
+        enabled: true,
+        providers: [MetadataProviderKey.AUDIBLE],
+        mergeStrategy: 'overwriteIfProvided',
+      };
+      fields.seriesIndex = {
+        enabled: true,
+        providers: [MetadataProviderKey.AUDIBLE],
+        mergeStrategy: 'overwriteIfProvided',
+      };
+    });
+
+    preferencesService.getGlobal.mockResolvedValue(prefs);
+    resolver.resolve.mockReturnValue(prefs);
+    resolver.withForwardCompatibility.mockReturnValue(prefs);
+    registry.all.mockReturnValue([{ key: MetadataProviderKey.AUDIBLE }] as never);
+    fetchService.search.mockReturnValue(
+      of(
+        candidate(MetadataProviderKey.AUDIBLE, 'B002V1NSN2', {
+          seriesName: 'Sword of Truth',
+          seriesIndex: 11,
+          seriesMemberships: [
+            { seriesName: 'Sword of Truth', seriesIndex: 11 },
+            { seriesName: 'Chainfire Trilogy', seriesIndex: 3 },
+          ],
+        }),
+      ),
+    );
+
+    const resolved = await pipeline.run({ title: 'Confessor', isAudiobook: true }, {});
+
+    expect(resolved.seriesName).toBe('Sword of Truth');
+    expect(resolved.seriesIndex).toBe(11);
+    expect(resolved.seriesMemberships).toEqual([
+      { seriesName: 'Sword of Truth', seriesIndex: 11 },
+      { seriesName: 'Chainfire Trilogy', seriesIndex: 3 },
+    ]);
+  });
+
+  it('does not pass series memberships when series name and index resolve from different providers', async () => {
+    const prefs = createPreferences((fields) => {
+      fields.seriesName = {
+        enabled: true,
+        providers: [MetadataProviderKey.AUDIBLE],
+        mergeStrategy: 'overwriteIfProvided',
+      };
+      fields.seriesIndex = {
+        enabled: true,
+        providers: [MetadataProviderKey.GOOGLE],
+        mergeStrategy: 'overwriteIfProvided',
+      };
+    });
+
+    preferencesService.getGlobal.mockResolvedValue(prefs);
+    resolver.resolve.mockReturnValue(prefs);
+    resolver.withForwardCompatibility.mockReturnValue(prefs);
+    registry.all.mockReturnValue([{ key: MetadataProviderKey.AUDIBLE }, { key: MetadataProviderKey.GOOGLE }] as never);
+    fetchService.search.mockReturnValue(
+      of(
+        candidate(MetadataProviderKey.AUDIBLE, 'B002V1NSN2', {
+          seriesName: 'Sword of Truth',
+          seriesIndex: 11,
+          seriesMemberships: [
+            { seriesName: 'Sword of Truth', seriesIndex: 11 },
+            { seriesName: 'Chainfire Trilogy', seriesIndex: 3 },
+          ],
+        }),
+        candidate(MetadataProviderKey.GOOGLE, 'g1', { seriesIndex: 12 }),
+      ),
+    );
+
+    const resolved = await pipeline.run({ title: 'Confessor', isAudiobook: true }, {});
+
+    expect(resolved.seriesName).toBe('Sword of Truth');
+    expect(resolved.seriesIndex).toBe(12);
+    expect(resolved.seriesMemberships).toBeUndefined();
+  });
+
+  it('does not pass series memberships when only the series name resolves', async () => {
+    const prefs = createPreferences((fields) => {
+      fields.seriesName = {
+        enabled: true,
+        providers: [MetadataProviderKey.AUDIBLE],
+        mergeStrategy: 'overwriteIfProvided',
+      };
+      fields.seriesIndex = {
+        enabled: false,
+        providers: [MetadataProviderKey.AUDIBLE],
+        mergeStrategy: 'overwriteIfProvided',
+      };
+    });
+
+    preferencesService.getGlobal.mockResolvedValue(prefs);
+    resolver.resolve.mockReturnValue(prefs);
+    resolver.withForwardCompatibility.mockReturnValue(prefs);
+    registry.all.mockReturnValue([{ key: MetadataProviderKey.AUDIBLE }] as never);
+    fetchService.search.mockReturnValue(
+      of(
+        candidate(MetadataProviderKey.AUDIBLE, 'B002V1NSN2', {
+          seriesName: 'Sword of Truth',
+          seriesIndex: 11,
+          seriesMemberships: [
+            { seriesName: 'Sword of Truth', seriesIndex: 11 },
+            { seriesName: 'Chainfire Trilogy', seriesIndex: 3 },
+          ],
+        }),
+      ),
+    );
+
+    const resolved = await pipeline.run({ title: 'Confessor', isAudiobook: true }, { seriesIndex: 99 });
+
+    expect(resolved.seriesName).toBe('Sword of Truth');
+    expect(resolved.seriesIndex).toBeUndefined();
+    expect(resolved.seriesMemberships).toBeUndefined();
+  });
+
   it('loads and applies library overrides when libraryId is provided', async () => {
     const global = createPreferences();
     const resolvedPrefs = createPreferences((fields) => {

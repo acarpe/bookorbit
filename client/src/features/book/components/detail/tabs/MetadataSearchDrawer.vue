@@ -2,7 +2,7 @@
 import { computed, onMounted, ref } from 'vue'
 import { X, Sparkles } from '@lucide/vue'
 import { isAudioFormat } from '@bookorbit/types'
-import type { BookDetail, BookMetadataLockField, MetadataCandidate, MetadataSource } from '@bookorbit/types'
+import type { BookDetail, BookMetadataLockField, MetadataCandidate, MetadataProviderKey, MetadataSource } from '@bookorbit/types'
 import { useMetadataSearch } from '../../../composables/useMetadataSearch'
 import { useCoverVersions } from '../../../composables/useCoverVersions'
 import type { MetadataPatch } from '../../../composables/useMetadataDiff'
@@ -57,6 +57,7 @@ const {
 
 const view = ref<'search' | 'diff'>('search')
 const selectedCandidate = ref<MetadataCandidate | null>(null)
+const lastSearchParams = ref<{ title: string; author: string; isbn: string } | null>(null)
 const drawerTitle = computed(() => (view.value === 'search' ? 'Search Metadata' : 'Compare Metadata'))
 const drawerSubtitle = computed(() =>
   view.value === 'search' ? 'Find the best provider match for this book.' : 'Review differences and apply only what you want.',
@@ -70,11 +71,32 @@ function handleClose() {
   emit('close')
 }
 
-function handleSearch(params: { title: string; author: string; isbn: string }) {
+function runMetadataSearch(params: { title: string; author: string; isbn: string }) {
   const isAudiobook = props.book.files.some((f) => f.format != null && isAudioFormat(f.format))
+  search({ ...params, bookId: props.book.id, isAudiobook })
+}
+
+function handleSearch(params: { title: string; author: string; isbn: string }) {
+  lastSearchParams.value = params
   selectedCandidate.value = null
   view.value = 'search'
-  search({ ...params, bookId: props.book.id, isAudiobook })
+  runMetadataSearch(params)
+}
+
+function rerunLastSearch() {
+  selectedCandidate.value = null
+  view.value = 'search'
+  if (lastSearchParams.value) runMetadataSearch(lastSearchParams.value)
+}
+
+function handleToggleProvider(provider: MetadataProviderKey) {
+  toggleProvider(provider)
+  if (hasSearched.value) rerunLastSearch()
+}
+
+function handleClearProviderFilter() {
+  clearProviderFilter()
+  if (hasSearched.value) rerunLastSearch()
 }
 
 function handleSelect(candidate: MetadataCandidate) {
@@ -143,8 +165,8 @@ function handleApply(patch: { formPatch: MetadataPatch; coverUrl?: string }) {
             :is-streaming="isStreaming"
             :has-searched="hasSearched"
             @search="handleSearch"
-            @toggle-provider="toggleProvider"
-            @clear-filter="clearProviderFilter"
+            @toggle-provider="handleToggleProvider"
+            @clear-filter="handleClearProviderFilter"
             @select="handleSelect"
           />
 

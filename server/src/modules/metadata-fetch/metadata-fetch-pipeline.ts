@@ -8,6 +8,7 @@ import {
   MetadataFetchPreferences,
   MetadataField,
   MetadataProviderKey,
+  MetadataSeriesMembership,
   ProviderConfigurations,
 } from '@bookorbit/types';
 import { firstValueFrom, toArray } from 'rxjs';
@@ -23,6 +24,7 @@ import { MetadataSearchParams } from './providers/metadata-search-params';
 
 export type ResolvedMetadataFields = Partial<Record<MetadataField, string | string[] | number | null>> & {
   coverUrl?: string;
+  seriesMemberships?: MetadataSeriesMembership[];
   chapters?: AudiobookChapter[];
   comicMetadata?: ComicMetadataFields;
 };
@@ -286,6 +288,9 @@ export class MetadataFetchPipeline {
       }
     }
 
+    const seriesMemberships = this.resolveSeriesMemberships(byProvider, result, sources);
+    if (seriesMemberships) result.seriesMemberships = seriesMemberships;
+
     const providerIds: ResolvedProviderIds = {};
     if (preferences.options?.saveProviderIds) {
       for (const candidate of byProvider.values()) {
@@ -331,6 +336,40 @@ export class MetadataFetchPipeline {
     };
     const key = map[field];
     return key ? candidate[key] : undefined;
+  }
+
+  private resolveSeriesMemberships(
+    byProvider: Map<string, MetadataCandidate>,
+    resolved: ResolvedMetadataFields,
+    sources: Record<string, string>,
+  ): MetadataSeriesMembership[] | undefined {
+    const seriesProvider = sources.seriesName as MetadataProviderKey | undefined;
+    if (!seriesProvider || resolved.seriesName === undefined) return undefined;
+
+    const memberships = this.normalizeSeriesMemberships(byProvider.get(seriesProvider)?.seriesMemberships);
+    if (!memberships.length) return undefined;
+
+    const indexProvider = sources.seriesIndex as MetadataProviderKey | undefined;
+    if (indexProvider !== seriesProvider || resolved.seriesIndex === undefined) return undefined;
+    return memberships;
+  }
+
+  private normalizeSeriesMemberships(memberships: readonly MetadataSeriesMembership[] | undefined): MetadataSeriesMembership[] {
+    if (!memberships?.length) return [];
+
+    const normalized: MetadataSeriesMembership[] = [];
+    const seen = new Set<string>();
+    for (const membership of memberships) {
+      const seriesName = membership.seriesName.trim();
+      const key = seriesName.toLowerCase();
+      if (!seriesName || seen.has(key)) continue;
+
+      const seriesIndex = typeof membership.seriesIndex === 'number' && Number.isFinite(membership.seriesIndex) ? membership.seriesIndex : null;
+      seen.add(key);
+      normalized.push({ seriesName, seriesIndex });
+    }
+
+    return normalized;
   }
 
   private mergeGenres(providerKeys: MetadataProviderKey[], byProvider: Map<string, MetadataCandidate>, blockedGenreTokens: ReadonlySet<string>) {
