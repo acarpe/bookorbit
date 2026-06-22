@@ -1,8 +1,10 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { Permission } from '@bookorbit/types';
+import type { ContentFilterRules, ReadStatus } from '@bookorbit/types';
 import { and, eq, inArray, ne, sql } from 'drizzle-orm';
 import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
 
+import { buildContentFilterClauses } from '../../common/utils/content-filter-sql.utils';
 import { DB } from '../../db';
 import * as schema from '../../db/schema';
 import type { HardcoverBookState, HardcoverUserSetting, NewHardcoverBookState, NewHardcoverUserSetting } from '../../db/schema';
@@ -22,6 +24,21 @@ export interface BookSyncData {
   startedAt: Date | null;
   finishedAt: Date | null;
   rating: number | null;
+  progress: number | null;
+}
+
+export interface HardcoverImportLocalBook {
+  bookId: number;
+  primaryFileId: number | null;
+  primaryFileFormat: string | null;
+  title: string | null;
+  isbn13: string | null;
+  isbn10: string | null;
+  hardcoverMetadataId: string | null;
+  authors: string[];
+  status: ReadStatus | null;
+  startedAt: Date | null;
+  finishedAt: Date | null;
   progress: number | null;
 }
 
@@ -181,5 +198,115 @@ export class HardcoverRepository {
       .where(eq(schema.bookFiles.id, bookFileId))
       .limit(1);
     return row?.bookId ?? null;
+  }
+
+  async findImportCandidateBooks(
+    userId: number,
+    accessibleLibraryIds: number[],
+    contentFilters?: ContentFilterRules,
+  ): Promise<HardcoverImportLocalBook[]> {
+    if (accessibleLibraryIds.length === 0) return [];
+
+    const contentFilterClauses = contentFilters ? buildContentFilterClauses(contentFilters, this.db) : [];
+    const maxProgressSq = this.db
+      .select({
+        bookId: schema.bookFiles.bookId,
+        maxProgress: sql<number>`max(${schema.readingProgress.percentage})`.as('max_progress'),
+      })
+      .from(schema.bookFiles)
+      .innerJoin(schema.readingProgress, and(eq(schema.readingProgress.bookFileId, schema.bookFiles.id), eq(schema.readingProgress.userId, userId)))
+      .groupBy(schema.bookFiles.bookId)
+      .as('import_max_progress_sq');
+
+    const rows = await this.db
+      .select({
+        bookId: schema.books.id,
+        primaryFileId: schema.books.primaryFileId,
+        primaryFileFormat: schema.bookFiles.format,
+        title: schema.bookMetadata.title,
+        isbn13: schema.bookMetadata.isbn13,
+        isbn10: schema.bookMetadata.isbn10,
+        hardcoverMetadataId: schema.bookMetadata.hardcoverId,
+        authorsCsv: sql<string>`coalesce(string_agg(${schema.authors.name}, '||' order by ${schema.bookAuthors.displayOrder}, ${schema.bookAuthors.authorId}), '')`,
+        status: schema.userBookStatus.status,
+        startedAt: schema.userBookStatus.startedAt,
+        finishedAt: schema.userBookStatus.finishedAt,
+        progress: maxProgressSq.maxProgress,
+      })
+      .from(schema.books)
+      .leftJoin(schema.bookMetadata, eq(schema.bookMetadata.bookId, schema.books.id))
+      .leftJoin(schema.bookAuthors, eq(schema.bookAuthors.bookId, schema.books.id))
+      .leftJoin(schema.authors, eq(schema.authors.id, schema.bookAuthors.authorId))
+      .leftJoin(schema.userBookStatus, and(eq(schema.userBookStatus.bookId, schema.books.id), eq(schema.userBookStatus.userId, userId)))
+      .leftJoin(schema.bookFiles, eq(schema.bookFiles.id, schema.books.primaryFileId))
+      .leftJoin(maxProgressSq, eq(maxProgressSq.bookId, schema.books.id))
+      .where(and(inArray(schema.books.libraryId, accessibleLibraryIds), eq(schema.books.status, 'present'), ...contentFilterClauses))
+      .groupBy(
+        schema.books.id,
+        schema.books.primaryFileId,
+        schema.bookFiles.format,
+        schema.bookMetadata.title,
+        schema.bookMetadata.isbn13,
+        schema.bookMetadata.isbn10,
+        schema.bookMetadata.hardcoverId,
+        schema.userBookStatus.status,
+        schema.userBookStatus.startedAt,
+        schema.userBookStatus.finishedAt,
+        maxProgressSq.maxProgress,
+      );
+
+    return rows.map((row) => ({
+      bookId: row.bookId,
+      primaryFileId: row.primaryFileId,
+      primaryFileFormat: row.primaryFileFormat,
+      title: row.title,
+      isbn13: row.isbn13,
+      isbn10: row.isbn10,
+      hardcoverMetadataId: row.hardcoverMetadataId,
+      authors: row.authorsCsv ? row.authorsCsv.split('||').filter((author) => author.length > 0) : [],
+      status: row.status as ReadStatus | null,
+      startedAt: row.startedAt,
+      finishedAt: row.finishedAt,
+      progress: row.progress,
+    }));
+  }
+
+  async upsertImportProgress(userId: number, bookFileId: number, percentage: number): Promise<boolean> {
+    const now = new Date();
+    const normalizedPercentage = Number.isFinite(percentage) ? Math.max(0, Math.min(100, percentage)) : 0;
+    const [row] = await this.db
+      .insert(schema.readingProgress)
+      .values({
+        userId,
+        bookFileId,
+        cfi: null,
+        pageNumber: null,
+        percentage: normalizedPercentage,
+        positionSeconds: null,
+        koboLocationSource: null,
+        koboLocationType: null,
+        koboLocationValue: null,
+        koboContentSourceProgressPercent: null,
+        koreaderProgress: null,
+        updatedAt: now,
+      })
+      .onConflictDoUpdate({
+        target: [schema.readingProgress.bookFileId, schema.readingProgress.userId],
+        setWhere: sql`${schema.readingProgress.percentage} <= 0`,
+        set: {
+          cfi: null,
+          pageNumber: null,
+          percentage: normalizedPercentage,
+          positionSeconds: null,
+          koboLocationSource: null,
+          koboLocationType: null,
+          koboLocationValue: null,
+          koboContentSourceProgressPercent: null,
+          koreaderProgress: null,
+          updatedAt: now,
+        },
+      })
+      .returning({ bookFileId: schema.readingProgress.bookFileId });
+    return row != null;
   }
 }

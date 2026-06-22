@@ -18,10 +18,15 @@ const mockSyncService = {
   getSyncPendingSummary: vi.fn(),
 };
 
+const mockImportService = {
+  previewImport: vi.fn(),
+  applyImport: vi.fn(),
+};
+
 const mockUser = { id: 1, isSuperuser: false, permissions: [] };
 
 function makeController() {
-  return new HardcoverController(mockSettingsService as any, mockSyncService as any);
+  return new HardcoverController(mockSettingsService as any, mockSyncService as any, mockImportService as any);
 }
 
 describe('HardcoverController', () => {
@@ -77,5 +82,20 @@ describe('HardcoverController', () => {
     const result = await makeController().getSyncPendingSummary(mockUser as any);
     expect(result).toEqual({ totalBooks: 10, pendingBooks: 2 });
     expect(mockSyncService.getSyncPendingSummary).toHaveBeenCalledWith(1);
+  });
+
+  it('previewImport delegates to service', async () => {
+    mockImportService.previewImport.mockResolvedValue({ summary: { willUpdate: 1 }, rows: [] });
+    const result = await makeController().previewImport(mockUser as any);
+    expect(result).toEqual({ summary: { willUpdate: 1 }, rows: [] });
+    expect(mockImportService.previewImport).toHaveBeenCalledWith(mockUser);
+  });
+
+  it('applyImport delegates to service', async () => {
+    mockImportService.applyImport.mockResolvedValue({ applied: 1, failed: 0 });
+    const dto = { hardcoverUserBookIds: [1000], importProgress: true };
+    const result = await makeController().applyImport(mockUser as any, dto);
+    expect(result).toEqual({ applied: 1, failed: 0 });
+    expect(mockImportService.applyImport).toHaveBeenCalledWith(mockUser, dto);
   });
 });

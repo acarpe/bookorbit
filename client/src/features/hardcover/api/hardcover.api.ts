@@ -1,6 +1,9 @@
 import { api } from '@/lib/api'
 import type {
+  ApplyHardcoverImportPayload,
   HardcoverActiveSyncStatus,
+  HardcoverImportApplyResult,
+  HardcoverImportPreview,
   HardcoverSyncPendingSummary,
   HardcoverSettings,
   HardcoverTokenValidationResult,
@@ -94,5 +97,27 @@ export async function streamHardcoverSyncStatus(onStatus: (status: HardcoverActi
 export async function fetchHardcoverSyncPendingSummary(): Promise<HardcoverSyncPendingSummary> {
   const res = await api(`${BASE}/sync/pending`)
   if (!res.ok) return { totalBooks: 0, pendingBooks: 0 }
+  return res.json()
+}
+
+export async function previewHardcoverImport(): Promise<HardcoverImportPreview> {
+  const res = await api(`${BASE}/import/preview`, { method: 'POST' })
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}))
+    throw new Error((body as { message?: string }).message ?? 'Failed to preview Hardcover import')
+  }
+  return res.json()
+}
+
+export async function applyHardcoverImport(payload: ApplyHardcoverImportPayload = {}): Promise<HardcoverImportApplyResult> {
+  const res = await api(`${BASE}/import/apply`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  })
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}))
+    throw new Error((body as { message?: string }).message ?? 'Failed to import Hardcover read status')
+  }
   return res.json()
 }

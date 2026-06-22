@@ -1,18 +1,21 @@
 import { Module } from '@nestjs/common';
 
 import { AchievementModule } from '../achievement/achievement.module';
+import { LibraryModule } from '../library/library.module';
+import { UserBookStatusModule } from '../user-book-status/user-book-status.module';
 import { HardcoverAutoSyncSchedulerService } from './hardcover-auto-sync-scheduler.service';
 import { HardcoverBookMatchService } from './hardcover-book-match.service';
 import { HardcoverClientService } from './hardcover-client.service';
 import { HardcoverController } from './hardcover.controller';
 import { HardcoverEventListener } from './hardcover-event-listener.service';
+import { HardcoverImportService } from './hardcover-import.service';
 import { HardcoverQueueService } from './hardcover-queue.service';
 import { HardcoverRepository } from './hardcover.repository';
 import { HardcoverSettingsService } from './hardcover-settings.service';
 import { HardcoverSyncService } from './hardcover-sync.service';
 
 @Module({
-  imports: [AchievementModule],
+  imports: [AchievementModule, LibraryModule, UserBookStatusModule],
   controllers: [HardcoverController],
   providers: [
     HardcoverQueueService,
@@ -21,6 +24,7 @@ import { HardcoverSyncService } from './hardcover-sync.service';
     HardcoverSettingsService,
     HardcoverBookMatchService,
     HardcoverSyncService,
+    HardcoverImportService,
     HardcoverAutoSyncSchedulerService,
     HardcoverEventListener,
   ],

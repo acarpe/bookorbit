@@ -5,7 +5,8 @@ import { map, Observable } from 'rxjs';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { RequirePermission } from '../../common/decorators/require-permission.decorator';
 import type { RequestUser } from '../../common/types/request-user';
-import { UpsertHardcoverSettingsDto, ValidateHardcoverTokenDto } from './dto';
+import { ApplyHardcoverImportDto, UpsertHardcoverSettingsDto, ValidateHardcoverTokenDto } from './dto';
+import { HardcoverImportService } from './hardcover-import.service';
 import { HardcoverSettingsService } from './hardcover-settings.service';
 import { HardcoverSyncService } from './hardcover-sync.service';
 
@@ -15,6 +16,7 @@ export class HardcoverController {
   constructor(
     private readonly settingsService: HardcoverSettingsService,
     private readonly syncService: HardcoverSyncService,
+    private readonly importService: HardcoverImportService,
   ) {}
 
   @Get('settings')
@@ -60,5 +62,15 @@ export class HardcoverController {
   @Get('sync/pending')
   getSyncPendingSummary(@CurrentUser() user: RequestUser) {
     return this.syncService.getSyncPendingSummary(user.id);
+  }
+
+  @Post('import/preview')
+  previewImport(@CurrentUser() user: RequestUser) {
+    return this.importService.previewImport(user);
+  }
+
+  @Post('import/apply')
+  applyImport(@CurrentUser() user: RequestUser, @Body() dto: ApplyHardcoverImportDto) {
+    return this.importService.applyImport(user, dto);
   }
 }

@@ -1,6 +1,7 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { Permission } from '@bookorbit/types';
 
+import * as schema from '../../db/schema';
 import { HardcoverRepository } from './hardcover.repository';
 
 function makeReturningChain(row: unknown) {
@@ -174,12 +175,131 @@ describe('HardcoverRepository', () => {
     expect(findSyncableBooksForUser).toHaveBeenNthCalledWith(2, 7, 99);
   });
 
+  it('findSyncableBook applies the single-book filter in the query builder', async () => {
+    const { repo, db } = makeRepository();
+    const selectArgs: Array<Record<string, unknown>> = [];
+    const chain: Record<string, unknown> = {};
+    for (const method of ['from', 'innerJoin', 'leftJoin', 'where', 'groupBy', 'as']) {
+      chain[method] = vi.fn().mockReturnValue(chain);
+    }
+    chain.then = (resolve: (rows: unknown[]) => void) => resolve([{ bookId: 42 }]);
+    db.select.mockImplementation((cols: Record<string, unknown>) => {
+      selectArgs.push(cols);
+      return chain;
+    });
+
+    await expect(repo.findSyncableBook(7, 42)).resolves.toEqual({ bookId: 42 });
+
+    expect(chain.where).toHaveBeenCalled();
+    expect(selectArgs.some((cols) => cols && 'bookId' in cols && 'status' in cols)).toBe(true);
+  });
+
+  it('findBookIdByFileId returns null when no file row exists', async () => {
+    const { repo, bookIdLimit } = makeRepository();
+    bookIdLimit.mockResolvedValueOnce([]);
+
+    await expect(repo.findBookIdByFileId(5)).resolves.toBeNull();
+  });
+
   it('findBookIdByFileId returns the first matching book id', async () => {
     const { repo, bookIdLimit, bookIdWhere } = makeRepository();
 
     await expect(repo.findBookIdByFileId(5)).resolves.toBe(42);
     expect(bookIdLimit).toHaveBeenCalledWith(1);
     expect(bookIdWhere).toHaveBeenCalledTimes(1);
+  });
+
+  it('findImportCandidateBooks short-circuits when no libraries are accessible', async () => {
+    const { repo, db } = makeRepository();
+    db.select.mockClear();
+
+    await expect(repo.findImportCandidateBooks(7, [])).resolves.toEqual([]);
+
+    expect(db.select).not.toHaveBeenCalled();
+  });
+
+  it('findImportCandidateBooks maps local books with authors and progress', async () => {
+    const { repo, db } = makeRepository();
+    const progressSq = { bookId: 'progressBookId', maxProgress: 'maxProgress' };
+    const progressChain: Record<string, unknown> = {};
+    for (const method of ['from', 'innerJoin', 'groupBy']) {
+      progressChain[method] = vi.fn().mockReturnValue(progressChain);
+    }
+    progressChain.as = vi.fn().mockReturnValue(progressSq);
+
+    const rows = [
+      {
+        bookId: 42,
+        primaryFileId: 500,
+        primaryFileFormat: 'epub',
+        title: 'Dune',
+        isbn13: '9780441172719',
+        isbn10: null,
+        hardcoverMetadataId: '10',
+        authorsCsv: 'Frank Herbert||Brian Herbert',
+        status: 'unread',
+        startedAt: null,
+        finishedAt: null,
+        progress: 12,
+      },
+      {
+        bookId: 43,
+        primaryFileId: null,
+        primaryFileFormat: null,
+        title: null,
+        isbn13: null,
+        isbn10: null,
+        hardcoverMetadataId: null,
+        authorsCsv: '',
+        status: null,
+        startedAt: null,
+        finishedAt: null,
+        progress: null,
+      },
+    ];
+    const mainChain: Record<string, unknown> = {};
+    for (const method of ['from', 'leftJoin', 'where']) {
+      mainChain[method] = vi.fn().mockReturnValue(mainChain);
+    }
+    mainChain.groupBy = vi.fn().mockResolvedValue(rows);
+
+    db.select.mockReset();
+    db.select.mockReturnValueOnce(progressChain).mockReturnValueOnce(mainChain);
+
+    await expect(
+      repo.findImportCandidateBooks(7, [1], { includeTagIds: [], excludeTagIds: [], includeGenreIds: [], excludeGenreIds: [] }),
+    ).resolves.toEqual([
+      {
+        bookId: 42,
+        primaryFileId: 500,
+        primaryFileFormat: 'epub',
+        title: 'Dune',
+        isbn13: '9780441172719',
+        isbn10: null,
+        hardcoverMetadataId: '10',
+        authors: ['Frank Herbert', 'Brian Herbert'],
+        status: 'unread',
+        startedAt: null,
+        finishedAt: null,
+        progress: 12,
+      },
+      {
+        bookId: 43,
+        primaryFileId: null,
+        primaryFileFormat: null,
+        title: null,
+        isbn13: null,
+        isbn10: null,
+        hardcoverMetadataId: null,
+        authors: [],
+        status: null,
+        startedAt: null,
+        finishedAt: null,
+        progress: null,
+      },
+    ]);
+    expect(progressChain.as).toHaveBeenCalledWith('import_max_progress_sq');
+    expect(mainChain.groupBy).toHaveBeenCalled();
   });
 
   it('userHasHardcoverSyncPermission returns true for a user with the permission', async () => {
@@ -203,5 +323,52 @@ describe('HardcoverRepository', () => {
     db.select.mockReturnValueOnce({ from: permissionFrom });
 
     await expect(repo.userHasHardcoverSyncPermission(7)).resolves.toBe(false);
+  });
+
+  it('upsertImportProgress inserts or updates only blank existing progress', async () => {
+    const { repo, db } = makeRepository();
+    const progressInsert = makeReturningChain({ bookFileId: 500 });
+    db.insert.mockReset();
+    db.insert.mockReturnValue(progressInsert);
+
+    await expect(repo.upsertImportProgress(7, 500, 140)).resolves.toBe(true);
+
+    expect(progressInsert.values).toHaveBeenCalledWith(
+      expect.objectContaining({
+        userId: 7,
+        bookFileId: 500,
+        percentage: 100,
+      }),
+    );
+    expect(progressInsert.onConflictDoUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        target: [schema.readingProgress.bookFileId, schema.readingProgress.userId],
+        setWhere: expect.anything(),
+        set: expect.objectContaining({ percentage: 100 }),
+      }),
+    );
+    expect(progressInsert.returning).toHaveBeenCalledWith({ bookFileId: schema.readingProgress.bookFileId });
+  });
+
+  it('upsertImportProgress returns false when an existing positive progress row wins the race', async () => {
+    const { repo, db } = makeRepository();
+    const progressInsert = makeReturningChain({ bookFileId: 500 });
+    progressInsert.returning.mockResolvedValue([]);
+    db.insert.mockReset();
+    db.insert.mockReturnValue(progressInsert);
+
+    await expect(repo.upsertImportProgress(7, 500, 50)).resolves.toBe(false);
+  });
+
+  it('upsertImportProgress normalizes invalid percentages to zero', async () => {
+    const { repo, db } = makeRepository();
+    const progressInsert = makeReturningChain({ bookFileId: 500 });
+    db.insert.mockReset();
+    db.insert.mockReturnValue(progressInsert);
+
+    await expect(repo.upsertImportProgress(7, 500, Number.NaN)).resolves.toBe(true);
+
+    expect(progressInsert.values).toHaveBeenCalledWith(expect.objectContaining({ percentage: 0 }));
+    expect(progressInsert.onConflictDoUpdate).toHaveBeenCalledWith(expect.objectContaining({ set: expect.objectContaining({ percentage: 0 }) }));
   });
 });
