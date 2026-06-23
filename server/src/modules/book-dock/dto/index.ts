@@ -2,11 +2,13 @@ import {
   IsArray,
   IsBoolean,
   IsInt,
+  IsNotEmpty,
   IsNumber,
   IsObject,
   IsOptional,
   IsString,
   Max,
+  MaxLength,
   Min,
   ValidateIf,
   ValidateNested,
@@ -89,6 +91,16 @@ class FinalizeOverrideDto {
   @IsOptional()
   @IsInt()
   folderId?: number;
+
+  @IsOptional()
+  @IsBoolean()
+  skipDuplicateCheck?: boolean;
+
+  @IsOptional()
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(255)
+  targetFileName?: string;
 }
 
 @HasCompleteDefaultDestination()

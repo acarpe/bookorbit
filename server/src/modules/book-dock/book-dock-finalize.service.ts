@@ -1,5 +1,5 @@
 import { BadRequestException, Inject, Injectable, Logger, NotFoundException, OnModuleInit, Optional } from '@nestjs/common';
-import { basename, dirname, extname, join } from 'path';
+import { basename, dirname, extname, join, resolve } from 'path';
 import { access as fsAccess, readFile, stat, unlink } from 'fs/promises';
 import { and, eq, inArray, or, sql } from 'drizzle-orm';
 import { NodePgDatabase } from 'drizzle-orm/node-postgres';
@@ -31,6 +31,13 @@ import { BookDockGateway } from './book-dock.gateway';
 import type { BookDockFileRow } from '../../db/schema';
 
 type Db = NodePgDatabase<typeof schema>;
+
+type FinalizeOverrideEntry = {
+  libraryId?: number;
+  folderId?: number;
+  skipDuplicateCheck?: boolean;
+  targetFileName?: string;
+};
 
 const BATCH_SIZE = 100;
 const MIN_PUBLISHED_YEAR = 1000;
@@ -90,7 +97,7 @@ export class BookDockFinalizeService implements OnModuleInit {
     excludedIds: number[] | undefined,
     defaultLibraryId: number | undefined,
     defaultFolderId: number | undefined,
-    overrides?: Array<{ fileId: number; libraryId?: number; folderId?: number }>,
+    overrides?: Array<{ fileId: number } & FinalizeOverrideEntry>,
     status?: string,
     search?: string,
   ): Promise<BookDockFinalizeResult> {
@@ -172,7 +179,7 @@ export class BookDockFinalizeService implements OnModuleInit {
     row: BookDockFileRow,
     defaultLibraryId: number | undefined,
     defaultFolderId: number | undefined,
-    overrideMap: Map<number, { libraryId?: number; folderId?: number }>,
+    overrideMap: Map<number, FinalizeOverrideEntry>,
     userId: number,
     isSuperuser: boolean,
     duplicateLookup?: Map<string, number>,
@@ -198,7 +205,17 @@ export class BookDockFinalizeService implements OnModuleInit {
       const format = row.format ?? extname(row.fileName).toLowerCase().slice(1);
       this.validator.validateFormat(row.fileName, library.allowedFormats);
 
-      const destPath = await this.resolveDestination(library, folder.path, row, format);
+      const patternDestPath = await this.resolveDestination(library, folder.path, row, format);
+      let destPath = patternDestPath;
+      if (override?.targetFileName) {
+        const stem = format ? override.targetFileName.replace(new RegExp(`\\.${format}$`, 'i'), '') : override.targetFileName;
+        const safeFileName = this.validator.sanitizeFilename(format ? `${stem}.${format}` : stem);
+        const candidate = join(dirname(patternDestPath), safeFileName);
+        if (resolve(dirname(candidate)) !== resolve(dirname(patternDestPath))) {
+          return { fileId: row.id, fileName: row.fileName, success: false, message: 'Invalid file name' };
+        }
+        destPath = candidate;
+      }
 
       const exists = await fsAccess(destPath)
         .then(() => true)
@@ -207,17 +224,19 @@ export class BookDockFinalizeService implements OnModuleInit {
         return { fileId: row.id, fileName: row.fileName, success: false, message: 'A file with this name already exists at the target location' };
       }
 
-      const meta = normalizeFinalizeMetadata(row.selectedMetadata ?? row.embeddedMetadata ?? {});
-      const existingBookId = await this.findDuplicate(libraryId, meta, duplicateLookup);
-      if (existingBookId !== null) {
-        return {
-          fileId: row.id,
-          fileName: row.fileName,
-          success: false,
-          isDuplicate: true,
-          existingBookId,
-          message: `Duplicate: this book already exists in the library`,
-        };
+      if (!override?.skipDuplicateCheck && !override?.targetFileName) {
+        const meta = normalizeFinalizeMetadata(row.selectedMetadata ?? row.embeddedMetadata ?? {});
+        const existingBookId = await this.findDuplicate(libraryId, meta, duplicateLookup);
+        if (existingBookId !== null) {
+          return {
+            fileId: row.id,
+            fileName: row.fileName,
+            success: false,
+            isDuplicate: true,
+            existingBookId,
+            message: `Duplicate: this book already exists in the library`,
+          };
+        }
       }
 
       await this.storage.moveToPath(row.absolutePath, destPath);
@@ -330,7 +349,7 @@ export class BookDockFinalizeService implements OnModuleInit {
   private async buildDuplicateLookup(
     rows: BookDockFileRow[],
     defaultLibraryId: number | undefined,
-    overrideMap: Map<number, { libraryId?: number; folderId?: number }>,
+    overrideMap: Map<number, FinalizeOverrideEntry>,
   ): Promise<Map<string, number>> {
     const needsByLibrary = new Map<
       number,

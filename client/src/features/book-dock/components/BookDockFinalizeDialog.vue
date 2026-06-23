@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { X, Check, AlertCircle, Copy, Loader2, ExternalLink, ChevronDown, FileText } from '@lucide/vue'
 
@@ -24,9 +24,64 @@ const { result, loading, error, finalize, reset } = useBookDockFinalize()
 const defaultLibraryId = ref<number | null>(null)
 const defaultFolderId = ref<number | null>(null)
 const expandedErrors = ref<Set<number>>(new Set())
+const reimportingIds = reactive(new Set<number>())
+const renameInputs = ref<Map<number, string>>(new Map())
 const selectionSummary = ref<{ total: number; withDestination: number; withoutDestination: number } | null>(null)
 
 const duplicateCount = computed(() => result.value?.results.filter((r) => r.isDuplicate).length ?? 0)
+
+function isFileExistsError(msg: string | undefined): boolean {
+  return !!msg?.includes('file with this name already exists')
+}
+
+function fileExtension(fileName: string): string {
+  const dot = fileName.lastIndexOf('.')
+  return dot > 0 ? fileName.slice(dot) : ''
+}
+
+function getRenameInput(fileId: number): string {
+  return renameInputs.value.get(fileId) ?? ''
+}
+
+function setRenameInput(fileId: number, value: string) {
+  renameInputs.value.set(fileId, value)
+  renameInputs.value = new Map(renameInputs.value)
+}
+
+async function handleRenameAndRetry(fileId: number) {
+  const name = getRenameInput(fileId).trim()
+  if (!name || !result.value || reimportingIds.has(fileId)) return
+  reimportingIds.add(fileId)
+  try {
+    const payload: Record<string, unknown> = {
+      fileIds: [fileId],
+      overrides: [{ fileId, targetFileName: name }],
+    }
+    if (defaultLibraryId.value !== null) payload.defaultLibraryId = defaultLibraryId.value
+    if (defaultFolderId.value !== null) payload.defaultFolderId = defaultFolderId.value
+    const res = await api('/api/v1/book-dock/finalize', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    })
+    if (!res.ok) return
+    const newResult = await res.json()
+    const fileResult = (newResult.results as typeof result.value.results)[0]
+    if (!fileResult) return
+    const entry = result.value.results.find((r) => r.fileId === fileId)
+    if (entry) {
+      Object.assign(entry, fileResult)
+      if (fileResult.success) {
+        result.value.succeeded++
+        result.value.failed--
+        renameInputs.value.delete(fileId)
+        renameInputs.value = new Map(renameInputs.value)
+      }
+    }
+  } finally {
+    reimportingIds.delete(fileId)
+  }
+}
 
 const namePreview = ref<{ fileId: number; fileName: string; newName: string }[]>([])
 const previewLoading = ref(false)
@@ -145,6 +200,38 @@ function handleClose() {
 function goToBook(bookId: number) {
   router.push({ name: 'book-detail', params: { bookId } })
   handleClose()
+}
+
+async function handleReimportDuplicate(fileId: number) {
+  if (!result.value || reimportingIds.has(fileId)) return
+  reimportingIds.add(fileId)
+  try {
+    const payload: Record<string, unknown> = {
+      fileIds: [fileId],
+      overrides: [{ fileId, skipDuplicateCheck: true }],
+    }
+    if (defaultLibraryId.value !== null) payload.defaultLibraryId = defaultLibraryId.value
+    if (defaultFolderId.value !== null) payload.defaultFolderId = defaultFolderId.value
+    const res = await api('/api/v1/book-dock/finalize', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    })
+    if (!res.ok) return
+    const newResult = await res.json()
+    const fileResult = (newResult.results as typeof result.value.results)[0]
+    if (!fileResult) return
+    const entry = result.value.results.find((r) => r.fileId === fileId)
+    if (entry) {
+      Object.assign(entry, fileResult)
+      if (fileResult.success) {
+        result.value.succeeded++
+        result.value.failed--
+      }
+    }
+  } finally {
+    reimportingIds.delete(fileId)
+  }
 }
 </script>
 
@@ -272,13 +359,43 @@ function goToBook(bookId: number) {
                   View existing <ExternalLink class="size-3" />
                 </button>
                 <button
-                  v-if="!r.success && !r.isDuplicate && r.message"
+                  v-if="!r.success && r.isDuplicate"
+                  class="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1 shrink-0 transition-colors"
+                  :disabled="reimportingIds.has(r.fileId)"
+                  @click="handleReimportDuplicate(r.fileId)"
+                >
+                  <Loader2 v-if="reimportingIds.has(r.fileId)" class="size-3 animate-spin" />
+                  Import anyway
+                </button>
+                <button
+                  v-if="!r.success && !r.isDuplicate && r.message && !isFileExistsError(r.message)"
                   class="text-xs text-red-500 flex items-center gap-1 shrink-0 hover:text-red-600 transition-colors"
                   @click="expandedErrors.has(r.fileId) ? expandedErrors.delete(r.fileId) : expandedErrors.add(r.fileId)"
                 >
                   {{ expandedErrors.has(r.fileId) ? 'Hide' : 'Details' }}
                   <ChevronDown class="size-3 transition-transform" :class="expandedErrors.has(r.fileId) ? 'rotate-180' : ''" />
                 </button>
+              </div>
+              <div v-if="!r.success && isFileExistsError(r.message)" class="px-3 pb-2.5">
+                <div class="flex items-center gap-1.5">
+                  <span class="text-xs text-muted-foreground shrink-0">Already exists - save as:</span>
+                  <input
+                    type="text"
+                    :value="getRenameInput(r.fileId)"
+                    :placeholder="'e.g. ' + r.fileName.replace(/\.[^.]+$/, '') + ' (2)'"
+                    class="flex-1 min-w-0 h-7 rounded-md border border-input bg-background px-2 text-xs outline-none focus:ring-1 focus:ring-ring"
+                    @input="setRenameInput(r.fileId, ($event.target as HTMLInputElement).value)"
+                  />
+                  <span class="text-xs text-muted-foreground font-mono shrink-0">{{ fileExtension(r.fileName) }}</span>
+                  <button
+                    class="h-7 px-2.5 rounded-md bg-primary text-primary-foreground text-xs font-medium transition-all hover:opacity-90 active:scale-95 flex items-center gap-1 shrink-0 disabled:opacity-50"
+                    :disabled="!getRenameInput(r.fileId).trim() || reimportingIds.has(r.fileId)"
+                    @click="handleRenameAndRetry(r.fileId)"
+                  >
+                    <Loader2 v-if="reimportingIds.has(r.fileId)" class="size-3 animate-spin" />
+                    Import
+                  </button>
+                </div>
               </div>
               <div v-if="!r.success && r.message && expandedErrors.has(r.fileId)" class="px-3 pb-2">
                 <p class="text-xs text-red-500 bg-red-500/10 rounded-md p-2 break-all">{{ r.message }}</p>

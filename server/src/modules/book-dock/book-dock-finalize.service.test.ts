@@ -47,6 +47,7 @@ function makeService() {
   };
   const validator = {
     validateFormat: vi.fn(),
+    sanitizeFilename: vi.fn((s: string) => s),
   };
   const storage = {
     moveToPath: vi.fn().mockResolvedValue(undefined),
@@ -503,6 +504,376 @@ describe('BookDockFinalizeService', () => {
         (service as any).finalizeFile(makeRow({ targetLibraryId: 5, targetFolderId: 9 }), undefined, undefined, new Map(), 1, true),
       ).resolves.toMatchObject({ success: true, bookId: 556 });
       expect(processor.createBookRecord).toHaveBeenCalledWith(5, 9, '/library/new/book.epub', '/library/new/book.epub', 'new/book.epub', 'epub', 100);
+    });
+
+    describe('skipDuplicateCheck override', () => {
+      it('bypasses duplicate detection and succeeds when skipDuplicateCheck is true', async () => {
+        const { service, processor } = makeService();
+        vi.spyOn(service as never, 'findLibraryOrFail').mockResolvedValue({
+          id: 5,
+          allowedFormats: ['epub', 'pdf'],
+          fileNamingPattern: null,
+          organizationMode: 'book_per_folder',
+        } as never);
+        vi.spyOn(service as never, 'findFolderOrFail').mockResolvedValue({ id: 9, libraryId: 5, path: '/library' } as never);
+        vi.spyOn(service as never, 'resolveDestination').mockResolvedValue('/library/Author/Title/Title.pdf' as never);
+        const findDuplicateSpy = vi.spyOn(service as never, 'findDuplicate');
+        vi.spyOn(service as never, 'applyMetadata').mockResolvedValue(undefined as never);
+        vi.spyOn(service as never, 'cleanupBookDockRecord').mockResolvedValue(undefined as never);
+        mockAccess.mockRejectedValueOnce(new Error('ENOENT'));
+        mockStat.mockResolvedValueOnce({ size: 512 } as never);
+        processor.createBookRecord.mockResolvedValueOnce({ bookId: 200 });
+
+        const overrideMap = new Map([[1, { libraryId: 5, folderId: 9, skipDuplicateCheck: true }]]);
+        const result = await (service as any).finalizeFile(
+          makeRow({ id: 1, fileName: 'Title.pdf', format: 'pdf', targetLibraryId: 5, targetFolderId: 9 }),
+          undefined,
+          undefined,
+          overrideMap,
+          1,
+          true,
+        );
+
+        expect(result).toMatchObject({ success: true, bookId: 200 });
+        expect(findDuplicateSpy).not.toHaveBeenCalled();
+      });
+
+      it('still blocks import when destination file already exists even with skipDuplicateCheck', async () => {
+        const { service } = makeService();
+        vi.spyOn(service as never, 'findLibraryOrFail').mockResolvedValue({
+          id: 5,
+          allowedFormats: ['epub'],
+          fileNamingPattern: null,
+          organizationMode: 'book_per_folder',
+        } as never);
+        vi.spyOn(service as never, 'findFolderOrFail').mockResolvedValue({ id: 9, libraryId: 5, path: '/library' } as never);
+        vi.spyOn(service as never, 'resolveDestination').mockResolvedValue('/library/Author/Title/Title.epub' as never);
+        mockAccess.mockResolvedValueOnce(undefined as never);
+
+        const overrideMap = new Map([[1, { libraryId: 5, folderId: 9, skipDuplicateCheck: true }]]);
+        const result = await (service as any).finalizeFile(
+          makeRow({ id: 1, targetLibraryId: 5, targetFolderId: 9 }),
+          undefined,
+          undefined,
+          overrideMap,
+          1,
+          true,
+        );
+
+        expect(result).toEqual({
+          fileId: 1,
+          fileName: 'book.epub',
+          success: false,
+          message: 'A file with this name already exists at the target location',
+        });
+      });
+
+      it('calls findDuplicate normally when skipDuplicateCheck is absent', async () => {
+        const { service } = makeService();
+        vi.spyOn(service as never, 'findLibraryOrFail').mockResolvedValue({
+          id: 5,
+          allowedFormats: ['epub'],
+          fileNamingPattern: null,
+          organizationMode: 'book_per_folder',
+        } as never);
+        vi.spyOn(service as never, 'findFolderOrFail').mockResolvedValue({ id: 9, libraryId: 5, path: '/library' } as never);
+        vi.spyOn(service as never, 'resolveDestination').mockResolvedValue('/library/Author/Title/Title.epub' as never);
+        mockAccess.mockRejectedValueOnce(new Error('ENOENT'));
+        const findDuplicateSpy = vi.spyOn(service as never, 'findDuplicate').mockResolvedValue(77 as never);
+
+        const overrideMap = new Map([[1, { libraryId: 5, folderId: 9 }]]);
+        const result = await (service as any).finalizeFile(
+          makeRow({ id: 1, targetLibraryId: 5, targetFolderId: 9 }),
+          undefined,
+          undefined,
+          overrideMap,
+          1,
+          true,
+        );
+
+        expect(findDuplicateSpy).toHaveBeenCalledOnce();
+        expect(result).toMatchObject({ success: false, isDuplicate: true, existingBookId: 77 });
+      });
+
+      it('calls findDuplicate normally when skipDuplicateCheck is false', async () => {
+        const { service } = makeService();
+        vi.spyOn(service as never, 'findLibraryOrFail').mockResolvedValue({
+          id: 5,
+          allowedFormats: ['epub'],
+          fileNamingPattern: null,
+          organizationMode: 'book_per_folder',
+        } as never);
+        vi.spyOn(service as never, 'findFolderOrFail').mockResolvedValue({ id: 9, libraryId: 5, path: '/library' } as never);
+        vi.spyOn(service as never, 'resolveDestination').mockResolvedValue('/library/Author/Title/Title.epub' as never);
+        mockAccess.mockRejectedValueOnce(new Error('ENOENT'));
+        const findDuplicateSpy = vi.spyOn(service as never, 'findDuplicate').mockResolvedValue(88 as never);
+
+        const overrideMap = new Map([[1, { libraryId: 5, folderId: 9, skipDuplicateCheck: false }]]);
+        const result = await (service as any).finalizeFile(
+          makeRow({ id: 1, targetLibraryId: 5, targetFolderId: 9 }),
+          undefined,
+          undefined,
+          overrideMap,
+          1,
+          true,
+        );
+
+        expect(findDuplicateSpy).toHaveBeenCalledOnce();
+        expect(result).toMatchObject({ success: false, isDuplicate: true, existingBookId: 88 });
+      });
+
+      it('attaches pdf to existing book folder in book_per_folder mode', async () => {
+        const { service, processor } = makeService();
+        vi.spyOn(service as never, 'findLibraryOrFail').mockResolvedValue({
+          id: 5,
+          allowedFormats: ['epub', 'pdf'],
+          fileNamingPattern: null,
+          organizationMode: 'book_per_folder',
+        } as never);
+        vi.spyOn(service as never, 'findFolderOrFail').mockResolvedValue({ id: 9, libraryId: 5, path: '/library' } as never);
+        // Naming pattern resolves PDF into the same folder as the existing EPUB
+        vi.spyOn(service as never, 'resolveDestination').mockResolvedValue('/library/Author/Dune/Dune.pdf' as never);
+        vi.spyOn(service as never, 'applyMetadata').mockResolvedValue(undefined as never);
+        vi.spyOn(service as never, 'cleanupBookDockRecord').mockResolvedValue(undefined as never);
+        mockAccess.mockRejectedValueOnce(new Error('ENOENT'));
+        mockStat.mockResolvedValueOnce({ size: 1024 } as never);
+        processor.createBookRecord.mockResolvedValueOnce({ bookId: 42 });
+
+        const overrideMap = new Map([[7, { libraryId: 5, folderId: 9, skipDuplicateCheck: true }]]);
+        const result = await (service as any).finalizeFile(
+          makeRow({ id: 7, fileName: 'Dune.pdf', format: 'pdf', absolutePath: '/tmp/Dune.pdf', targetLibraryId: 5, targetFolderId: 9 }),
+          undefined,
+          undefined,
+          overrideMap,
+          1,
+          true,
+        );
+
+        expect(result).toMatchObject({ success: true, bookId: 42 });
+        // book_per_folder: folderPath = dirname(destPath) = /library/Author/Dune
+        expect(processor.createBookRecord).toHaveBeenCalledWith(
+          5,
+          9,
+          '/library/Author/Dune',
+          '/library/Author/Dune/Dune.pdf',
+          'Author/Dune/Dune.pdf',
+          'pdf',
+          1024,
+        );
+      });
+
+      it('creates a separate book record in book_per_file mode with skipDuplicateCheck', async () => {
+        const { service, processor } = makeService();
+        vi.spyOn(service as never, 'findLibraryOrFail').mockResolvedValue({
+          id: 6,
+          allowedFormats: ['epub', 'pdf'],
+          fileNamingPattern: null,
+          organizationMode: 'book_per_file',
+        } as never);
+        vi.spyOn(service as never, 'findFolderOrFail').mockResolvedValue({ id: 10, libraryId: 6, path: '/library2' } as never);
+        vi.spyOn(service as never, 'resolveDestination').mockResolvedValue('/library2/Dune.pdf' as never);
+        vi.spyOn(service as never, 'applyMetadata').mockResolvedValue(undefined as never);
+        vi.spyOn(service as never, 'cleanupBookDockRecord').mockResolvedValue(undefined as never);
+        mockAccess.mockRejectedValueOnce(new Error('ENOENT'));
+        mockStat.mockResolvedValueOnce({ size: 2048 } as never);
+        processor.createBookRecord.mockResolvedValueOnce({ bookId: 300 });
+
+        const overrideMap = new Map([[8, { libraryId: 6, folderId: 10, skipDuplicateCheck: true }]]);
+        const result = await (service as any).finalizeFile(
+          makeRow({ id: 8, fileName: 'Dune.pdf', format: 'pdf', absolutePath: '/tmp/Dune.pdf', targetLibraryId: 6, targetFolderId: 10 }),
+          undefined,
+          undefined,
+          overrideMap,
+          1,
+          true,
+        );
+
+        expect(result).toMatchObject({ success: true, bookId: 300 });
+        // book_per_file: folderPath = destPath itself (each file is its own book)
+        expect(processor.createBookRecord).toHaveBeenCalledWith(6, 10, '/library2/Dune.pdf', '/library2/Dune.pdf', 'Dune.pdf', 'pdf', 2048);
+      });
+
+      it('passes skipDuplicateCheck through the finalize public API via overrides array', async () => {
+        const { service, repo } = makeService();
+        repo.findByIds.mockResolvedValue([makeRow({ id: 3, targetLibraryId: 5, targetFolderId: 9 })]);
+        vi.spyOn(service as never, 'buildDuplicateLookup').mockResolvedValue(new Map() as never);
+        const finalizeFileSpy = vi.spyOn(service as never, 'finalizeFile').mockResolvedValue({
+          fileId: 3,
+          fileName: 'book.pdf',
+          success: true,
+          bookId: 99,
+        } as never);
+        vi.spyOn(service as never, 'emitSummary').mockResolvedValue(undefined as never);
+
+        await service.finalize(1, true, [3], false, [], 5, 9, [{ fileId: 3, skipDuplicateCheck: true }]);
+
+        const overrideMapPassed = finalizeFileSpy.mock.calls[0]?.[3] as Map<number, unknown>;
+        expect(overrideMapPassed.get(3)).toMatchObject({ fileId: 3, skipDuplicateCheck: true });
+      });
+    });
+  });
+
+  describe('targetFileName override', () => {
+    it('replaces the basename of the resolved destination with the sanitized targetFileName', async () => {
+      const { service, processor } = makeService();
+      vi.spyOn(service as never, 'findLibraryOrFail').mockResolvedValue({
+        id: 5,
+        allowedFormats: ['epub'],
+        fileNamingPattern: null,
+        organizationMode: 'book_per_folder',
+      } as never);
+      vi.spyOn(service as never, 'findFolderOrFail').mockResolvedValue({ id: 9, libraryId: 5, path: '/library' } as never);
+      vi.spyOn(service as never, 'resolveDestination').mockResolvedValue('/library/Unknown Author/1/1.epub' as never);
+      const findDuplicateSpy = vi.spyOn(service as never, 'findDuplicate');
+      vi.spyOn(service as never, 'applyMetadata').mockResolvedValue(undefined as never);
+      vi.spyOn(service as never, 'cleanupBookDockRecord').mockResolvedValue(undefined as never);
+      mockAccess.mockRejectedValueOnce(new Error('ENOENT'));
+      mockStat.mockResolvedValueOnce({ size: 993 } as never);
+      processor.createBookRecord.mockResolvedValueOnce({ bookId: 500 });
+
+      const overrideMap = new Map([[1, { libraryId: 5, folderId: 9, targetFileName: '1_alt' }]]);
+      const result = await (service as any).finalizeFile(
+        makeRow({ id: 1, fileName: '1.epub', format: 'epub', targetLibraryId: 5, targetFolderId: 9 }),
+        undefined,
+        undefined,
+        overrideMap,
+        1,
+        true,
+      );
+
+      expect(result).toMatchObject({ success: true, bookId: 500 });
+      // basename replaced: 1.epub → 1_alt.epub, directory unchanged
+      expect(processor.createBookRecord).toHaveBeenCalledWith(
+        5,
+        9,
+        '/library/Unknown Author/1',
+        '/library/Unknown Author/1/1_alt.epub',
+        'Unknown Author/1/1_alt.epub',
+        'epub',
+        993,
+      );
+      // targetFileName implicitly skips duplicate check
+      expect(findDuplicateSpy).not.toHaveBeenCalled();
+    });
+
+    it('targetFileName still fails when the renamed dest also already exists', async () => {
+      const { service } = makeService();
+      vi.spyOn(service as never, 'findLibraryOrFail').mockResolvedValue({
+        id: 5,
+        allowedFormats: ['epub'],
+        fileNamingPattern: null,
+        organizationMode: 'book_per_folder',
+      } as never);
+      vi.spyOn(service as never, 'findFolderOrFail').mockResolvedValue({ id: 9, libraryId: 5, path: '/library' } as never);
+      vi.spyOn(service as never, 'resolveDestination').mockResolvedValue('/library/Unknown Author/1/1.epub' as never);
+      // 1_alt.epub also already exists
+      mockAccess.mockResolvedValueOnce(undefined as never);
+
+      const overrideMap = new Map([[1, { libraryId: 5, folderId: 9, targetFileName: '1_alt' }]]);
+      const result = await (service as any).finalizeFile(
+        makeRow({ id: 1, fileName: '1.epub', format: 'epub', targetLibraryId: 5, targetFolderId: 9 }),
+        undefined,
+        undefined,
+        overrideMap,
+        1,
+        true,
+      );
+
+      expect(result).toEqual({
+        fileId: 1,
+        fileName: '1.epub',
+        success: false,
+        message: 'A file with this name already exists at the target location',
+      });
+    });
+
+    it('passes targetFileName through the finalize public API via overrides array', async () => {
+      const { service, repo } = makeService();
+      repo.findByIds.mockResolvedValue([makeRow({ id: 4, targetLibraryId: 5, targetFolderId: 9 })]);
+      vi.spyOn(service as never, 'buildDuplicateLookup').mockResolvedValue(new Map() as never);
+      const finalizeFileSpy = vi.spyOn(service as never, 'finalizeFile').mockResolvedValue({
+        fileId: 4,
+        fileName: '1.epub',
+        success: true,
+        bookId: 99,
+      } as never);
+      vi.spyOn(service as never, 'emitSummary').mockResolvedValue(undefined as never);
+
+      await service.finalize(1, true, [4], false, [], 5, 9, [{ fileId: 4, targetFileName: '1_alt' }]);
+
+      const overrideMapPassed = finalizeFileSpy.mock.calls[0]?.[3] as Map<number, unknown>;
+      expect(overrideMapPassed.get(4)).toMatchObject({ fileId: 4, targetFileName: '1_alt' });
+    });
+
+    it('strips extension from targetFileName if user includes it to avoid double extension', async () => {
+      const { service, processor } = makeService();
+      vi.spyOn(service as never, 'findLibraryOrFail').mockResolvedValue({
+        id: 5,
+        allowedFormats: ['epub'],
+        fileNamingPattern: null,
+        organizationMode: 'book_per_folder',
+      } as never);
+      vi.spyOn(service as never, 'findFolderOrFail').mockResolvedValue({ id: 9, libraryId: 5, path: '/library' } as never);
+      vi.spyOn(service as never, 'resolveDestination').mockResolvedValue('/library/Author/Title/Title.epub' as never);
+      vi.spyOn(service as never, 'applyMetadata').mockResolvedValue(undefined as never);
+      vi.spyOn(service as never, 'cleanupBookDockRecord').mockResolvedValue(undefined as never);
+      mockAccess.mockRejectedValueOnce(new Error('ENOENT'));
+      mockStat.mockResolvedValueOnce({ size: 200 } as never);
+      processor.createBookRecord.mockResolvedValueOnce({ bookId: 600 });
+
+      // User types "Title (alt).epub" — should NOT produce "Title (alt).epub.epub"
+      const overrideMap = new Map([[1, { libraryId: 5, folderId: 9, targetFileName: 'Title (alt).epub' }]]);
+      const result = await (service as any).finalizeFile(
+        makeRow({ id: 1, fileName: 'Title.epub', format: 'epub', targetLibraryId: 5, targetFolderId: 9 }),
+        undefined,
+        undefined,
+        overrideMap,
+        1,
+        true,
+      );
+
+      expect(result).toMatchObject({ success: true });
+      expect(processor.createBookRecord).toHaveBeenCalledWith(
+        5,
+        9,
+        '/library/Author/Title',
+        '/library/Author/Title/Title (alt).epub',
+        'Author/Title/Title (alt).epub',
+        'epub',
+        200,
+      );
+    });
+
+    it('rejects targetFileName that would escape the destination directory', async () => {
+      const { service } = makeService();
+      vi.spyOn(service as never, 'findLibraryOrFail').mockResolvedValue({
+        id: 5,
+        allowedFormats: ['epub'],
+        fileNamingPattern: null,
+        organizationMode: 'book_per_folder',
+      } as never);
+      vi.spyOn(service as never, 'findFolderOrFail').mockResolvedValue({ id: 9, libraryId: 5, path: '/library' } as never);
+      vi.spyOn(service as never, 'resolveDestination').mockResolvedValue('/library/Author/Title/Title.epub' as never);
+      // Simulate a sanitizeFilename that still returns something with path separators
+      // (defense-in-depth: guard fires even if upstream sanitization is incomplete)
+      vi.spyOn((service as any).validator, 'sanitizeFilename').mockReturnValue('../escape.epub');
+
+      const overrideMap = new Map([[1, { libraryId: 5, folderId: 9, targetFileName: '../escape' }]]);
+      const result = await (service as any).finalizeFile(
+        makeRow({ id: 1, fileName: 'Title.epub', format: 'epub', targetLibraryId: 5, targetFolderId: 9 }),
+        undefined,
+        undefined,
+        overrideMap,
+        1,
+        true,
+      );
+
+      expect(result).toEqual(
+        expect.objectContaining({
+          success: false,
+          message: 'Invalid file name',
+        }),
+      );
     });
   });
 
