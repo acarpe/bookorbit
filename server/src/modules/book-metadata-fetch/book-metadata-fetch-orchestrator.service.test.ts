@@ -1,4 +1,4 @@
-import { MetadataProviderKey } from '@bookorbit/types';
+import { MetadataProviderKey, NotificationType } from '@bookorbit/types';
 
 import { BookMetadataFetchSessionService } from './book-metadata-fetch-session.service';
 import { BookMetadataFetchOrchestratorService } from './book-metadata-fetch-orchestrator.service';
@@ -102,6 +102,7 @@ function makeService(withGateway = true) {
     session,
     throttleTracker,
     gateway,
+    notificationService,
   };
 }
 
@@ -127,12 +128,14 @@ describe('BookMetadataFetchOrchestratorService', () => {
     expect(gateway.emitStatus).toHaveBeenCalled();
   });
 
-  it('triggerForLibrary skips disabled configs and does not record runs', async () => {
-    const { service, configService } = makeService();
+  it('triggerForLibrary runs manually even when automatic fetch is disabled', async () => {
+    const { service, configService, queueRepo } = makeService();
     configService.getEffectiveConfig.mockResolvedValue(baseConfig(false, true));
+    queueRepo.scheduleEligibleBooksInBatches.mockResolvedValue(0);
 
     await expect(service.triggerForLibrary(11)).resolves.toBe(0);
-    expect(configService.recordLibraryRun).not.toHaveBeenCalled();
+    expect(queueRepo.scheduleEligibleBooksInBatches).toHaveBeenCalledWith(baseConfig(false, true), 'manual_trigger', 11, 1000);
+    expect(configService.recordLibraryRun).toHaveBeenCalledWith(11, 0);
   });
 
   it('triggerForLibrary records run and emits status for queued jobs', async () => {
@@ -435,8 +438,14 @@ describe('BookMetadataFetchOrchestratorService', () => {
     expect(resetSpy).toHaveBeenCalledTimes(1);
   });
 
-  it('scheduleIfEligible skips queue writes when import trigger is disabled or book is missing', async () => {
-    const { service, configService, queueRepo, bookReadService } = makeService();
+  it('scheduleIfEligible skips queue writes when disabled, import trigger is disabled, book is missing, or eligibility fails', async () => {
+    const { service, configService, eligibilityService, queueRepo, bookReadService } = makeService();
+    configService.getEffectiveConfig.mockResolvedValue(baseConfig(false, true));
+
+    await service.scheduleIfEligible(1, 2, 'import' as never);
+    expect(bookReadService.findById).not.toHaveBeenCalled();
+    expect(queueRepo.upsertSchedule).not.toHaveBeenCalled();
+
     configService.getEffectiveConfig.mockResolvedValue(baseConfig(true, false));
 
     await service.scheduleIfEligible(1, 2, 'import' as never);
@@ -446,5 +455,287 @@ describe('BookMetadataFetchOrchestratorService', () => {
     bookReadService.findById.mockResolvedValue(null);
     await service.scheduleIfEligible(1, 2, 'import' as never);
     expect(queueRepo.upsertSchedule).not.toHaveBeenCalled();
+
+    bookReadService.findById.mockResolvedValue({
+      book: {
+        books: { libraryId: 2 },
+        book_metadata: {
+          metadataScore: 50,
+          lastMetadataFetchAt: null,
+          title: 'Book',
+          subtitle: null,
+          description: null,
+          publisher: null,
+          publishedYear: null,
+          language: null,
+          pageCount: null,
+          seriesName: null,
+          seriesIndex: null,
+          coverSource: null,
+          durationSeconds: null,
+          abridged: null,
+        },
+      },
+      authorRows: [],
+      genreRows: [],
+      narratorRows: [],
+    });
+    eligibilityService.isEligible.mockReturnValue(false);
+    await service.scheduleIfEligible(1, 2, 'import' as never);
+    expect(queueRepo.upsertSchedule).not.toHaveBeenCalled();
+  });
+
+  it('requeueFailed returns zero without session update', async () => {
+    const { service, gateway, session } = makeService();
+
+    await expect(service.requeueFailed()).resolves.toBe(0);
+
+    expect(session.getSnapshot().sessionTotal).toBe(0);
+    expect(gateway.emitStatus).not.toHaveBeenCalled();
+  });
+
+  it('onModuleDestroy is a no-op when polling was never started', () => {
+    const { service } = makeService();
+
+    expect(() => service.onModuleDestroy()).not.toThrow();
+  });
+
+  it('pollOnce logs failures and clears the running flag', async () => {
+    const { service, queueRepo } = makeService();
+    queueRepo.recoverStuckProcessing.mockRejectedValue(new Error('queue unavailable'));
+
+    await (service as any).pollOnce();
+
+    expect((service as any).running).toBe(false);
+    expect(queueRepo.fetchDue).not.toHaveBeenCalled();
+  });
+
+  it('processOne passes fallback identifiers and collected provider ids to the pipeline', async () => {
+    const { service, bookReadService, pipeline } = makeService();
+    bookReadService.findById.mockResolvedValue({
+      book: {
+        books: { libraryId: 5 },
+        book_metadata: {
+          title: null,
+          subtitle: null,
+          description: null,
+          isbn13: null,
+          isbn10: 'isbn-10',
+          publisher: null,
+          publishedYear: null,
+          language: null,
+          pageCount: null,
+          seriesName: null,
+          seriesIndex: null,
+          coverSource: null,
+          durationSeconds: null,
+          abridged: null,
+          googleBooksId: 'google-1',
+          goodreadsId: 'goodreads-1',
+          amazonId: 'amazon-1',
+          hardcoverId: 'hardcover-1',
+          openLibraryId: 'open-library-1',
+          itunesId: 'itunes-1',
+          audibleId: 'audible-1',
+          koboId: 'kobo-1',
+          comicvineId: 'comicvine-1',
+          ranobedbId: 'ranobedb-1',
+          lubimyczytacId: 'lubimyczytac-1',
+          aladinId: 'aladin-1',
+        },
+      },
+      authorRows: [],
+      genreRows: [],
+      narratorRows: [],
+    });
+
+    await (service as any).processOne(91, 'Book');
+
+    expect(pipeline.runWithSources).toHaveBeenCalledWith(
+      expect.objectContaining({
+        title: undefined,
+        author: undefined,
+        isbn: 'isbn-10',
+        isAudiobook: true,
+        existingProviderIds: {
+          [MetadataProviderKey.GOOGLE]: 'google-1',
+          [MetadataProviderKey.GOODREADS]: 'goodreads-1',
+          [MetadataProviderKey.AMAZON]: 'amazon-1',
+          [MetadataProviderKey.HARDCOVER]: 'hardcover-1',
+          [MetadataProviderKey.OPEN_LIBRARY]: 'open-library-1',
+          [MetadataProviderKey.ITUNES]: 'itunes-1',
+          [MetadataProviderKey.AUDIBLE]: 'audible-1',
+          [MetadataProviderKey.KOBO]: 'kobo-1',
+          [MetadataProviderKey.COMICVINE]: 'comicvine-1',
+          [MetadataProviderKey.RANOBEDB]: 'ranobedb-1',
+          [MetadataProviderKey.LUBIMYCZYTAC]: 'lubimyczytac-1',
+          [MetadataProviderKey.ALADIN]: 'aladin-1',
+        },
+      }),
+      expect.any(Object),
+      5,
+    );
+  });
+
+  it('processOne records non-Error failures without an http status', async () => {
+    const { service, queueRepo, bookReadService, pipeline } = makeService();
+    bookReadService.findById.mockResolvedValue({
+      book: {
+        books: { libraryId: 1 },
+        book_metadata: {
+          title: 'Book',
+          subtitle: null,
+          description: null,
+          isbn13: null,
+          isbn10: null,
+          publisher: null,
+          publishedYear: null,
+          language: null,
+          pageCount: null,
+          seriesName: null,
+          seriesIndex: null,
+          coverSource: null,
+          durationSeconds: null,
+          abridged: null,
+        },
+      },
+      authorRows: [],
+      genreRows: [],
+      narratorRows: [],
+    });
+    pipeline.runWithSources.mockRejectedValue('provider down');
+
+    await (service as any).processOne(92, 'Book');
+
+    expect(queueRepo.markFailed).toHaveBeenCalledWith(92, 'provider down', undefined);
+  });
+
+  it('persistResolved ignores unsupported values and empty new related lists', async () => {
+    const { service, bookReadService, bookMetadataLockService, metadataService } = makeService();
+    bookMetadataLockService.filterResolvedMetadata.mockResolvedValue({
+      resolved: {
+        title: 123,
+        subtitle: [],
+        description: {},
+        publisher: false,
+        publishedYear: '2020',
+        language: 7,
+        pageCount: Number.POSITIVE_INFINITY,
+        seriesName: Symbol('series'),
+        seriesIndex: '2',
+        duration: '3600',
+        abridged: null,
+        authors: [],
+        genres: [],
+        narrators: [],
+      },
+      providerIds: {},
+      skippedFields: ['title', 'cover'],
+    });
+
+    await (service as any).persistResolved(93, {}, {}, [], [], []);
+
+    const fields = bookReadService.updateMetadataFields.mock.calls[0]?.[1] as Record<string, unknown>;
+    expect(fields).toEqual({
+      lastMetadataFetchAt: expect.any(Date),
+      updatedAt: expect.any(Date),
+    });
+    expect(metadataService.replaceAuthors).not.toHaveBeenCalled();
+    expect(metadataService.replaceGenres).not.toHaveBeenCalled();
+    expect(metadataService.replaceNarrators).not.toHaveBeenCalled();
+    expect(metadataService.upsertComicMetadata).not.toHaveBeenCalled();
+    expect(metadataService.downloadAndSaveCover).not.toHaveBeenCalled();
+  });
+
+  it('persistResolved clears existing related rows when providers return empty lists', async () => {
+    const { service, bookMetadataLockService, metadataService } = makeService();
+    bookMetadataLockService.filterResolvedMetadata.mockResolvedValue({
+      resolved: {
+        authors: [],
+        genres: [],
+        narrators: [],
+      },
+      providerIds: {},
+      skippedFields: [],
+    });
+
+    await (service as any).persistResolved(94, {}, {}, [{ name: 'Old A' }], [{ name: 'Old G' }], [{ name: 'Old N' }]);
+
+    expect(metadataService.replaceAuthors).toHaveBeenCalledWith(94, []);
+    expect(metadataService.replaceGenres).toHaveBeenCalledWith(94, []);
+    expect(metadataService.replaceNarrators).toHaveBeenCalledWith(94, []);
+  });
+
+  it('randomDelay uses the normal delay window when no provider is throttled', async () => {
+    vi.useFakeTimers();
+    const randomSpy = vi.spyOn(Math, 'random').mockReturnValue(0);
+    const timeoutSpy = vi.spyOn(globalThis, 'setTimeout');
+    try {
+      const { service } = makeService();
+
+      const waitPromise = (service as any).randomDelay();
+      expect(timeoutSpy).toHaveBeenCalledTimes(1);
+      const delayMs = timeoutSpy.mock.calls[0]?.[1] as number;
+      expect(delayMs).toBe(2_000);
+      vi.runAllTimers();
+      await waitPromise;
+    } finally {
+      randomSpy.mockRestore();
+      timeoutSpy.mockRestore();
+      vi.useRealTimers();
+    }
+  });
+
+  it('checkAndResetSession sends completion and failure notifications before resetting', async () => {
+    const { service, queueRepo, session, notificationService } = makeService();
+    session.addToTotal(2);
+    session.incrementDone();
+    queueRepo.getStatusSummary.mockResolvedValueOnce({ queued: 0, processing: 0, failed: 0 });
+
+    await (service as any).checkAndResetSession();
+
+    session.addToTotal(3);
+    session.incrementDone();
+    queueRepo.getStatusSummary.mockResolvedValueOnce({ queued: 0, processing: 0, failed: 1 });
+
+    await (service as any).checkAndResetSession();
+
+    expect(notificationService.notify).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        type: NotificationType.MetadataFetchCompleted,
+        title: 'Metadata fetch completed',
+        message: 'Processed 1 of 2 books',
+      }),
+    );
+    expect(notificationService.notify).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        type: NotificationType.MetadataFetchFailed,
+        title: 'Metadata fetch completed with errors',
+        message: 'Processed 1 of 3 books, 1 failed',
+      }),
+    );
+  });
+
+  it('metadata value coercion helpers accept only supported shapes', () => {
+    const { service } = makeService();
+
+    expect((service as any).asNullableString(undefined)).toBeUndefined();
+    expect((service as any).asNullableString(null)).toBeNull();
+    expect((service as any).asNullableString(1)).toBeUndefined();
+    expect((service as any).asNullableString('value')).toBe('value');
+    expect((service as any).asNullableNumber(undefined)).toBeUndefined();
+    expect((service as any).asNullableNumber(null)).toBeNull();
+    expect((service as any).asNullableNumber(Number.NaN)).toBeUndefined();
+    expect((service as any).asNullableNumber(5)).toBe(5);
+    expect((service as any).asBoolean(undefined)).toBeUndefined();
+    expect((service as any).asBoolean(null)).toBeUndefined();
+    expect((service as any).asBoolean('false')).toBeUndefined();
+    expect((service as any).asBoolean(false)).toBe(false);
+    expect((service as any).asStringArray(undefined)).toBeUndefined();
+    expect((service as any).asStringArray('value')).toBeUndefined();
+    expect((service as any).asStringArray([1])).toBeUndefined();
+    expect((service as any).asStringArray(['value'])).toEqual(['value']);
   });
 });

@@ -6,7 +6,7 @@ import ToggleSwitch from '@/components/ui/ToggleSwitch.vue'
 import ConditionConfigurator from './ConditionConfigurator.vue'
 import { useBookMetadataFetchConfig } from '@/features/book-metadata-fetch/composables/useBookMetadataFetchConfig'
 import { useBookMetadataFetchActions } from '@/features/book-metadata-fetch/composables/useBookMetadataFetchActions'
-import { useEligibleCountPreview } from '@/features/book-metadata-fetch/composables/useEligibleCountPreview'
+import { invalidateEligibleCountPreviews, useEligibleCountPreview } from '@/features/book-metadata-fetch/composables/useEligibleCountPreview'
 import { useMediaQuery } from '@vueuse/core'
 
 const { saveGlobalConfig } = useBookMetadataFetchConfig()
@@ -65,6 +65,7 @@ async function handleTrigger() {
   try {
     const { queued } = await triggerGlobal()
     triggerResult.value = queued > 0 ? `Queued ${queued} books` : 'No eligible books found'
+    invalidateEligibleCountPreviews()
   } finally {
     triggering.value = false
   }

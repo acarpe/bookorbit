@@ -90,9 +90,8 @@ export class BookMetadataFetchOrchestratorService implements OnApplicationBootst
 
   async triggerForLibrary(libraryId: number): Promise<number> {
     const config = await this.configService.getEffectiveConfig(libraryId);
-    if (!config.enabled) return 0;
-
     const queued = await this.queueRepo.scheduleEligibleBooksInBatches(config, 'manual_trigger', libraryId, SCHEDULE_BATCH_SIZE);
+    await this.configService.recordLibraryRun(libraryId, queued);
     if (queued === 0) return 0;
     if (queued > 0) {
       this.session.addToTotal(queued);
@@ -100,7 +99,6 @@ export class BookMetadataFetchOrchestratorService implements OnApplicationBootst
       await this.emitStatus();
       void this.pollOnce();
     }
-    await this.configService.recordLibraryRun(libraryId, queued);
     return queued;
   }
 
