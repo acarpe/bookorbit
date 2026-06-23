@@ -78,10 +78,9 @@ export class BookMetadataFetchOrchestratorService implements OnApplicationBootst
   async triggerGlobal(): Promise<number> {
     const config = await this.configService.getGlobalConfig();
     const queued = await this.queueRepo.scheduleEligibleBooksInBatches(config, 'manual_trigger', undefined, SCHEDULE_BATCH_SIZE);
-    if (queued === 0) return 0;
+    await this.unpauseIfNeeded();
     if (queued > 0) {
       this.session.addToTotal(queued);
-      await this.unpauseIfNeeded();
       await this.emitStatus();
       void this.pollOnce();
     }
@@ -92,10 +91,9 @@ export class BookMetadataFetchOrchestratorService implements OnApplicationBootst
     const config = await this.configService.getEffectiveConfig(libraryId);
     const queued = await this.queueRepo.scheduleEligibleBooksInBatches(config, 'manual_trigger', libraryId, SCHEDULE_BATCH_SIZE);
     await this.configService.recordLibraryRun(libraryId, queued);
-    if (queued === 0) return 0;
+    await this.unpauseIfNeeded();
     if (queued > 0) {
       this.session.addToTotal(queued);
-      await this.unpauseIfNeeded();
       await this.emitStatus();
       void this.pollOnce();
     }

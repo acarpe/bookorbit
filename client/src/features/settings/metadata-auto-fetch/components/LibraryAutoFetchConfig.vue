@@ -6,6 +6,7 @@ import ToggleSwitch from '@/components/ui/ToggleSwitch.vue'
 import ConditionConfigurator from './ConditionConfigurator.vue'
 import { useBookMetadataFetchConfig } from '@/features/book-metadata-fetch/composables/useBookMetadataFetchConfig'
 import { useBookMetadataFetchActions } from '@/features/book-metadata-fetch/composables/useBookMetadataFetchActions'
+import { useBookMetadataFetchStatus } from '@/features/book-metadata-fetch/composables/useBookMetadataFetchStatus'
 import { invalidateEligibleCountPreviews, useEligibleCountPreview } from '@/features/book-metadata-fetch/composables/useEligibleCountPreview'
 import { useMediaQuery } from '@vueuse/core'
 
@@ -16,6 +17,7 @@ const props = defineProps<{
 
 const { fetchLibraryConfig, saveLibraryConfig } = useBookMetadataFetchConfig()
 const { triggerForLibrary } = useBookMetadataFetchActions()
+const { status } = useBookMetadataFetchStatus()
 
 const libraryData = ref<BookMetadataFetchLibraryConfig | null>(null)
 const inheriting = ref(true)
@@ -30,6 +32,18 @@ const conditionsOpen = ref(true)
 
 const conditions = computed(() => (inheriting.value ? props.globalConfig.conditions : (local.value?.conditions ?? null)))
 const { count: eligibleCount, loading: countLoading } = useEligibleCountPreview(conditions, props.library.id)
+
+const statusLabel = computed<string | null>(() => {
+  if (triggerResult.value) return triggerResult.value
+  const remaining = status.value.queued + status.value.processing
+  if (remaining > 0) {
+    return status.value.paused ? `${remaining} in queue - paused` : `${remaining} remaining`
+  }
+  if (eligibleCount.value !== null) {
+    return countLoading.value ? null : `~${eligibleCount.value} eligible`
+  }
+  return null
+})
 const activeConditionSummary = computed(() => {
   const c = displayConfig.value.conditions
   const parts: string[] = []
@@ -189,10 +203,7 @@ function cloneConfigOnly(config: BookMetadataFetchConfig): BookMetadataFetchConf
         <button :disabled="triggering" class="settings-btn-outline" @click="handleTrigger">
           {{ triggering ? 'Running...' : 'Run now' }}
         </button>
-        <span v-if="triggerResult" class="text-xs text-muted-foreground">{{ triggerResult }}</span>
-        <span v-else-if="eligibleCount !== null" class="text-xs text-muted-foreground">
-          {{ countLoading ? '...' : `~${eligibleCount} eligible` }}
-        </span>
+        <span v-if="statusLabel" class="text-xs text-muted-foreground">{{ statusLabel }}</span>
       </div>
 
       <div class="md:hidden sticky bottom-2 z-10 border border-border/60 bg-card/95 backdrop-blur rounded-lg px-3 py-2">
@@ -204,10 +215,7 @@ function cloneConfigOnly(config: BookMetadataFetchConfig): BookMetadataFetchConf
           <button :disabled="triggering" class="settings-btn-outline h-9 px-3" @click="handleTrigger">
             {{ triggering ? 'Running...' : 'Run now' }}
           </button>
-          <span v-if="triggerResult" class="text-xs text-muted-foreground">{{ triggerResult }}</span>
-          <span v-else-if="eligibleCount !== null" class="text-xs text-muted-foreground">
-            {{ countLoading ? '...' : `~${eligibleCount} eligible` }}
-          </span>
+          <span v-if="statusLabel" class="text-xs text-muted-foreground">{{ statusLabel }}</span>
         </div>
       </div>
     </template>

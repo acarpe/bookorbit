@@ -112,10 +112,21 @@ describe('BookMetadataFetchOrchestratorService', () => {
   });
 
   it('triggerGlobal returns 0 when no books are queued', async () => {
-    const { service, queueRepo } = makeService();
+    const { service, queueRepo, configService } = makeService();
     queueRepo.scheduleEligibleBooksInBatches.mockResolvedValue(0);
 
     await expect(service.triggerGlobal()).resolves.toBe(0);
+    expect(configService.setPaused).not.toHaveBeenCalled();
+  });
+
+  it('triggerGlobal unpauses a paused queue when no new books are eligible', async () => {
+    const { service, queueRepo, configService } = makeService();
+    (service as any).paused = true;
+    queueRepo.scheduleEligibleBooksInBatches.mockResolvedValue(0);
+
+    await expect(service.triggerGlobal()).resolves.toBe(0);
+    expect(configService.setPaused).toHaveBeenCalledWith(false);
+    expect((service as any).paused).toBe(false);
   });
 
   it('triggerGlobal increments session and emits status when jobs are queued', async () => {
@@ -136,6 +147,17 @@ describe('BookMetadataFetchOrchestratorService', () => {
     await expect(service.triggerForLibrary(11)).resolves.toBe(0);
     expect(queueRepo.scheduleEligibleBooksInBatches).toHaveBeenCalledWith(baseConfig(false, true), 'manual_trigger', 11, 1000);
     expect(configService.recordLibraryRun).toHaveBeenCalledWith(11, 0);
+  });
+
+  it('triggerForLibrary unpauses a paused queue when no new books are eligible', async () => {
+    const { service, queueRepo, configService } = makeService();
+    (service as any).paused = true;
+    queueRepo.scheduleEligibleBooksInBatches.mockResolvedValue(0);
+
+    await expect(service.triggerForLibrary(7)).resolves.toBe(0);
+    expect(configService.setPaused).toHaveBeenCalledWith(false);
+    expect((service as any).paused).toBe(false);
+    expect(configService.recordLibraryRun).toHaveBeenCalledWith(7, 0);
   });
 
   it('triggerForLibrary records run and emits status for queued jobs', async () => {

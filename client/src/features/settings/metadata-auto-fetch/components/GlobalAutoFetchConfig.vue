@@ -6,11 +6,13 @@ import ToggleSwitch from '@/components/ui/ToggleSwitch.vue'
 import ConditionConfigurator from './ConditionConfigurator.vue'
 import { useBookMetadataFetchConfig } from '@/features/book-metadata-fetch/composables/useBookMetadataFetchConfig'
 import { useBookMetadataFetchActions } from '@/features/book-metadata-fetch/composables/useBookMetadataFetchActions'
+import { useBookMetadataFetchStatus } from '@/features/book-metadata-fetch/composables/useBookMetadataFetchStatus'
 import { invalidateEligibleCountPreviews, useEligibleCountPreview } from '@/features/book-metadata-fetch/composables/useEligibleCountPreview'
 import { useMediaQuery } from '@vueuse/core'
 
 const { saveGlobalConfig } = useBookMetadataFetchConfig()
 const { triggerGlobal } = useBookMetadataFetchActions()
+const { status } = useBookMetadataFetchStatus()
 
 const props = defineProps<{ config: BookMetadataFetchConfig }>()
 const emit = defineEmits<{ updated: [BookMetadataFetchConfig] }>()
@@ -24,6 +26,18 @@ const conditionsOpen = ref(true)
 
 const conditions = computed(() => local.value.conditions)
 const { count: eligibleCount, loading: countLoading } = useEligibleCountPreview(conditions)
+
+const statusLabel = computed<string | null>(() => {
+  if (triggerResult.value) return triggerResult.value
+  const remaining = status.value.queued + status.value.processing
+  if (remaining > 0) {
+    return status.value.paused ? `${remaining} in queue - paused` : `${remaining} remaining`
+  }
+  if (eligibleCount.value !== null) {
+    return countLoading.value ? null : `~${eligibleCount.value} eligible`
+  }
+  return null
+})
 const activeConditionSummary = computed(() => {
   const c = local.value.conditions
   const parts: string[] = []
@@ -114,7 +128,7 @@ async function handleTrigger() {
         <button :disabled="triggering" class="settings-btn-outline h-9 px-3" @click="handleTrigger">
           {{ triggering ? 'Running...' : 'Run now' }}
         </button>
-        <span v-if="triggerResult" class="text-xs text-muted-foreground">{{ triggerResult }}</span>
+        <span v-if="statusLabel" class="text-xs text-muted-foreground">{{ statusLabel }}</span>
       </div>
     </div>
 
@@ -127,10 +141,7 @@ async function handleTrigger() {
       <button :disabled="triggering" class="settings-btn-outline" @click="handleTrigger">
         {{ triggering ? 'Running...' : 'Run for eligible books' }}
       </button>
-      <span v-if="triggerResult" class="text-xs text-muted-foreground">{{ triggerResult }}</span>
-      <span v-else-if="eligibleCount !== null" class="text-xs text-muted-foreground">
-        {{ countLoading ? '...' : `~${eligibleCount} eligible` }}
-      </span>
+      <span v-if="statusLabel" class="text-xs text-muted-foreground">{{ statusLabel }}</span>
     </div>
   </div>
 </template>
