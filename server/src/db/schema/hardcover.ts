@@ -11,6 +11,7 @@ export const hardcoverUserSettings = pgTable('hardcover_user_settings', {
     .unique(),
   apiToken: varchar('api_token', { length: 2048 }).notNull(),
   enabled: boolean('enabled').notNull().default(true),
+  bookSyncMode: varchar('book_sync_mode', { length: 20 }).notNull().default('all_eligible'),
   autoSyncOnStatusChange: boolean('auto_sync_on_status_change').notNull().default(true),
   autoSyncOnProgressUpdate: boolean('auto_sync_on_progress_update').notNull().default(true),
   autoSyncOnRatingChange: boolean('auto_sync_on_rating_change').notNull().default(true),
@@ -46,6 +47,8 @@ export const hardcoverBookState = pgTable(
     lastSyncedStartedAt: varchar('last_synced_started_at', { length: 10 }),
     lastSyncedFinishedAt: varchar('last_synced_finished_at', { length: 10 }),
     syncError: text('sync_error'),
+    syncOverride: varchar('sync_override', { length: 20 }),
+    syncExcluded: boolean('sync_excluded').notNull().default(false),
     createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp('updated_at', { withTimezone: true })
       .defaultNow()

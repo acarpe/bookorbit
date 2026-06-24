@@ -117,6 +117,19 @@ export class HardcoverRepository {
     return row!;
   }
 
+  async setBookSyncOverride(userId: number, bookId: number, syncOverride: 'included' | 'excluded' | null): Promise<HardcoverBookState> {
+    const syncExcluded = syncOverride === 'excluded';
+    const [row] = await this.db
+      .insert(schema.hardcoverBookState)
+      .values({ userId, bookId, syncOverride, syncExcluded } as NewHardcoverBookState)
+      .onConflictDoUpdate({
+        target: [schema.hardcoverBookState.userId, schema.hardcoverBookState.bookId],
+        set: { syncOverride, syncExcluded, updatedAt: new Date() },
+      })
+      .returning();
+    return row!;
+  }
+
   // ---- Sync Settings ----
 
   async updateLastSyncedAt(userId: number, at: Date): Promise<void> {
@@ -134,7 +147,16 @@ export class HardcoverRepository {
     return row ?? null;
   }
 
+  async findBookSyncData(userId: number, bookId: number): Promise<BookSyncData | null> {
+    const [row] = await this.findBookSyncDataForUser(userId, bookId);
+    return row ?? null;
+  }
+
   private async findSyncableBooksForUser(userId: number, bookId?: number): Promise<BookSyncData[]> {
+    return this.findBookSyncDataForUser(userId, bookId, false);
+  }
+
+  private async findBookSyncDataForUser(userId: number, bookId?: number, includeUnread = true): Promise<BookSyncData[]> {
     const bookFilter = bookId !== undefined ? eq(schema.books.id, bookId) : undefined;
 
     const maxProgressSq = this.db
@@ -160,7 +182,7 @@ export class HardcoverRepository {
       .groupBy(schema.bookAuthors.bookId)
       .as('first_author_sq');
 
-    const rows = await this.db
+    const query = this.db
       .select({
         bookId: schema.books.id,
         isbn13: schema.bookMetadata.isbn13,
@@ -170,23 +192,21 @@ export class HardcoverRepository {
         hardcoverMetadataId: schema.bookMetadata.hardcoverId,
         pageCount: schema.bookMetadata.pageCount,
         format: schema.bookFiles.format,
-        status: schema.userBookStatus.status,
+        status: includeUnread ? sql<string>`coalesce(${schema.userBookStatus.status}, 'unread')` : schema.userBookStatus.status,
         startedAt: schema.userBookStatus.startedAt,
         finishedAt: schema.userBookStatus.finishedAt,
         rating: schema.userBookRatings.rating,
         progress: maxProgressSq.maxProgress,
       })
       .from(schema.books)
-      .innerJoin(
-        schema.userBookStatus,
-        and(eq(schema.userBookStatus.bookId, schema.books.id), eq(schema.userBookStatus.userId, userId), ne(schema.userBookStatus.status, 'unread')),
-      )
+      .leftJoin(schema.userBookStatus, and(eq(schema.userBookStatus.bookId, schema.books.id), eq(schema.userBookStatus.userId, userId)))
       .leftJoin(schema.bookMetadata, eq(schema.bookMetadata.bookId, schema.books.id))
       .leftJoin(schema.userBookRatings, and(eq(schema.userBookRatings.bookId, schema.books.id), eq(schema.userBookRatings.userId, userId)))
       .leftJoin(maxProgressSq, eq(maxProgressSq.bookId, schema.books.id))
       .leftJoin(firstAuthorSq, eq(firstAuthorSq.bookId, schema.books.id))
-      .leftJoin(schema.bookFiles, eq(schema.bookFiles.id, schema.books.primaryFileId))
-      .where(bookFilter);
+      .leftJoin(schema.bookFiles, eq(schema.bookFiles.id, schema.books.primaryFileId));
+
+    const rows = includeUnread ? await query.where(bookFilter) : await query.where(and(bookFilter, ne(schema.userBookStatus.status, 'unread')));
 
     return rows as BookSyncData[];
   }

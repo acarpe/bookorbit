@@ -2,11 +2,14 @@ import { api } from '@/lib/api'
 import type {
   ApplyHardcoverImportPayload,
   HardcoverActiveSyncStatus,
+  HardcoverBookSyncState,
+  HardcoverBookSyncNowResult,
   HardcoverImportApplyResult,
   HardcoverImportPreview,
   HardcoverSyncPendingSummary,
   HardcoverSettings,
   HardcoverTokenValidationResult,
+  UpdateHardcoverBookSyncPayload,
   UpsertHardcoverSettingsPayload,
 } from '@bookorbit/types'
 
@@ -97,6 +100,34 @@ export async function streamHardcoverSyncStatus(onStatus: (status: HardcoverActi
 export async function fetchHardcoverSyncPendingSummary(): Promise<HardcoverSyncPendingSummary> {
   const res = await api(`${BASE}/sync/pending`)
   if (!res.ok) return { totalBooks: 0, pendingBooks: 0 }
+  return res.json()
+}
+
+export async function fetchHardcoverBookSyncState(bookId: number): Promise<HardcoverBookSyncState> {
+  const res = await api(`${BASE}/books/${bookId}/sync-state`)
+  if (!res.ok) throw new Error('Failed to fetch Hardcover book sync state')
+  return res.json()
+}
+
+export async function updateHardcoverBookSyncState(bookId: number, payload: UpdateHardcoverBookSyncPayload): Promise<HardcoverBookSyncState> {
+  const res = await api(`${BASE}/books/${bookId}/sync-state`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  })
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}))
+    throw new Error((body as { message?: string }).message ?? 'Failed to save Hardcover book sync state')
+  }
+  return res.json()
+}
+
+export async function startHardcoverBookSync(bookId: number): Promise<HardcoverBookSyncNowResult> {
+  const res = await api(`${BASE}/books/${bookId}/sync`, { method: 'POST' })
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}))
+    throw new Error((body as { message?: string }).message ?? 'Failed to sync Hardcover book')
+  }
   return res.json()
 }
 

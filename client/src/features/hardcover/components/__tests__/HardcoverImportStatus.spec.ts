@@ -232,6 +232,7 @@ describe('HardcoverImportStatus', () => {
       enabled: false,
       effectiveEnabled: false,
       disabledReason: 'missing_token',
+      bookSyncMode: 'all_eligible',
       autoSyncOnStatusChange: false,
       autoSyncOnProgressUpdate: false,
       autoSyncOnRatingChange: false,

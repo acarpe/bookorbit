@@ -1,10 +1,20 @@
 export type HardcoverSyncDisabledReason = "permission_denied" | "missing_token" | "user_disabled";
+export type HardcoverBookSyncMode = "all_eligible" | "selected_only";
+export type HardcoverBookSyncOverride = "included" | "excluded" | null;
+export type HardcoverBookSyncEffectiveReason =
+  | HardcoverSyncDisabledReason
+  | "global_disabled"
+  | "not_selected"
+  | "excluded"
+  | "unread"
+  | "unsupported_status";
 
 export interface HardcoverSettings {
   tokenConfigured: boolean;
   enabled: boolean;
   effectiveEnabled: boolean;
   disabledReason: HardcoverSyncDisabledReason | null;
+  bookSyncMode: HardcoverBookSyncMode;
   autoSyncOnStatusChange: boolean;
   autoSyncOnProgressUpdate: boolean;
   autoSyncOnRatingChange: boolean;
@@ -15,6 +25,7 @@ export interface HardcoverSettings {
 export interface UpsertHardcoverSettingsPayload {
   apiToken?: string;
   enabled?: boolean;
+  bookSyncMode?: HardcoverBookSyncMode;
   autoSyncOnStatusChange?: boolean;
   autoSyncOnProgressUpdate?: boolean;
   autoSyncOnRatingChange?: boolean;
@@ -31,6 +42,25 @@ export type HardcoverSyncRunStatus = "running" | "completed" | "failed" | "cance
 export interface HardcoverSyncPendingSummary {
   totalBooks: number;
   pendingBooks: number;
+}
+
+export interface HardcoverBookSyncState {
+  bookId: number;
+  syncOverride: HardcoverBookSyncOverride;
+  syncEnabled: boolean;
+  canSyncNow: boolean;
+  effectiveReason: HardcoverBookSyncEffectiveReason | null;
+  lastSyncedAt: string | null;
+  syncError: string | null;
+}
+
+export interface UpdateHardcoverBookSyncPayload {
+  syncEnabled: boolean;
+}
+
+export interface HardcoverBookSyncNowResult {
+  result: "synced" | "skipped" | "failed";
+  state: HardcoverBookSyncState;
 }
 
 export interface HardcoverActiveSyncStatus {

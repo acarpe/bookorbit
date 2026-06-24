@@ -23,8 +23,8 @@ function makeWhereChain(result: unknown) {
 }
 
 function makeRepository() {
-  const settingsRow = { id: 1, userId: 7, apiToken: 'tok', enabled: true };
-  const bookStateRow = { id: 2, userId: 7, bookId: 42, hardcoverBookId: 99 };
+  const settingsRow = { id: 1, userId: 7, apiToken: 'tok', enabled: true, bookSyncMode: 'all_eligible' };
+  const bookStateRow = { id: 2, userId: 7, bookId: 42, hardcoverBookId: 99, syncOverride: null, syncExcluded: false };
 
   const settingsQuery = { findFirst: vi.fn().mockResolvedValue(settingsRow) };
   const bookStateQuery = {
@@ -131,6 +131,22 @@ describe('HardcoverRepository', () => {
     expect(bookStateInsert.values).toHaveBeenCalledWith({ userId: 7, bookId: 42, hardcoverBookId: 99 });
     expect(bookStateInsert.onConflictDoUpdate).toHaveBeenCalledWith(
       expect.objectContaining({ set: expect.objectContaining({ hardcoverBookId: 99 }) }),
+    );
+  });
+
+  it('setBookSyncOverride inserts or updates only the per-book override', async () => {
+    const { repo, db, bookStateInsert, bookStateRow } = makeRepository();
+    db.insert.mockReset();
+    db.insert.mockReturnValue(bookStateInsert);
+
+    await expect(repo.setBookSyncOverride(7, 42, 'included')).resolves.toEqual(bookStateRow);
+
+    expect(bookStateInsert.values).toHaveBeenCalledWith({ userId: 7, bookId: 42, syncOverride: 'included', syncExcluded: false });
+    expect(bookStateInsert.onConflictDoUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        target: [schema.hardcoverBookState.userId, schema.hardcoverBookState.bookId],
+        set: expect.objectContaining({ syncOverride: 'included', syncExcluded: false }),
+      }),
     );
   });
 

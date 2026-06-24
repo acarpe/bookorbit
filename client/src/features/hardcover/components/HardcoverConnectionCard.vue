@@ -13,6 +13,7 @@ const validationResult = ref<{ valid: boolean; username?: string } | null>(null)
 
 const form = reactive({
   enabled: true,
+  bookSyncMode: 'all_eligible' as 'all_eligible' | 'selected_only',
   autoSyncOnStatusChange: true,
   autoSyncOnProgressUpdate: true,
   autoSyncOnRatingChange: true,
@@ -23,6 +24,7 @@ onMounted(async () => {
   await fetchSettings()
   if (settings.value) {
     form.enabled = settings.value.enabled
+    form.bookSyncMode = settings.value.bookSyncMode
     form.autoSyncOnStatusChange = settings.value.autoSyncOnStatusChange
     form.autoSyncOnProgressUpdate = settings.value.autoSyncOnProgressUpdate
     form.autoSyncOnRatingChange = settings.value.autoSyncOnRatingChange
@@ -43,6 +45,7 @@ async function handleSave() {
   const ok = await saveSettings({
     ...(tokenInput.value.trim() ? { apiToken: tokenInput.value.trim() } : {}),
     enabled: form.enabled,
+    bookSyncMode: form.bookSyncMode,
     autoSyncOnStatusChange: form.autoSyncOnStatusChange,
     autoSyncOnProgressUpdate: form.autoSyncOnProgressUpdate,
     autoSyncOnRatingChange: form.autoSyncOnRatingChange,
@@ -72,6 +75,23 @@ const privacyOptions = [
   { id: 2, label: 'Followers only' },
   { id: 3, label: 'Private' },
 ]
+
+const bookSyncModeOptions = [
+  {
+    id: 'all_eligible' as const,
+    label: 'All eligible books',
+    description: 'Sync everything unless you exclude a book.',
+  },
+  {
+    id: 'selected_only' as const,
+    label: 'Selected books only',
+    description: 'Sync only books you explicitly include.',
+  },
+]
+
+function selectBookSyncMode(mode: 'all_eligible' | 'selected_only') {
+  form.bookSyncMode = mode
+}
 </script>
 
 <template>
@@ -117,7 +137,7 @@ const privacyOptions = [
     <div class="flex items-center gap-2">
       <button
         type="button"
-        :disabled="validating || !tokenInput.trim()"
+        :disabled="validating"
         class="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-md border border-border bg-muted text-muted-foreground hover:bg-muted/80 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
         @click="handleValidateToken"
       >
@@ -143,6 +163,27 @@ const privacyOptions = [
           Sync runs only for books that are not unread. This applies to status, progress, and rating triggers. These switches control when a sync
           runs.
         </p>
+      </div>
+
+      <div class="space-y-2">
+        <p class="text-sm">Book sync scope</p>
+        <div class="grid gap-2 sm:grid-cols-2">
+          <button
+            v-for="option in bookSyncModeOptions"
+            :key="option.id"
+            type="button"
+            class="rounded-md border px-3 py-2 text-left transition-colors disabled:cursor-not-allowed disabled:opacity-50"
+            :class="
+              form.bookSyncMode === option.id
+                ? 'border-primary bg-primary/10 text-foreground'
+                : 'border-border bg-background text-muted-foreground hover:bg-muted/50'
+            "
+            @click="selectBookSyncMode(option.id)"
+          >
+            <div class="text-sm font-medium">{{ option.label }}</div>
+            <div class="mt-0.5 text-xs leading-relaxed">{{ option.description }}</div>
+          </button>
+        </div>
       </div>
 
       <div class="flex items-center justify-between">

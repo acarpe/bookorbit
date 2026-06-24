@@ -162,6 +162,13 @@
       "when": 1781716753204,
       "tag": "0022_add_aladin_id",
       "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1782258157534,
+      "tag": "0023_add_hardcover_sync_controls",
+      "breakpoints": true
     }
   ]
 }

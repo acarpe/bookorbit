@@ -49,6 +49,7 @@ import { useKoreaderBookProgress } from '@/features/koreader/composables/useKore
 import { RATING_STARS, getRatingStarClass } from '@/features/book/lib/rating-stars'
 import BookCoverSurface from '@/features/book/components/BookCoverSurface.vue'
 import { useDisplaySettings } from '@/composables/useDisplaySettings'
+import HardcoverBookSyncGridItem from '@/features/hardcover/components/HardcoverBookSyncGridItem.vue'
 
 type FileProgress = {
   percentage: number
@@ -92,7 +93,9 @@ const showSendDialog = ref(false)
 const { weights: scoreWeights, fetchWeights } = useMetadataScoreWeights()
 const { bookProgress: koreaderBookProgress, fetchBookProgress: fetchKoreaderProgress } = useKoreaderBookProgress()
 
-onMounted(fetchWeights)
+onMounted(() => {
+  void fetchWeights()
+})
 
 const {
   pendingId: deleteBookId,
@@ -1650,6 +1653,7 @@ watch(
           </template>
           <dd v-else class="text-sm text-foreground mt-0.5">-</dd>
         </div>
+        <HardcoverBookSyncGridItem :book-id="book.id" />
         <div class="min-w-0">
           <dt class="text-[10px] uppercase tracking-wider font-medium text-muted-foreground">Date Started</dt>
           <template v-if="isEditingReadingDate('startedAt')">

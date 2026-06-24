@@ -32,6 +32,7 @@ describe('HardcoverSettingsService', () => {
       expect(result.enabled).toBe(false);
       expect(result.effectiveEnabled).toBe(false);
       expect(result.disabledReason).toBe('missing_token');
+      expect(result.bookSyncMode).toBe('all_eligible');
       expect(result.privacySettingId).toBe(3);
     });
 
@@ -39,6 +40,7 @@ describe('HardcoverSettingsService', () => {
       mockRepo.findSettings.mockResolvedValue({
         apiToken: 'secret',
         enabled: true,
+        bookSyncMode: 'selected_only',
         autoSyncOnStatusChange: true,
         autoSyncOnProgressUpdate: false,
         autoSyncOnRatingChange: true,
@@ -50,6 +52,7 @@ describe('HardcoverSettingsService', () => {
       expect(result.enabled).toBe(true);
       expect(result.effectiveEnabled).toBe(true);
       expect(result.disabledReason).toBeNull();
+      expect(result.bookSyncMode).toBe('selected_only');
       expect(result.autoSyncOnProgressUpdate).toBe(false);
       expect((result as any).apiToken).toBeUndefined();
       expect(result.lastSyncedAt).toBeNull();
@@ -59,6 +62,7 @@ describe('HardcoverSettingsService', () => {
       mockRepo.findSettings.mockResolvedValue({
         apiToken: 'secret',
         enabled: false,
+        bookSyncMode: 'all_eligible',
         autoSyncOnStatusChange: true,
         autoSyncOnProgressUpdate: true,
         autoSyncOnRatingChange: true,
@@ -78,6 +82,7 @@ describe('HardcoverSettingsService', () => {
       mockRepo.findSettings.mockResolvedValue({
         apiToken: 'secret',
         enabled: true,
+        bookSyncMode: 'all_eligible',
         autoSyncOnStatusChange: true,
         autoSyncOnProgressUpdate: true,
         autoSyncOnRatingChange: true,
@@ -96,6 +101,7 @@ describe('HardcoverSettingsService', () => {
       mockRepo.findSettings.mockResolvedValue({
         apiToken: 'secret',
         enabled: true,
+        bookSyncMode: 'all_eligible',
         autoSyncOnStatusChange: true,
         autoSyncOnProgressUpdate: true,
         autoSyncOnRatingChange: true,
@@ -129,25 +135,37 @@ describe('HardcoverSettingsService', () => {
       await expect(makeService().upsertSettings(1, { enabled: true })).rejects.toThrow(BadRequestException);
     });
 
+    it('throws BadRequestException for invalid bookSyncMode', async () => {
+      mockRepo.findSettings.mockResolvedValue({
+        apiToken: 'token',
+        enabled: true,
+        bookSyncMode: 'all_eligible',
+      });
+
+      await expect(makeService().upsertSettings(1, { bookSyncMode: 'invalid' as never })).rejects.toThrow(BadRequestException);
+    });
+
     it('upserts and returns settings', async () => {
       mockRepo.findSettings.mockResolvedValueOnce(undefined).mockResolvedValue({
         apiToken: 'token',
         enabled: true,
+        bookSyncMode: 'selected_only',
         autoSyncOnStatusChange: true,
         autoSyncOnProgressUpdate: true,
         autoSyncOnRatingChange: true,
         privacySettingId: 3,
       });
       mockRepo.upsertSettings.mockResolvedValue({});
-      const result = await makeService().upsertSettings(1, { apiToken: 'token' });
+      const result = await makeService().upsertSettings(1, { apiToken: 'token', bookSyncMode: 'selected_only' });
       expect(result.tokenConfigured).toBe(true);
-      expect(mockRepo.upsertSettings).toHaveBeenCalledWith(1, { apiToken: 'token' });
+      expect(mockRepo.upsertSettings).toHaveBeenCalledWith(1, { apiToken: 'token', bookSyncMode: 'selected_only' });
     });
 
     it('carries existing token forward when updating settings without a new token', async () => {
       const existing = {
         apiToken: 'saved-token',
         enabled: true,
+        bookSyncMode: 'all_eligible',
         autoSyncOnStatusChange: true,
         autoSyncOnProgressUpdate: true,
         autoSyncOnRatingChange: true,

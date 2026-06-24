@@ -1,6 +1,7 @@
 import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 
 import type {
+  HardcoverBookSyncMode,
   HardcoverSettings,
   HardcoverSyncDisabledReason,
   HardcoverTokenValidationResult,
@@ -13,6 +14,7 @@ import { HardcoverClientService } from './hardcover-client.service';
 import { HardcoverRepository } from './hardcover.repository';
 
 const VALID_PRIVACY_IDS = [HARDCOVER_PRIVACY.PUBLIC, HARDCOVER_PRIVACY.FOLLOWS, HARDCOVER_PRIVACY.PRIVATE];
+const VALID_BOOK_SYNC_MODES = ['all_eligible', 'selected_only'] as const;
 
 @Injectable()
 export class HardcoverSettingsService {
@@ -33,6 +35,7 @@ export class HardcoverSettingsService {
       enabled,
       effectiveEnabled: hasSyncPermission && tokenConfigured && enabled,
       disabledReason: this.resolveDisabledReason({ hasSyncPermission, tokenConfigured, enabled }),
+      bookSyncMode: (row?.bookSyncMode ?? 'all_eligible') as HardcoverBookSyncMode,
       autoSyncOnStatusChange: row?.autoSyncOnStatusChange ?? true,
       autoSyncOnProgressUpdate: row?.autoSyncOnProgressUpdate ?? true,
       autoSyncOnRatingChange: row?.autoSyncOnRatingChange ?? true,
@@ -44,6 +47,9 @@ export class HardcoverSettingsService {
   async upsertSettings(userId: number, payload: UpsertHardcoverSettingsPayload): Promise<HardcoverSettings> {
     if (payload.privacySettingId !== undefined && !VALID_PRIVACY_IDS.includes(payload.privacySettingId as 1 | 2 | 3)) {
       throw new BadRequestException(`Invalid privacySettingId: ${payload.privacySettingId}`);
+    }
+    if (payload.bookSyncMode !== undefined && !VALID_BOOK_SYNC_MODES.includes(payload.bookSyncMode)) {
+      throw new BadRequestException(`Invalid bookSyncMode: ${payload.bookSyncMode}`);
     }
 
     const existing = await this.repo.findSettings(userId);
@@ -60,6 +66,7 @@ export class HardcoverSettingsService {
     // the INSERT values must be valid.
     data.apiToken = rawToken ?? existing!.apiToken;
     if (payload.enabled !== undefined) data.enabled = payload.enabled;
+    if (payload.bookSyncMode !== undefined) data.bookSyncMode = payload.bookSyncMode;
     if (payload.autoSyncOnStatusChange !== undefined) data.autoSyncOnStatusChange = payload.autoSyncOnStatusChange;
     if (payload.autoSyncOnProgressUpdate !== undefined) data.autoSyncOnProgressUpdate = payload.autoSyncOnProgressUpdate;
     if (payload.autoSyncOnRatingChange !== undefined) data.autoSyncOnRatingChange = payload.autoSyncOnRatingChange;

@@ -96,8 +96,10 @@ const RouterLinkStub = defineComponent({
   template: '<a><slot /></a>',
 })
 
+let mountedWrappers: Array<{ unmount: () => void }> = []
+
 function mountDetails(book: BookDetail) {
-  return shallowMount(DetailsTab, {
+  const wrapper = shallowMount(DetailsTab, {
     props: { book },
     global: {
       stubs: {
@@ -110,6 +112,8 @@ function mountDetails(book: BookDetail) {
       },
     },
   })
+  mountedWrappers.push(wrapper)
+  return wrapper
 }
 
 async function loadCoverImages(wrapper: ReturnType<typeof mountDetails>, naturalWidth = 1000, naturalHeight = 1000) {
@@ -166,6 +170,8 @@ describe('DetailsTab cover surface', () => {
   })
 
   afterEach(() => {
+    for (const wrapper of mountedWrappers) wrapper.unmount()
+    mountedWrappers = []
     bookSpineOverlay.value = 'off'
     bookCoverDisplayMode.value = 'blurred-fit'
     vi.unstubAllGlobals()
@@ -252,6 +258,15 @@ describe('DetailsTab cover surface', () => {
       { name: 'author-detail', params: { id: 42 } },
     ])
     expect(wrapper.text()).toContain('Author One, Author Two')
+  })
+
+  it('places the Hardcover sync grid item with the current book id', async () => {
+    const wrapper = mountDetails(makeBook())
+    await flushPromises()
+
+    const item = wrapper.findComponent({ name: 'HardcoverBookSyncGridItem' })
+    expect(item.exists()).toBe(true)
+    expect(item.props('bookId')).toBe(12)
   })
 
   it('renders Send via Email button and opens dialog when user has email_send permission', async () => {

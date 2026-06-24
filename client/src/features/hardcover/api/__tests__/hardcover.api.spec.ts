@@ -13,12 +13,15 @@ import {
   applyHardcoverImport,
   cancelHardcoverSync,
   disconnectHardcover,
+  fetchHardcoverBookSyncState,
   fetchHardcoverSettings,
   fetchHardcoverSyncPendingSummary,
   fetchHardcoverSyncStatus,
   previewHardcoverImport,
+  startHardcoverBookSync,
   startHardcoverSync,
   streamHardcoverSyncStatus,
+  updateHardcoverBookSyncState,
   upsertHardcoverSettings,
   validateHardcoverToken,
 } from '../hardcover.api'
@@ -34,14 +37,19 @@ function jsonResponse(body: unknown, ok = true): Response {
 
 describe('hardcover.api', () => {
   beforeEach(() => {
-    vi.clearAllMocks()
+    mockApi.mockReset()
   })
 
   it('fetches and saves settings', async () => {
-    mockApi.mockResolvedValueOnce(jsonResponse({ tokenConfigured: true })).mockResolvedValueOnce(jsonResponse({ enabled: true }))
+    mockApi
+      .mockResolvedValueOnce(jsonResponse({ tokenConfigured: true, bookSyncMode: 'all_eligible' }))
+      .mockResolvedValueOnce(jsonResponse({ enabled: true, bookSyncMode: 'selected_only' }))
 
-    await expect(fetchHardcoverSettings()).resolves.toEqual({ tokenConfigured: true })
-    await expect(upsertHardcoverSettings({ enabled: true })).resolves.toEqual({ enabled: true })
+    await expect(fetchHardcoverSettings()).resolves.toEqual({ tokenConfigured: true, bookSyncMode: 'all_eligible' })
+    await expect(upsertHardcoverSettings({ enabled: true, bookSyncMode: 'selected_only' })).resolves.toEqual({
+      enabled: true,
+      bookSyncMode: 'selected_only',
+    })
 
     expect(mockApi).toHaveBeenNthCalledWith(1, '/api/v1/hardcover/settings')
     expect(mockApi).toHaveBeenNthCalledWith(
@@ -49,7 +57,7 @@ describe('hardcover.api', () => {
       '/api/v1/hardcover/settings',
       expect.objectContaining({
         method: 'PATCH',
-        body: JSON.stringify({ enabled: true }),
+        body: JSON.stringify({ enabled: true, bookSyncMode: 'selected_only' }),
       }),
     )
   })
@@ -89,6 +97,93 @@ describe('hardcover.api', () => {
 
     await expect(fetchHardcoverSyncStatus()).resolves.toBeNull()
     await expect(fetchHardcoverSyncPendingSummary()).resolves.toEqual({ totalBooks: 0, pendingBooks: 0 })
+  })
+
+  it('fetches and updates per-book sync state', async () => {
+    mockApi
+      .mockResolvedValueOnce(
+        jsonResponse({
+          bookId: 12,
+          syncOverride: null,
+          syncEnabled: true,
+          canSyncNow: true,
+          effectiveReason: null,
+          lastSyncedAt: null,
+          syncError: null,
+        }),
+      )
+      .mockResolvedValueOnce(
+        jsonResponse({
+          bookId: 12,
+          syncOverride: 'excluded',
+          syncEnabled: false,
+          canSyncNow: false,
+          effectiveReason: 'excluded',
+          lastSyncedAt: null,
+          syncError: null,
+        }),
+      )
+
+    await expect(fetchHardcoverBookSyncState(12)).resolves.toEqual({
+      bookId: 12,
+      syncOverride: null,
+      syncEnabled: true,
+      canSyncNow: true,
+      effectiveReason: null,
+      lastSyncedAt: null,
+      syncError: null,
+    })
+    await expect(updateHardcoverBookSyncState(12, { syncEnabled: false })).resolves.toEqual({
+      bookId: 12,
+      syncOverride: 'excluded',
+      syncEnabled: false,
+      canSyncNow: false,
+      effectiveReason: 'excluded',
+      lastSyncedAt: null,
+      syncError: null,
+    })
+
+    expect(mockApi).toHaveBeenNthCalledWith(1, '/api/v1/hardcover/books/12/sync-state')
+    expect(mockApi).toHaveBeenNthCalledWith(
+      2,
+      '/api/v1/hardcover/books/12/sync-state',
+      expect.objectContaining({
+        method: 'PATCH',
+        body: JSON.stringify({ syncEnabled: false }),
+      }),
+    )
+  })
+
+  it('starts a manual sync for a single book', async () => {
+    mockApi.mockResolvedValueOnce(
+      jsonResponse({
+        result: 'synced',
+        state: {
+          bookId: 12,
+          syncOverride: 'included',
+          syncEnabled: true,
+          canSyncNow: false,
+          effectiveReason: null,
+          lastSyncedAt: '2026-06-24T18:00:00.000Z',
+          syncError: null,
+        },
+      }),
+    )
+
+    await expect(startHardcoverBookSync(12)).resolves.toEqual({
+      result: 'synced',
+      state: {
+        bookId: 12,
+        syncOverride: 'included',
+        syncEnabled: true,
+        canSyncNow: false,
+        effectiveReason: null,
+        lastSyncedAt: '2026-06-24T18:00:00.000Z',
+        syncError: null,
+      },
+    })
+
+    expect(mockApi).toHaveBeenCalledWith('/api/v1/hardcover/books/12/sync', { method: 'POST' })
   })
 
   it('previews and applies Hardcover import payloads', async () => {
@@ -171,13 +266,21 @@ describe('hardcover.api', () => {
       .mockResolvedValueOnce(jsonResponse({}, false))
       .mockResolvedValueOnce(jsonResponse({}, false))
       .mockResolvedValueOnce(jsonResponse({}, false))
-      .mockResolvedValueOnce({ ok: false, body: null } as Response)
+      .mockResolvedValueOnce(jsonResponse({}, false))
+      .mockResolvedValueOnce(jsonResponse({}, false))
 
     await expect(fetchHardcoverSettings()).rejects.toThrow('Failed to fetch Hardcover settings')
     await expect(upsertHardcoverSettings({ enabled: true })).rejects.toThrow('Failed to save settings')
     await expect(disconnectHardcover()).rejects.toThrow('Failed to disconnect Hardcover')
     await expect(validateHardcoverToken()).rejects.toThrow('Failed to validate token')
+    await expect(fetchHardcoverBookSyncState(12)).rejects.toThrow('Failed to fetch Hardcover book sync state')
     await expect(streamHardcoverSyncStatus(vi.fn<SyncStatusCallback>())).rejects.toThrow('Failed to stream Hardcover sync status')
+  })
+
+  it('surfaces per-book sync state save failures with server messages', async () => {
+    mockApi.mockResolvedValueOnce(jsonResponse({ message: 'Forbidden' }, false))
+
+    await expect(updateHardcoverBookSyncState(12, { syncEnabled: true })).rejects.toThrow('Forbidden')
   })
 
   it('surfaces start sync failures with server messages', async () => {
