@@ -232,6 +232,49 @@ describe('mapBookWithEditions', () => {
     expect(mapBookWithEditions(book)[0].coverUrl).toBe('https://assets.hardcover.app/book-cover.jpg');
   });
 
+  it('uses edition release_date before book release_year when edition release_year is absent', () => {
+    const book: HardcoverBookWithEditions = {
+      ...baseBook,
+      release_year: 1962,
+      release_date: '1962-01-01',
+      editions: [
+        {
+          ...baseBook.editions![0],
+          title: 'Det osynliga barnet och andra berättelser',
+          release_year: undefined,
+          release_date: '2019-08-08',
+          publisher: { name: 'Förlaget M' },
+          language: { code2: 'sv' },
+          pages: 150,
+          isbn_10: '9523331647',
+          isbn_13: '9789523331648',
+        },
+      ],
+    };
+
+    const [result] = mapBookWithEditions(book);
+
+    expect(result).toMatchObject({
+      publisher: 'Förlaget M',
+      language: 'sv',
+      pageCount: 150,
+      publishedYear: 2019,
+      isbn10: '9523331647',
+      isbn13: '9789523331648',
+    });
+  });
+
+  it('prefers edition release_year over edition release_date and book release_year', () => {
+    const book: HardcoverBookWithEditions = {
+      ...baseBook,
+      release_year: 1962,
+      release_date: '1962-01-01',
+      editions: [{ ...baseBook.editions![0], release_year: 2020, release_date: '2019-08-08' }],
+    };
+
+    expect(mapBookWithEditions(book)[0].publishedYear).toBe(2020);
+  });
+
   it('falls back to book publishedYear when edition has no date fields', () => {
     const book: HardcoverBookWithEditions = {
       ...baseBook,

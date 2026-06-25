@@ -38,6 +38,10 @@ function editionRank(edition: HardcoverEdition): number {
   return (isAudiobookEdition(edition) ? 2 : 0) + (edition.pages == null ? 1 : 0);
 }
 
+function resolveEditionPublishedYear(edition: HardcoverEdition, book: HardcoverBookWithEditions): number | undefined {
+  return parseYear(edition.release_year, edition.release_date) ?? parseYear(book.release_year, book.release_date);
+}
+
 export function mapSearchDocument(doc: HardcoverSearchDocument): MetadataCandidate {
   const { isbn10, isbn13 } = pickIsbn(doc.isbns);
 
@@ -79,7 +83,7 @@ function mapEdition(edition: HardcoverEdition, book: HardcoverBookWithEditions):
     publisher: edition.publisher?.name,
     language: edition.language?.code2,
     pageCount: isAudiobookEdition(edition) ? undefined : (edition.pages ?? book.pages),
-    publishedYear: parseYear(edition.release_year ?? book.release_year, edition.release_date ?? book.release_date),
+    publishedYear: resolveEditionPublishedYear(edition, book),
     isbn10: edition.isbn_10,
     isbn13: edition.isbn_13,
     seriesName: book.featured_book_series?.series?.name,
