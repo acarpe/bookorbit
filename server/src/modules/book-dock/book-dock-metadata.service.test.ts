@@ -38,6 +38,7 @@ vi.mock('../metadata/extractors/audio.extractor', () => ({
 import { Logger } from '@nestjs/common';
 import { mkdir, writeFile } from 'fs/promises';
 import type { MockedFunction } from 'vitest';
+import type { ParsedOpf } from '../metadata/lib/opf-parser';
 
 import { extractEpubMetadata } from '../metadata/lib/epub';
 import { parseMobiFile } from '../metadata/lib/mobi-parser';
@@ -65,6 +66,40 @@ function makeAudioResult(overrides?: Partial<AudioExtractResult>): AudioExtractR
     durationSeconds: null,
     chapters: [],
     coverBytes: null,
+    ...overrides,
+  };
+}
+
+function makeParsedOpf(overrides: Partial<ParsedOpf> = {}): ParsedOpf {
+  return {
+    title: null,
+    subtitle: null,
+    description: null,
+    isbn10: null,
+    isbn13: null,
+    publisher: null,
+    publishedYear: null,
+    language: null,
+    pageCount: null,
+    rating: null,
+    seriesName: null,
+    seriesIndex: null,
+    authors: [],
+    genres: [],
+    tags: [],
+    googleBooksId: null,
+    goodreadsId: null,
+    amazonId: null,
+    hardcoverId: null,
+    hardcoverEditionId: null,
+    openLibraryId: null,
+    ranobedbId: null,
+    koboId: null,
+    lubimyczytacId: null,
+    aladinId: null,
+    itunesId: null,
+    customMetadata: {},
+    coverHref: null,
     ...overrides,
   };
 }
@@ -254,21 +289,25 @@ describe('BookDockMetadataService', () => {
     expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('xmp_parse_failed'));
   });
 
-  it('extractMetadata maps epub parser output with non-empty authors and tags', async () => {
-    mockExtractEpubMetadata.mockResolvedValue({
-      title: 'Epub Title',
-      subtitle: 'Epub Sub',
-      description: 'Desc',
-      publisher: 'Pub',
-      publishedYear: 2001,
-      language: 'en',
-      isbn10: '123456789X',
-      isbn13: '9780306406157',
-      seriesName: 'Series',
-      seriesIndex: 1.5,
-      authors: [{ name: 'Author A', sortName: null }],
-      tags: ['Sci-Fi'],
-    } as never);
+  it('extractMetadata maps epub subjects and Calibre page count instead of BookOrbit tags', async () => {
+    mockExtractEpubMetadata.mockResolvedValue(
+      makeParsedOpf({
+        title: 'Epub Title',
+        subtitle: 'Epub Sub',
+        description: 'Desc',
+        publisher: 'Pub',
+        publishedYear: 2001,
+        language: 'en',
+        isbn10: '123456789X',
+        isbn13: '9780306406157',
+        seriesName: 'Series',
+        seriesIndex: 1.5,
+        pageCount: 598,
+        authors: [{ name: 'Author A', sortName: null }],
+        genres: ['Krimi & Thriller'],
+        tags: ['Imported Tag'],
+      }),
+    );
     const service = new BookDockMetadataService(repo as never);
 
     await expect((service as any).extractMetadata('/tmp/book.epub', 'epub')).resolves.toEqual({
@@ -282,9 +321,63 @@ describe('BookDockMetadataService', () => {
       isbn13: '9780306406157',
       seriesName: 'Series',
       seriesIndex: 1.5,
+      pageCount: 598,
       authors: ['Author A'],
-      genres: ['Sci-Fi'],
+      genres: ['Krimi & Thriller'],
     });
+  });
+
+  it('extractMetadata leaves epub genres empty when only BookOrbit tags are present', async () => {
+    mockExtractEpubMetadata.mockResolvedValue(
+      makeParsedOpf({
+        title: 'Tagged Epub',
+        tags: ['Imported Tag'],
+      }),
+    );
+    const service = new BookDockMetadataService(repo as never);
+
+    const metadata = await (service as any).extractMetadata('/tmp/tagged.epub', 'epub');
+
+    expect(metadata.title).toBe('Tagged Epub');
+    expect(metadata.genres).toBeUndefined();
+    expect(metadata.pageCount).toBeUndefined();
+  });
+
+  it('extractAndSave(epub) stores subject genres and page count in embedded metadata', async () => {
+    mockExtractEpubMetadata.mockResolvedValue(
+      makeParsedOpf({
+        title: '1794',
+        isbn13: '9783492317948',
+        seriesName: 'Winge und Cardell',
+        seriesIndex: 2,
+        pageCount: 598,
+        authors: [{ name: 'Niklas Natt och Dag', sortName: 'Dag, Niklas Natt och' }],
+        genres: ['Krimi & Thriller'],
+        tags: [],
+      }),
+    );
+    const service = new BookDockMetadataService(repo as never);
+
+    await service.extractAndSave(13, '/tmp/1794.epub', 'epub', '/tmp/covers');
+
+    expect(mockExtractCover).toHaveBeenCalledWith('/tmp/1794.epub', 'epub');
+    expect(repo.update).toHaveBeenNthCalledWith(
+      2,
+      13,
+      expect.objectContaining({
+        embeddedMetadata: expect.objectContaining({
+          title: '1794',
+          isbn13: '9783492317948',
+          seriesName: 'Winge und Cardell',
+          seriesIndex: 2,
+          pageCount: 598,
+          authors: ['Niklas Natt och Dag'],
+          genres: ['Krimi & Thriller'],
+        }),
+        coverPath: null,
+        status: 'ready',
+      }),
+    );
   });
 
   it('extractMetadata handles mobi-family formats and parses year prefix when valid', async () => {

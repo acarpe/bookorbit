@@ -9,6 +9,8 @@ import { extractCbzMetadata, extractCbrMetadata, extractCb7Metadata } from '../m
 import { parseFb2File } from '../metadata/lib/fb2-parser';
 import { parseMobiFile } from '../metadata/lib/mobi-parser';
 import { parsePdfFile, type PdfParsed, type PdfParseWarning } from '../metadata/lib/pdf-parser';
+import { mapOpfMetadata } from '../metadata/extractors/opf-metadata.mapper';
+import type { ParsedBookData } from '../metadata/extractors/format-extractor.interface';
 import { extractAudioMetadata, type AudioExtractResult } from '../metadata/extractors/audio.extractor';
 import { extractCover, generateThumbnail, imageExt } from '../metadata/lib/cover';
 import { detectComicContainerFormat } from '../../common/comic-format-detect';
@@ -89,20 +91,7 @@ export class BookDockMetadataService {
   private async fromEpub(absolutePath: string): Promise<BookDockMetadata> {
     const parsed = await extractEpubMetadata(absolutePath);
     if (!parsed) return {};
-    return {
-      title: parsed.title ?? undefined,
-      subtitle: parsed.subtitle ?? undefined,
-      description: parsed.description ?? undefined,
-      publisher: parsed.publisher ?? undefined,
-      publishedYear: parsed.publishedYear ?? undefined,
-      language: parsed.language ?? undefined,
-      isbn10: parsed.isbn10 ?? undefined,
-      isbn13: parsed.isbn13 ?? undefined,
-      seriesName: parsed.seriesName ?? undefined,
-      seriesIndex: parsed.seriesIndex ?? undefined,
-      authors: parsed.authors.length > 0 ? parsed.authors.map((a) => a.name) : undefined,
-      genres: parsed.tags.length > 0 ? parsed.tags : undefined,
-    };
+    return this.toBookDockMetadata(mapOpfMetadata(parsed, null));
   }
 
   private async fromPdf(absolutePath: string): Promise<BookDockMetadata> {
@@ -204,6 +193,24 @@ export class BookDockMetadataService {
       pageCount: parsed.pageCount ?? undefined,
       authors: parsed.authors.length > 0 ? parsed.authors.map((a) => a.name) : undefined,
       genres: parsed.genres.length > 0 ? parsed.genres : undefined,
+    };
+  }
+
+  private toBookDockMetadata(data: ParsedBookData): BookDockMetadata {
+    return {
+      title: data.title ?? undefined,
+      subtitle: data.subtitle ?? undefined,
+      description: data.description ?? undefined,
+      publisher: data.publisher ?? undefined,
+      publishedYear: data.publishedYear ?? undefined,
+      language: data.language ?? undefined,
+      isbn10: data.isbn10 ?? undefined,
+      isbn13: data.isbn13 ?? undefined,
+      seriesName: data.seriesName ?? undefined,
+      seriesIndex: data.seriesIndex ?? undefined,
+      pageCount: data.pageCount ?? undefined,
+      authors: data.authors.length > 0 ? data.authors.map((a) => a.name) : undefined,
+      genres: data.genres.length > 0 ? data.genres : undefined,
     };
   }
 
