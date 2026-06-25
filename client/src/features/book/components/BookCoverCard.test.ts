@@ -112,7 +112,7 @@ vi.mock('@/features/book/components/BookCoverPlaceholder.vue', () => ({
 vi.mock('@/features/email/components/SendBookDialog.vue', () => ({
   default: defineComponent({
     name: 'SendBookDialog',
-    props: ['open', 'bookIds', 'bookFiles', 'bookTitle'],
+    props: ['open', 'selectionPayload', 'bookFiles', 'bookTitle'],
     emits: ['update:open'],
     setup() {
       return () => h('div', { 'data-testid': 'send-dialog' })

@@ -1,6 +1,6 @@
 import { ref } from 'vue'
 import { api } from '@/lib/api'
-import type { Collection } from '@bookorbit/types'
+import type { BookSelectionPayload, Collection } from '@bookorbit/types'
 
 const collections = ref<Collection[]>([])
 const loaded = ref(false)
@@ -32,8 +32,12 @@ export function useCollections() {
     return fetchPromise
   }
 
-  async function fetchCollectionsWithMembership(bookIds: number[]): Promise<Collection[]> {
-    const res = await api(`/api/v1/collections?bookIds=${bookIds.join(',')}`)
+  async function fetchCollectionsWithMembership(selectionPayload: BookSelectionPayload): Promise<Collection[]> {
+    const res = await api('/api/v1/collections/membership', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(selectionPayload),
+    })
     if (!res.ok) throw new Error('Failed to fetch collections')
     return res.json()
   }
@@ -62,11 +66,11 @@ export function useCollections() {
     return updated
   }
 
-  async function addBooksToCollection(collectionId: number, bookIds: number[]): Promise<Collection> {
+  async function addBooksToCollection(collectionId: number, selectionPayload: BookSelectionPayload): Promise<Collection> {
     const res = await api(`/api/v1/collections/${collectionId}/books`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ bookIds }),
+      body: JSON.stringify(selectionPayload),
     })
     if (!res.ok) throw new Error('Failed to add books to collection')
     const updated: Collection = await res.json()
@@ -74,11 +78,11 @@ export function useCollections() {
     return updated
   }
 
-  async function removeBooksFromCollection(collectionId: number, bookIds: number[]): Promise<Collection> {
+  async function removeBooksFromCollection(collectionId: number, selectionPayload: BookSelectionPayload): Promise<Collection> {
     const res = await api(`/api/v1/collections/${collectionId}/books`, {
       method: 'DELETE',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ bookIds }),
+      body: JSON.stringify(selectionPayload),
     })
     if (!res.ok) throw new Error('Failed to remove books from collection')
     const updated: Collection = await res.json()

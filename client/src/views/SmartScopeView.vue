@@ -407,7 +407,8 @@ watch(smartScopeId, async () => {
 
   <AddToCollectionSheet
     :open="addToCollectionOpen"
-    :book-ids="[...selectedIds]"
+    :selection-payload="{ bookIds: [...selectedIds] }"
+    :selected-count="selectedCount"
     @update:open="addToCollectionOpen = $event"
     @done="exitSelectionMode"
   />
@@ -418,7 +419,13 @@ watch(smartScopeId, async () => {
     @update:open="bulkEditOpen = $event"
     @confirm="handleBulkEditConfirm"
   />
-  <SendBookDialog :open="sendBookOpen" :book-ids="[...selectedIds]" @update:open="sendBookOpen = $event" @sent="exitSelectionMode" />
+  <SendBookDialog
+    :open="sendBookOpen"
+    :selection-payload="{ bookIds: [...selectedIds] }"
+    :selected-count="selectedCount"
+    @update:open="sendBookOpen = $event"
+    @sent="exitSelectionMode"
+  />
 
   <DeleteBookDialog :open="deleteBookId !== null" :deleting="deletingBook" @confirm="confirmDelete" @cancel="cancelDelete" />
 

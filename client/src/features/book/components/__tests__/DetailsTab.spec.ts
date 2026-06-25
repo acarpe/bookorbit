@@ -16,6 +16,12 @@ import DetailsTab from '../detail/tabs/DetailsTab.vue'
 import type { BookDetail } from '@bookorbit/types'
 import { api } from '@/lib/api'
 
+const COLLECTION_MEMBERSHIP_REQUEST = {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ bookIds: [1] }),
+}
+
 vi.mock('vue-router', async (importOriginal) => {
   const actual = await importOriginal<typeof import('vue-router')>()
   return {
@@ -180,7 +186,7 @@ describe('DetailsTab - present state', () => {
 
   it('fetches collections data for Kobo sync but does not display them', async () => {
     vi.mocked(api).mockImplementation(async (input) => {
-      if (input === '/api/v1/collections?bookIds=1') {
+      if (input === '/api/v1/collections/membership') {
         return makeApiResponse([
           { id: 10, name: 'Favorites', syncToKobo: false, memberCount: 1 },
           { id: 11, name: 'Want to Read', syncToKobo: true, memberCount: 0 },
@@ -197,7 +203,7 @@ describe('DetailsTab - present state', () => {
 
     await flushPromises()
 
-    expect(vi.mocked(api)).toHaveBeenCalledWith('/api/v1/collections?bookIds=1')
+    expect(vi.mocked(api)).toHaveBeenCalledWith('/api/v1/collections/membership', COLLECTION_MEMBERSHIP_REQUEST)
     expect(wrapper.text()).not.toContain('Favorites')
     expect(wrapper.text()).not.toContain('Collections')
   })
@@ -225,7 +231,7 @@ describe('DetailsTab - present state', () => {
           updatedAt: '2026-04-11T00:00:00.000Z',
         })
       }
-      if (input === '/api/v1/collections?bookIds=1') return makeApiResponse([])
+      if (input === '/api/v1/collections/membership') return makeApiResponse([])
       return makeApiResponse({}, false)
     })
 
@@ -267,7 +273,7 @@ describe('DetailsTab - present state', () => {
 
   it('shows validation for finished date earlier than started date and blocks save', async () => {
     vi.mocked(api).mockImplementation(async (input) => {
-      if (input === '/api/v1/collections?bookIds=1') return makeApiResponse([])
+      if (input === '/api/v1/collections/membership') return makeApiResponse([])
       return makeApiResponse({}, false)
     })
 
@@ -305,7 +311,7 @@ describe('DetailsTab - present state', () => {
       if (input === '/api/v1/books/1/progress') {
         return makeApiResponse([{ fileId: 101, cfi: null, pageNumber: null, percentage: 0.4, updatedAt: null }])
       }
-      if (input === '/api/v1/collections?bookIds=1') {
+      if (input === '/api/v1/collections/membership') {
         return makeApiResponse([])
       }
       return makeApiResponse({}, false)
@@ -341,7 +347,7 @@ describe('DetailsTab - present state', () => {
       if (input === '/api/v1/books/1/progress') {
         return makeApiResponse([{ fileId: 101, cfi: null, pageNumber: null, percentage: 99.6, updatedAt: null }])
       }
-      if (input === '/api/v1/collections?bookIds=1') {
+      if (input === '/api/v1/collections/membership') {
         return makeApiResponse([])
       }
       return makeApiResponse({}, false)
@@ -384,7 +390,7 @@ describe('DetailsTab - present state', () => {
       if (input === '/api/v1/books/1/progress') {
         return makeApiResponse(progressRows)
       }
-      if (input === '/api/v1/collections?bookIds=1') {
+      if (input === '/api/v1/collections/membership') {
         return makeApiResponse([])
       }
       return makeApiResponse({}, false)
@@ -666,7 +672,7 @@ describe('DetailsTab - reading dates compact display', () => {
           updatedAt: '2026-05-21T00:00:00.000Z',
         })
       }
-      if (input === '/api/v1/collections?bookIds=1') return makeApiResponse([])
+      if (input === '/api/v1/collections/membership') return makeApiResponse([])
       return makeApiResponse({}, false)
     })
 

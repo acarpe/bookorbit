@@ -1,6 +1,6 @@
 import { flushPromises, mount } from '@vue/test-utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { Collection } from '@bookorbit/types'
+import type { BookSelectionPayload, Collection } from '@bookorbit/types'
 import AddToCollectionSheet from '../AddToCollectionSheet.vue'
 
 const {
@@ -13,10 +13,10 @@ const {
 } = vi.hoisted(() => ({
   toastSuccess: vi.fn<(message: string) => void>(),
   toastError: vi.fn<(message: string) => void>(),
-  fetchCollectionsWithMembershipMock: vi.fn<(bookIds: number[]) => Promise<Collection[]>>(),
+  fetchCollectionsWithMembershipMock: vi.fn<(selectionPayload: BookSelectionPayload) => Promise<Collection[]>>(),
   createCollectionMock: vi.fn<(name: string, icon: string) => Promise<Collection>>(),
-  addBooksToCollectionMock: vi.fn<(collectionId: number, bookIds: number[]) => Promise<Collection>>(),
-  removeBooksFromCollectionMock: vi.fn<(collectionId: number, bookIds: number[]) => Promise<Collection>>(),
+  addBooksToCollectionMock: vi.fn<(collectionId: number, selectionPayload: BookSelectionPayload) => Promise<Collection>>(),
+  removeBooksFromCollectionMock: vi.fn<(collectionId: number, selectionPayload: BookSelectionPayload) => Promise<Collection>>(),
 }))
 
 vi.mock('vue-sonner', () => ({
@@ -80,11 +80,12 @@ const globalStubs = {
   },
 }
 
-function mountSheet(props: { open?: boolean; bookIds?: number[] } = {}) {
+function mountSheet(props: { open?: boolean; selectionPayload?: BookSelectionPayload; selectedCount?: number } = {}) {
   return mount(AddToCollectionSheet, {
     props: {
       open: props.open ?? true,
-      bookIds: props.bookIds ?? [1],
+      selectionPayload: props.selectionPayload ?? { bookIds: [1] },
+      selectedCount: props.selectedCount,
     },
     global: globalStubs,
   })
@@ -112,7 +113,7 @@ describe('AddToCollectionSheet', () => {
     const wrapper = mountSheet()
     await flushPromises()
 
-    expect(fetchCollectionsWithMembershipMock).toHaveBeenCalledWith([1])
+    expect(fetchCollectionsWithMembershipMock).toHaveBeenCalledWith({ bookIds: [1] })
     expect(wrapper.text()).toContain('Read soon')
   })
 
@@ -135,7 +136,7 @@ describe('AddToCollectionSheet', () => {
     await findButtonByText(wrapper, 'Queue').trigger('click')
     await flushPromises()
 
-    expect(addBooksToCollectionMock).toHaveBeenCalledWith(2, [1])
+    expect(addBooksToCollectionMock).toHaveBeenCalledWith(2, { bookIds: [1] })
     expect(removeBooksFromCollectionMock).not.toHaveBeenCalled()
     expect(toastSuccess).toHaveBeenCalledWith('Added 1 book to "Queue"')
 
@@ -155,7 +156,7 @@ describe('AddToCollectionSheet', () => {
     await findButtonByText(wrapper, 'Finished').trigger('click')
     await flushPromises()
 
-    expect(removeBooksFromCollectionMock).toHaveBeenCalledWith(3, [1])
+    expect(removeBooksFromCollectionMock).toHaveBeenCalledWith(3, { bookIds: [1] })
     expect(addBooksToCollectionMock).not.toHaveBeenCalled()
     expect(toastSuccess).toHaveBeenCalledWith('Removed 1 book from "Finished"')
 
@@ -199,10 +200,29 @@ describe('AddToCollectionSheet', () => {
     await flushPromises()
 
     expect(createCollectionMock).toHaveBeenCalledWith('New Shelf', 'FolderOpen')
-    expect(addBooksToCollectionMock).toHaveBeenCalledWith(12, [1])
+    expect(addBooksToCollectionMock).toHaveBeenCalledWith(12, { bookIds: [1] })
 
     await findButtonByText(wrapper, 'Done').trigger('click')
     expect(wrapper.emitted('done')).toHaveLength(1)
+  })
+
+  it('uses query-scoped payloads and selectedCount for all-matching selections', async () => {
+    const selectionPayload: BookSelectionPayload = { query: { libraryId: 5, q: 'dune', sort: [{ field: 'title', dir: 'asc' }] } }
+    fetchCollectionsWithMembershipMock.mockResolvedValue([makeCollection({ id: 20, name: 'All Dune', memberCount: 100, bookCount: 500 })])
+    addBooksToCollectionMock.mockResolvedValue(makeCollection({ id: 20, name: 'All Dune', bookCount: 1833 }))
+
+    const wrapper = mountSheet({ selectionPayload, selectedCount: 1833 })
+    await flushPromises()
+
+    expect(fetchCollectionsWithMembershipMock).toHaveBeenCalledWith(selectionPayload)
+    expect(wrapper.text()).toContain('1833 books selected')
+    expect(wrapper.text()).toContain('100 of 1833 in this collection')
+
+    await findButtonByText(wrapper, 'All Dune').trigger('click')
+    await flushPromises()
+
+    expect(addBooksToCollectionMock).toHaveBeenCalledWith(20, selectionPayload)
+    expect(toastSuccess).toHaveBeenCalledWith('Added 1733 new books to "All Dune" (100 already there)')
   })
 
   it('does not emit done when no membership changes occurred', async () => {

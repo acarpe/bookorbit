@@ -2,12 +2,12 @@ import { ref } from 'vue'
 import type { Ref } from 'vue'
 import {
   BOOK_METADATA_LOCK_FIELDS,
+  type BookSelectionPayload,
+  type BookSelectionQuery,
   type BookCard,
   type BookDetail,
   type BookMetadataLockField,
-  type GroupRule,
   type ReadStatus,
-  type SortSpec,
   type UserBookStatus,
 } from '@bookorbit/types'
 import { api } from '@/lib/api'
@@ -56,11 +56,7 @@ const BULK_FIELD_LOCK_FIELD: Record<BulkEditableField, BookMetadataLockField> = 
 
 export type InFlightOp = { label: string; processed: number; total: number; failed?: number }
 
-export type QuerySelectionState = {
-  libraryId?: number
-  filter?: GroupRule
-  q?: string
-  sort?: SortSpec[]
+export type QuerySelectionState = BookSelectionQuery & {
   total: number
 }
 
@@ -88,7 +84,7 @@ export function useBookBulkActions(
 
   const inFlight = ref<InFlightOp | null>(null)
 
-  function getSelectionPayload(): { bookIds: number[] } | { query: Omit<QuerySelectionState, 'total'> } {
+  function getSelectionPayload(): BookSelectionPayload {
     if (querySelection?.value) {
       const { libraryId, filter, q, sort } = querySelection.value
       return { query: { libraryId, filter, q, sort } }
@@ -423,5 +419,6 @@ export function useBookBulkActions(
     handleBulkSetField,
     handleBulkSetMetadataLock,
     handleDeleteSelected,
+    getSelectionPayload,
   }
 }

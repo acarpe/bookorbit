@@ -1656,7 +1656,10 @@ describe('BookService', () => {
       const user = makeUser();
       const onProgress = vi.fn();
 
-      bookRepo.findLibraryIdsByBookIds.mockResolvedValue([{ id: 1, libraryId: 7 }]);
+      bookRepo.findLibraryIdsByBookIds.mockResolvedValue([
+        { id: 1, libraryId: 7 },
+        { id: 2, libraryId: 7 },
+      ]);
       bookRepo.findPrimaryFilesByBookIds.mockResolvedValue([
         { bookId: 1, absolutePath: '/books/1.epub', format: 'epub' },
         { bookId: 2, absolutePath: '/books/2.epub', format: 'epub' },
@@ -1676,7 +1679,10 @@ describe('BookService', () => {
       const { service, bookRepo, metadataService } = makeService();
       const user = makeUser();
 
-      bookRepo.findLibraryIdsByBookIds.mockResolvedValue([{ id: 1, libraryId: 7 }]);
+      bookRepo.findLibraryIdsByBookIds.mockResolvedValue([
+        { id: 1, libraryId: 7 },
+        { id: 2, libraryId: 7 },
+      ]);
       bookRepo.findPrimaryFilesByBookIds.mockResolvedValue([
         { bookId: 1, absolutePath: '/books/1.epub', format: 'epub' },
         { bookId: 2, absolutePath: '/books/2.epub', format: 'epub' },
@@ -1718,7 +1724,11 @@ describe('BookService', () => {
       const refreshSpy = vi.spyOn(service, 'refreshMetadata').mockResolvedValue({ id: 1 } as never);
       const onProgress = vi.fn();
 
-      bookRepo.findLibraryIdsByBookIds.mockResolvedValue([{ id: 1, libraryId: 7 }]);
+      bookRepo.findLibraryIdsByBookIds.mockResolvedValue([
+        { id: 1, libraryId: 7 },
+        { id: 2, libraryId: 7 },
+        { id: 3, libraryId: 7 },
+      ]);
 
       const result = await service.bulkRefreshMetadata([1, 2, 3], user, onProgress, {
         isCancelled: () => refreshSpy.mock.calls.length > 0,
@@ -1734,7 +1744,10 @@ describe('BookService', () => {
       const user = makeUser();
       const refreshSpy = vi.spyOn(service, 'refreshMetadata').mockResolvedValue({ id: 1 } as never);
 
-      bookRepo.findLibraryIdsByBookIds.mockResolvedValue([{ id: 1, libraryId: 7 }]);
+      bookRepo.findLibraryIdsByBookIds.mockResolvedValue([
+        { id: 1, libraryId: 7 },
+        { id: 2, libraryId: 7 },
+      ]);
 
       const onProgress = vi
         .fn()
@@ -2627,7 +2640,10 @@ describe('BookService', () => {
     it('bulkRefreshMetadata increments failed count when individual books fail', async () => {
       const { service, bookRepo } = makeService();
       const user = makeUser();
-      bookRepo.findLibraryIdsByBookIds.mockResolvedValue([{ id: 1, libraryId: 7 }]);
+      bookRepo.findLibraryIdsByBookIds.mockResolvedValue([
+        { id: 1, libraryId: 7 },
+        { id: 2, libraryId: 7 },
+      ]);
       const refreshSpy = vi
         .spyOn(service, 'refreshMetadata')
         .mockRejectedValueOnce(new Error('failed one'))
@@ -3870,6 +3886,14 @@ describe('BookService', () => {
       vi.spyOn(service, 'verifyLibraryAccessForBookIds').mockRejectedValue(error);
 
       await expect(service.resolveSelectionToIds({ bookIds: [1, 2] }, makeUser())).rejects.toBe(error);
+    });
+
+    it('rejects explicit selections when any requested book id is missing', async () => {
+      const { service, bookRepo } = makeService();
+      bookRepo.findLibraryIdsByBookIds.mockResolvedValue([{ id: 1, libraryId: 5 }]);
+
+      await expect(service.resolveSelectionToIds({ bookIds: [1, 2] }, makeUser())).rejects.toThrow(NotFoundException);
+      expect(bookRepo.findLibraryIdsByBookIds).toHaveBeenCalledWith([1, 2]);
     });
 
     it('resolves query selections across all accessible libraries', async () => {

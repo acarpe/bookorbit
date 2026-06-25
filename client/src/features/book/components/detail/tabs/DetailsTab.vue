@@ -864,7 +864,11 @@ async function loadSupplemental() {
   try {
     const progressPromise = api(`/api/v1/books/${props.book.id}/progress`).catch(() => null)
     const audioProgressPromise = hasAudio ? api(`/api/v1/books/${props.book.id}/audio-progress`).catch(() => null) : Promise.resolve(null)
-    const collectionsPromise = api(`/api/v1/collections?bookIds=${props.book.id}`)
+    const collectionsPromise = api('/api/v1/collections/membership', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ bookIds: [props.book.id] }),
+    })
     const koboPromise = canViewKobo.value ? api(`/api/v1/books/${props.book.id}/kobo-state`) : Promise.resolve(null)
     const koreaderProgressPromise = canViewKoreader.value ? fetchKoreaderProgress(props.book.id) : Promise.resolve()
 
@@ -1815,12 +1819,19 @@ watch(
 
   <AddToCollectionSheet
     :open="addToCollectionOpen"
-    :book-ids="[book.id]"
+    :selection-payload="{ bookIds: [book.id] }"
+    :selected-count="1"
     @update:open="addToCollectionOpen = $event"
     @done="void loadSupplemental()"
   />
 
-  <SendBookDialog v-model:open="showSendDialog" :book-ids="[book.id]" :book-title="book.title ?? undefined" :book-files="book.files" />
+  <SendBookDialog
+    v-model:open="showSendDialog"
+    :selection-payload="{ bookIds: [book.id] }"
+    :selected-count="1"
+    :book-title="book.title ?? undefined"
+    :book-files="book.files"
+  />
 
   <DeleteBookDialog :open="deleteBookId !== null" :deleting="deletingBook" @confirm="confirmDelete" @cancel="cancelDelete" />
 

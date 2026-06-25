@@ -78,7 +78,7 @@ import { ComicMetadataRepository } from '../metadata/comic-metadata.repository';
 import { BookDetailDto } from './dto/book-detail.dto';
 import type { BulkMetadataField } from './dto/bulk-set-metadata.dto';
 import type { BulkEditFieldsDto } from './dto/bulk-edit-metadata.dto';
-import type { BulkSelectionDto } from './dto/bulk-selection.dto';
+import type { BulkSelectionDto } from '../../common/dto/bulk-selection.dto';
 import type { MetadataExportDto, MetadataExportFormat, MetadataExportViewType } from './dto/metadata-export.dto';
 import type { MetadataExportColumnMode } from './dto/metadata-export-options.dto';
 import { SaveProgressDto } from './dto/save-progress.dto';
@@ -259,7 +259,11 @@ export class BookService {
   }
 
   private async verifyLibraryAccessForBookIds(bookIds: number[], user: RequestUser): Promise<{ id: number; libraryId: number }[]> {
-    const rows = await this.bookRepo.findLibraryIdsByBookIds(bookIds);
+    const uniqueBookIds = [...new Set(bookIds)];
+    const rows = await this.bookRepo.findLibraryIdsByBookIds(uniqueBookIds);
+    if (rows.length !== uniqueBookIds.length) {
+      throw new NotFoundException('One or more books were not found');
+    }
     const uniqueLibraryIds = [...new Set(rows.map((row) => row.libraryId))];
     const isSuperuser = this.isSuperuser(user);
     await Promise.all(uniqueLibraryIds.map((libraryId) => this.libraryService.verifyUserAccess(user.id, libraryId, isSuperuser)));

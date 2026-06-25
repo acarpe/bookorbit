@@ -175,7 +175,8 @@ function coverAspectRatio(book: BookCard): CoverAspectRatio {
 
   <AddToCollectionSheet
     :open="addToCollectionOpen"
-    :book-ids="addToCollectionBookId ? [addToCollectionBookId] : []"
+    :selection-payload="{ bookIds: addToCollectionBookId ? [addToCollectionBookId] : [] }"
+    :selected-count="addToCollectionBookId ? 1 : 0"
     @update:open="addToCollectionOpen = $event"
   />
 

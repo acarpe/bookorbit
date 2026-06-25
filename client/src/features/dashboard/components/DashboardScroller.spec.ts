@@ -44,9 +44,9 @@ vi.mock('@/features/book/components/BookQuickView.vue', () => ({
 vi.mock('@/features/collection/components/AddToCollectionSheet.vue', () => ({
   default: {
     name: 'AddToCollectionSheet',
-    props: ['open', 'bookIds'],
+    props: ['open', 'selectionPayload'],
     emits: ['update:open'],
-    template: '<div class="collection-sheet" :data-open="String(open)" :data-book-ids="bookIds.join(\',\')" />',
+    template: '<div class="collection-sheet" :data-open="String(open)" :data-book-ids="(selectionPayload.bookIds || []).join(\',\')" />',
   },
 }))
 vi.mock('@/features/book/components/DeleteBookDialog.vue', () => ({

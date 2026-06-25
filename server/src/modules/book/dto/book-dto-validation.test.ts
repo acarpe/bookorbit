@@ -42,7 +42,9 @@ describe('Book DTO validation', () => {
     expect((await errorsFor(BulkSelectionDto, { query: {} })).length).toBe(0);
     expect((await errorsFor(BulkSelectionDto, {})).length).toBeGreaterThan(0);
     expect((await errorsFor(BulkSelectionDto, { bookIds: [] })).length).toBeGreaterThan(0);
+    expect((await errorsFor(BulkSelectionDto, { bookIds: [0] })).length).toBeGreaterThan(0);
     expect((await errorsFor(BulkSelectionDto, { bookIds: ['x'] })).length).toBeGreaterThan(0);
+    expect((await errorsFor(BulkQuerySelectionDto, { libraryId: 0 })).length).toBeGreaterThan(0);
   });
 
   it('validates bulk book id DTOs in explicit and query modes', async () => {

@@ -7,12 +7,13 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { useCollections } from '../composables/useCollections'
 import IconPicker from '@/components/IconPicker.vue'
-import type { Collection } from '@bookorbit/types'
+import type { BookSelectionPayload, Collection } from '@bookorbit/types'
 import { useVirtualKeyboard } from '@/composables/useVirtualKeyboard'
 
 const props = defineProps<{
   open: boolean
-  bookIds: number[]
+  selectionPayload: BookSelectionPayload
+  selectedCount?: number
 }>()
 
 const emit = defineEmits<{
@@ -30,6 +31,11 @@ const newIcon = ref('')
 const creating = ref(false)
 const mutatingCollectionId = ref<number | null>(null)
 
+function selectionCount(): number {
+  const bookIds = props.selectionPayload.bookIds
+  return props.selectedCount ?? (Array.isArray(bookIds) ? bookIds.length : 0)
+}
+
 watch(
   () => props.open,
   async (open) => {
@@ -37,7 +43,7 @@ watch(
       changedCollectionIds.value = new Set()
       mutatingCollectionId.value = null
       try {
-        localCollections.value = await fetchCollectionsWithMembership(props.bookIds)
+        localCollections.value = await fetchCollectionsWithMembership(props.selectionPayload)
       } catch {
         toast.error('Failed to load collections')
       }
@@ -48,11 +54,12 @@ watch(
 
 function membershipCount(collection: Collection): number {
   const count = collection.memberCount ?? 0
-  return Math.max(0, Math.min(props.bookIds.length, count))
+  return Math.max(0, Math.min(selectionCount(), count))
 }
 
 function isFullyAdded(collection: Collection): boolean {
-  return props.bookIds.length > 0 && membershipCount(collection) === props.bookIds.length
+  const total = selectionCount()
+  return total > 0 && membershipCount(collection) === total
 }
 
 function partialCount(collection: Collection): number {
@@ -64,7 +71,7 @@ function justAdded(collection: Collection): boolean {
 }
 
 function membershipLabel(collection: Collection): string {
-  const total = props.bookIds.length
+  const total = selectionCount()
   if (isFullyAdded(collection)) {
     if (justAdded(collection)) return total === 1 ? 'Added' : `All ${total} added`
     return total === 1 ? 'In this collection' : `All ${total} in this collection`
@@ -89,10 +96,11 @@ async function handleCreate() {
     newIcon.value = ''
     localCollections.value = [...localCollections.value, { ...collection, memberCount: 0 }]
     try {
-      await addBooksToCollection(collection.id, props.bookIds)
-      localCollections.value = localCollections.value.map((c) => (c.id === collection.id ? { ...c, memberCount: props.bookIds.length } : c))
+      await addBooksToCollection(collection.id, props.selectionPayload)
+      const total = selectionCount()
+      localCollections.value = localCollections.value.map((c) => (c.id === collection.id ? { ...c, memberCount: total } : c))
       markCollectionChanged(collection.id)
-      toast.success(`Created "${collection.name}" and added ${props.bookIds.length} book${props.bookIds.length === 1 ? '' : 's'}`)
+      toast.success(`Created "${collection.name}" and added ${total} book${total === 1 ? '' : 's'}`)
     } catch {
       toast.error(`Created "${collection.name}" but failed to add books`)
     }
@@ -104,18 +112,19 @@ async function handleCreate() {
 }
 
 async function handleAddTo(collection: Collection) {
-  if (isFullyAdded(collection) || props.bookIds.length === 0 || mutatingCollectionId.value === collection.id) return
+  const total = selectionCount()
+  if (isFullyAdded(collection) || total === 0 || mutatingCollectionId.value === collection.id) return
   mutatingCollectionId.value = collection.id
   try {
-    await addBooksToCollection(collection.id, props.bookIds)
+    await addBooksToCollection(collection.id, props.selectionPayload)
     markCollectionChanged(collection.id)
-    localCollections.value = localCollections.value.map((c) => (c.id === collection.id ? { ...c, memberCount: props.bookIds.length } : c))
+    localCollections.value = localCollections.value.map((c) => (c.id === collection.id ? { ...c, memberCount: total } : c))
     const alreadyHad = membershipCount(collection)
-    const added = props.bookIds.length - alreadyHad
+    const added = total - alreadyHad
     const msg =
       alreadyHad > 0
         ? `Added ${added} new book${added === 1 ? '' : 's'} to "${collection.name}" (${alreadyHad} already there)`
-        : `Added ${props.bookIds.length} book${props.bookIds.length === 1 ? '' : 's'} to "${collection.name}"`
+        : `Added ${total} book${total === 1 ? '' : 's'} to "${collection.name}"`
     toast.success(msg)
   } catch {
     toast.error('Failed to add to collection')
@@ -125,13 +134,14 @@ async function handleAddTo(collection: Collection) {
 }
 
 async function handleRemoveFrom(collection: Collection) {
-  if (!isFullyAdded(collection) || props.bookIds.length === 0 || mutatingCollectionId.value === collection.id) return
+  const total = selectionCount()
+  if (!isFullyAdded(collection) || total === 0 || mutatingCollectionId.value === collection.id) return
   mutatingCollectionId.value = collection.id
   try {
-    await removeBooksFromCollection(collection.id, props.bookIds)
+    await removeBooksFromCollection(collection.id, props.selectionPayload)
     markCollectionChanged(collection.id)
     localCollections.value = localCollections.value.map((c) => (c.id === collection.id ? { ...c, memberCount: 0 } : c))
-    toast.success(`Removed ${props.bookIds.length} book${props.bookIds.length === 1 ? '' : 's'} from "${collection.name}"`)
+    toast.success(`Removed ${total} book${total === 1 ? '' : 's'} from "${collection.name}"`)
   } catch {
     toast.error('Failed to remove from collection')
   } finally {
@@ -184,7 +194,7 @@ function handleFocusOut(e: FocusEvent) {
       </SheetHeader>
 
       <div class="px-4 pb-4 space-y-4">
-        <p class="text-xs text-muted-foreground animate-fade-up">{{ bookIds.length }} book{{ bookIds.length === 1 ? '' : 's' }} selected</p>
+        <p class="text-xs text-muted-foreground animate-fade-up">{{ selectionCount() }} book{{ selectionCount() === 1 ? '' : 's' }} selected</p>
 
         <!-- Create new collection -->
         <div class="space-y-2 animate-fade-up" style="animation-delay: 50ms">
@@ -215,7 +225,7 @@ function handleFocusOut(e: FocusEvent) {
                     ? 'hover:bg-destructive/10 cursor-pointer'
                     : 'hover:bg-muted cursor-pointer'
               "
-              :disabled="bookIds.length === 0 || mutatingCollectionId === collection.id"
+              :disabled="selectionCount() === 0 || mutatingCollectionId === collection.id"
               @click="handleCollectionAction(collection)"
             >
               <div class="flex flex-col min-w-0">

@@ -194,12 +194,17 @@ const AddToCollectionSheetStub = defineComponent({
       type: Boolean,
       required: true,
     },
-    bookIds: {
-      type: Array as PropType<number[]>,
+    selectionPayload: {
+      type: Object as PropType<{ bookIds?: number[] }>,
       required: true,
     },
   },
   emits: ['update:open'],
+  computed: {
+    bookIds(): number[] {
+      return this.selectionPayload.bookIds ?? []
+    },
+  },
   template: `
     <div data-testid="collection-sheet" :data-open="open ? 'true' : 'false'" :data-book-ids="bookIds.join(',')">
       <button data-testid="collection-sheet-close" @click="$emit('update:open', false)">close</button>

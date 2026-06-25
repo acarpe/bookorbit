@@ -128,6 +128,26 @@ describe('useBookBulkActions', () => {
     vi.useRealTimers()
   })
 
+  it('exposes explicit and query selection payloads for external bulk dialogs', () => {
+    const selectedIds = ref(new Set([10, 20]))
+    const inactiveQuerySelection = ref<QuerySelectionState | null>(null)
+    const explicit = useBookBulkActions(selectedIds, vi.fn(), undefined, undefined, inactiveQuerySelection)
+
+    expect(explicit.getSelectionPayload()).toEqual({ bookIds: [10, 20] })
+
+    const querySelection = ref<QuerySelectionState | null>(makeQuerySelection({ sort: [{ field: 'title', dir: 'asc' }] }))
+    const queryScoped = useBookBulkActions(ref(new Set<number>()), vi.fn(), undefined, undefined, querySelection)
+
+    expect(queryScoped.getSelectionPayload()).toEqual({
+      query: {
+        libraryId: 5,
+        filter: { type: 'group', join: 'AND', rules: [] },
+        q: 'space opera',
+        sort: [{ field: 'title', dir: 'asc' }],
+      },
+    })
+  })
+
   it('patches selected books with the new manual read status after a successful bulk update', async () => {
     mocks.api.mockResolvedValue({ ok: true })
     const selectedIds = ref(new Set([1, 2]))

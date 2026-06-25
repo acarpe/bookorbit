@@ -98,5 +98,11 @@ async function handleRefresh() {
     </DropdownMenu>
   </div>
 
-  <SendBookDialog v-if="showSendDialog" :book-ids="[book.id]" :open="showSendDialog" @update:open="showSendDialog = $event" />
+  <SendBookDialog
+    v-if="showSendDialog"
+    :selection-payload="{ bookIds: [book.id] }"
+    :selected-count="1"
+    :open="showSendDialog"
+    @update:open="showSendDialog = $event"
+  />
 </template>

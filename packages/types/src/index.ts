@@ -8,6 +8,7 @@ export * from "./metadata-preferences";
 export * from "./metadata-lock";
 export * from "./dashboard";
 export * from "./book";
+export * from "./book-selection";
 export * from "./audiobook";
 export * from "./upload";
 export * from "./collection";

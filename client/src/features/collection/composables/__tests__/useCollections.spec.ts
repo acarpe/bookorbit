@@ -66,16 +66,20 @@ describe('useCollections', () => {
     expect(collections.value).toEqual([])
   })
 
-  it('fetches collections with per-book membership counts', async () => {
+  it('fetches collections with per-selection membership counts', async () => {
     const withMembership = [makeCollection({ id: 3, memberCount: 1 })]
     apiMock.mockResolvedValueOnce(makeResponse(withMembership))
 
     const { useCollections } = await import('../useCollections')
     const { fetchCollectionsWithMembership } = useCollections()
 
-    const result = await fetchCollectionsWithMembership([7, 8])
+    const result = await fetchCollectionsWithMembership({ query: { libraryId: 5, q: 'dune' } })
 
-    expect(apiMock).toHaveBeenCalledWith('/api/v1/collections?bookIds=7,8')
+    expect(apiMock).toHaveBeenCalledWith('/api/v1/collections/membership', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ query: { libraryId: 5, q: 'dune' } }),
+    })
     expect(result).toEqual(withMembership)
   })
 
@@ -88,7 +92,7 @@ describe('useCollections', () => {
     const { collections, createCollection, removeBooksFromCollection } = useCollections()
 
     await createCollection(created.name, created.icon ?? 'FolderOpen')
-    const result = await removeBooksFromCollection(created.id, [7])
+    const result = await removeBooksFromCollection(created.id, { bookIds: [7] })
 
     expect(apiMock).toHaveBeenLastCalledWith(`/api/v1/collections/${created.id}/books`, {
       method: 'DELETE',
@@ -105,6 +109,6 @@ describe('useCollections', () => {
     const { useCollections } = await import('../useCollections')
     const { removeBooksFromCollection } = useCollections()
 
-    await expect(removeBooksFromCollection(1, [9])).rejects.toThrow('Failed to remove books from collection')
+    await expect(removeBooksFromCollection(1, { bookIds: [9] })).rejects.toThrow('Failed to remove books from collection')
   })
 })

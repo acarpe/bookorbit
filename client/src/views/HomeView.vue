@@ -398,6 +398,7 @@ const {
   handleBulkSetField,
   handleBulkSetMetadataLock,
   handleDeleteSelected,
+  getSelectionPayload,
   addToCollectionOpen,
   bulkEditOpen,
   sendBookOpen,
@@ -1017,7 +1018,8 @@ async function handleToggleCollapse() {
 
   <AddToCollectionSheet
     :open="addToCollectionOpen"
-    :book-ids="[...selectedIds]"
+    :selection-payload="getSelectionPayload()"
+    :selected-count="querySelection ? querySelection.total : selectedCount"
     @update:open="addToCollectionOpen = $event"
     @done="exitSelectionMode"
   />
@@ -1030,7 +1032,13 @@ async function handleToggleCollapse() {
     @confirm="handleBulkEditConfirm"
   />
 
-  <SendBookDialog :open="sendBookOpen" :book-ids="[...selectedIds]" @update:open="sendBookOpen = $event" @sent="exitSelectionMode" />
+  <SendBookDialog
+    :open="sendBookOpen"
+    :selection-payload="getSelectionPayload()"
+    :selected-count="querySelection ? querySelection.total : selectedCount"
+    @update:open="sendBookOpen = $event"
+    @sent="exitSelectionMode"
+  />
 
   <SaveAsSmartScopeDialog :open="saveAsSmartScopeOpen" :filter="filter" :sort="sort" @close="saveAsSmartScopeOpen = false" />
 

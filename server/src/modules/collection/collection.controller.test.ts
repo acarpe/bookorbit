@@ -28,6 +28,7 @@ const USER: RequestUser = {
 function makeController() {
   const service = {
     findAll: vi.fn(),
+    findAllWithSelectionMembership: vi.fn(),
     findOne: vi.fn(),
     create: vi.fn(),
     reorder: vi.fn(),
@@ -79,6 +80,16 @@ describe('CollectionController', () => {
       await expectBadRequest(() => controller.findAll(USER, '-1,2'));
       await expectBadRequest(() => controller.findAll(USER, '0,2'));
       await expectBadRequest(() => controller.findAll(USER, '   '));
+    });
+
+    it('delegates membership payloads to the selection-aware service method', async () => {
+      const { controller, service } = makeController();
+      const selection = { query: { libraryId: 5, q: 'dune' } };
+      service.findAllWithSelectionMembership.mockResolvedValue([]);
+
+      await controller.findAllWithMembership(selection, USER);
+
+      expect(service.findAllWithSelectionMembership).toHaveBeenCalledWith(selection, USER);
     });
   });
 
@@ -190,11 +201,11 @@ describe('CollectionController', () => {
     };
     const addBooksMeta = Reflect.getMetadata(AUDITABLE_KEY, CollectionController.prototype.addBooks) as {
       getResourceId: (req: { params: { id: string } }) => number;
-      description: (req: { params: { id: string }; body: { bookIds?: number[] } }) => string;
+      description: (req: { params: { id: string }; body: { bookIds?: number[]; query?: unknown } }) => string;
     };
     const removeBooksMeta = Reflect.getMetadata(AUDITABLE_KEY, CollectionController.prototype.removeBooks) as {
       getResourceId: (req: { params: { id: string } }) => number;
-      description: (req: { params: { id: string }; body: { bookIds?: number[] } }) => string;
+      description: (req: { params: { id: string }; body: { bookIds?: number[]; query?: unknown } }) => string;
     };
 
     expect(createMeta.description({} as never, { name: 'Favorites' })).toBe("Created collection 'Favorites'");
@@ -204,9 +215,13 @@ describe('CollectionController', () => {
     expect(removeMeta.description({ params: { id: '10' } })).toBe('Deleted collection #10');
     expect(addBooksMeta.getResourceId({ params: { id: '10' } })).toBe(10);
     expect(addBooksMeta.description({ params: { id: '10' }, body: { bookIds: [1, 2] } })).toBe('Added 2 books to collection #10');
+    expect(addBooksMeta.description({ params: { id: '10' }, body: { query: { libraryId: 5 } } })).toBe('Added all matching books to collection #10');
     expect(addBooksMeta.description({ params: { id: '10' }, body: {} })).toBe('Added 0 books to collection #10');
     expect(removeBooksMeta.getResourceId({ params: { id: '10' } })).toBe(10);
     expect(removeBooksMeta.description({ params: { id: '10' }, body: { bookIds: [1] } })).toBe('Removed 1 book from collection #10');
+    expect(removeBooksMeta.description({ params: { id: '10' }, body: { query: { libraryId: 5 } } })).toBe(
+      'Removed all matching books from collection #10',
+    );
     expect(removeBooksMeta.description({ params: { id: '10' }, body: {} })).toBe('Removed 0 books from collection #10');
   });
 });

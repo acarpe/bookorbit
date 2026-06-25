@@ -7,6 +7,7 @@ import { useEmailRecipients } from '../composables/useEmailRecipients'
 import { useEmailGroups } from '../composables/useEmailGroups'
 import { useEmailTemplates } from '../composables/useEmailTemplates'
 import { useEmailSend } from '../composables/useEmailSend'
+import type { BookSelectionPayload } from '@bookorbit/types'
 
 interface BookFile {
   id: number
@@ -16,7 +17,8 @@ interface BookFile {
 
 const props = defineProps<{
   open: boolean
-  bookIds: number[]
+  selectionPayload: BookSelectionPayload
+  selectedCount?: number
   bookFiles?: BookFile[]
   bookTitle?: string
 }>()
@@ -40,6 +42,11 @@ const selectedFileId = ref<number | null>(null)
 const sending = ref(false)
 
 const hasSelection = computed(() => selectedRecipientIds.value.length > 0 || selectedGroupIds.value.length > 0)
+
+function selectionCount(): number {
+  const bookIds = props.selectionPayload.bookIds
+  return props.selectedCount ?? (Array.isArray(bookIds) ? bookIds.length : 0)
+}
 
 watch(
   () => props.open,
@@ -82,7 +89,7 @@ async function send() {
   sending.value = true
   try {
     const result = await sendBook({
-      bookIds: props.bookIds,
+      ...props.selectionPayload,
       recipientIds: selectedRecipientIds.value.length > 0 ? selectedRecipientIds.value : undefined,
       groupIds: selectedGroupIds.value.length > 0 ? selectedGroupIds.value : undefined,
       providerId: selectedProviderId.value ?? undefined,
@@ -116,7 +123,7 @@ function close() {
             <div>
               <h2 class="text-sm font-semibold text-foreground">Send via Email</h2>
               <p v-if="bookTitle" class="text-xs text-muted-foreground mt-0.5 truncate max-w-[280px]">{{ bookTitle }}</p>
-              <p v-else-if="bookIds.length > 1" class="text-xs text-muted-foreground mt-0.5">{{ bookIds.length }} books</p>
+              <p v-else-if="selectionCount() > 1" class="text-xs text-muted-foreground mt-0.5">{{ selectionCount() }} books</p>
             </div>
             <button class="text-muted-foreground hover:text-foreground transition-colors" @click="close()">
               <X :size="16" />

@@ -196,5 +196,11 @@ onBeforeUnmount(() => {
     </div>
   </Teleport>
 
-  <SendBookDialog v-if="book && showSendDialog" :book-ids="[book.id]" :open="showSendDialog" @update:open="showSendDialog = $event" />
+  <SendBookDialog
+    v-if="book && showSendDialog"
+    :selection-payload="{ bookIds: [book.id] }"
+    :selected-count="1"
+    :open="showSendDialog"
+    @update:open="showSendDialog = $event"
+  />
 </template>

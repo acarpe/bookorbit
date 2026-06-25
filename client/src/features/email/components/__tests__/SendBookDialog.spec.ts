@@ -1,5 +1,6 @@
 import { mount } from '@vue/test-utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import type { BookSelectionPayload } from '@bookorbit/types'
 import SendBookDialog from '../SendBookDialog.vue'
 
 const mockState = vi.hoisted(() => ({
@@ -58,12 +59,18 @@ vi.mock('vue-sonner', () => ({
 }))
 
 function mountDialog(
-  overrides: Partial<{ open: boolean; bookIds: number[]; bookFiles: Array<{ id: number; format: string | null; role: string }> }> = {},
+  overrides: Partial<{
+    open: boolean
+    selectionPayload: BookSelectionPayload
+    selectedCount: number
+    bookFiles: Array<{ id: number; format: string | null; role: string }>
+  }> = {},
 ) {
   return mount(SendBookDialog, {
     props: {
       open: true,
-      bookIds: [12],
+      selectionPayload: { bookIds: [12] },
+      selectedCount: 1,
       ...overrides,
     },
     global: {
@@ -118,7 +125,8 @@ describe('SendBookDialog', () => {
   it('sends selected recipients and groups, then emits close and sent', async () => {
     const wrapper = mountDialog({
       open: true,
-      bookIds: [12, 13],
+      selectionPayload: { bookIds: [12, 13] },
+      selectedCount: 2,
       bookFiles: [
         { id: 101, format: 'epub', role: 'primary' },
         { id: 102, format: 'pdf', role: 'secondary' },
@@ -166,6 +174,28 @@ describe('SendBookDialog', () => {
 
     expect(mockState.sendBook).toHaveBeenCalledWith({
       bookIds: [12],
+      recipientIds: [10],
+      groupIds: undefined,
+      providerId: undefined,
+      templateId: undefined,
+      fileId: undefined,
+    })
+  })
+
+  it('sends query-scoped selection payloads for all-matching selections', async () => {
+    const selectionPayload: BookSelectionPayload = { query: { libraryId: 5, q: 'dune', sort: [{ field: 'title', dir: 'asc' }] } }
+    const wrapper = mountDialog({ open: true, selectionPayload, selectedCount: 1833 })
+
+    expect(wrapper.text()).toContain('1833 books')
+
+    const recipientCheckbox = wrapper.find('input[type="checkbox"]')
+    await recipientCheckbox.trigger('change')
+
+    const sendButton = wrapper.findAll('button').find((button) => button.text().trim() === 'Send')
+    await sendButton!.trigger('click')
+
+    expect(mockState.sendBook).toHaveBeenCalledWith({
+      ...selectionPayload,
       recipientIds: [10],
       groupIds: undefined,
       providerId: undefined,

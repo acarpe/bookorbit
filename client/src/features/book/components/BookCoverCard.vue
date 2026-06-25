@@ -832,7 +832,8 @@ const secondaryLabelText = computed(() => resolveBookLabel(gridCardSecondaryLabe
   <SendBookDialog
     v-if="showSendDialog"
     :open="showSendDialog"
-    :book-ids="[book.id]"
+    :selection-payload="{ bookIds: [book.id] }"
+    :selected-count="1"
     :book-files="book.files"
     :book-title="book.title ?? undefined"
     @update:open="showSendDialog = $event"
