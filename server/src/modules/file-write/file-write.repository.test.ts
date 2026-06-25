@@ -94,6 +94,7 @@ describe('FileWriteRepository', () => {
       goodreadsId: 'gr',
       amazonId: 'a',
       hardcoverId: 'h',
+      hardcoverEditionId: '8941973',
       openLibraryId: 'ol',
       ranobedbId: 'rn',
       koboId: 'kb',

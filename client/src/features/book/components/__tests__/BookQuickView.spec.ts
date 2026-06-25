@@ -83,6 +83,7 @@ function makeDetail(overrides: Partial<BookDetail> = {}): BookDetail {
     seriesIndex: null,
     rating: null,
     coverSource: null,
+    hardcoverEditionId: null,
     providerIds: {},
     authors: [],
     genres: [],

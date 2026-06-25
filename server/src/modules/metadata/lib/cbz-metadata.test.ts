@@ -199,6 +199,7 @@ describe('extractCbzMetadata', () => {
           Manual note
           [bookorbit:ranobedbId] ranobe-1
           [bookorbit:googleBooksId] google-1
+          [bookorbit:hardcoverEditionId] 8941973
         </Notes>
       </ComicInfo>`;
       mockReadFile.mockResolvedValue(buildZipWithComicInfo(xml) as unknown as Buffer);
@@ -206,6 +207,7 @@ describe('extractCbzMetadata', () => {
       const r = await extractCbzMetadata('/book.cbz');
       expect(r?.ranobedbId).toBe('ranobe-1');
       expect(r?.googleBooksId).toBe('google-1');
+      expect(r?.hardcoverEditionId).toBe('8941973');
     });
   });
 

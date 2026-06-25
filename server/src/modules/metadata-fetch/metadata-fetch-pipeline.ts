@@ -24,6 +24,7 @@ import { MetadataSearchParams } from './providers/metadata-search-params';
 
 export type ResolvedMetadataFields = Partial<Record<MetadataField, string | string[] | number | null>> & {
   coverUrl?: string;
+  hardcoverEditionId?: string | null;
   seriesMemberships?: MetadataSeriesMembership[];
   chapters?: AudiobookChapter[];
   comicMetadata?: ComicMetadataFields;
@@ -295,6 +296,9 @@ export class MetadataFetchPipeline {
     if (preferences.options?.saveProviderIds) {
       for (const candidate of byProvider.values()) {
         if (candidate.providerId) providerIds[candidate.provider] = candidate.providerId;
+        if (candidate.provider === MetadataProviderKey.HARDCOVER && candidate.hardcoverEditionId) {
+          result.hardcoverEditionId = candidate.hardcoverEditionId;
+        }
       }
     }
 

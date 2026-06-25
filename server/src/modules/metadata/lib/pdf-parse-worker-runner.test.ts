@@ -37,6 +37,7 @@ describe('parsePdfFileInWorker', () => {
       goodreadsId: null,
       amazonId: null,
       hardcoverId: null,
+      hardcoverEditionId: null,
       openLibraryId: null,
       ranobedbId: null,
       koboId: null,

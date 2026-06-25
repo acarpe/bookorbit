@@ -18,6 +18,7 @@ export interface FileMetadata {
   goodreadsId?: string | null
   amazonId?: string | null
   hardcoverId?: string | null
+  hardcoverEditionId?: string | null
   openLibraryId?: string | null
   itunesId?: string | null
   audibleId?: string | null

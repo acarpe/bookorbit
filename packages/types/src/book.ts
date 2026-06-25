@@ -70,6 +70,8 @@ export type BookCard = {
   publisher: string | null;
   pageCount: number | null;
   isbn13: string | null;
+  hardcoverId?: string | null;
+  hardcoverEditionId?: string | null;
   narrators: string[];
   tags: string[];
   collapsedSeries?: import("./series-collapse").CollapsedSeriesInfo;
@@ -132,6 +134,7 @@ export type BookDetail = {
   seriesMemberships?: BookSeriesMembership[];
   rating: number | null;
   coverSource: "extracted" | "custom" | null;
+  hardcoverEditionId: string | null;
   providerIds: ProviderIds;
   authors: { id: number; name: string; sortName: string | null }[];
   genres: string[];
@@ -173,6 +176,7 @@ export type BookMetadataRefreshPreviewFields = {
   goodreadsId?: string | null;
   amazonId?: string | null;
   hardcoverId?: string | null;
+  hardcoverEditionId?: string | null;
   openLibraryId?: string | null;
   itunesId?: string | null;
   audibleId?: string | null;

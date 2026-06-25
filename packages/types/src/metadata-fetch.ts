@@ -40,6 +40,7 @@ export interface MetadataSeriesMembership {
 export interface MetadataCandidate {
   provider: MetadataProviderKey;
   providerId: string;
+  hardcoverEditionId?: string;
   title: string;
   subtitle?: string;
   authors?: string[];
@@ -114,4 +115,5 @@ export interface MetadataSource {
   narrators: string[];
   durationSeconds: number | null;
   abridged: boolean | null;
+  hardcoverEditionId: string | null;
 }

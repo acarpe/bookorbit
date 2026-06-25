@@ -27,6 +27,7 @@ export interface PdfParsed {
   goodreadsId: string | null;
   amazonId: string | null;
   hardcoverId: string | null;
+  hardcoverEditionId: string | null;
   openLibraryId: string | null;
   ranobedbId: string | null;
   koboId: string | null;
@@ -158,6 +159,7 @@ export async function parsePdfBuffer(absolutePath: string, buf: Buffer, options:
     goodreadsId: xmp?.goodreadsId ?? null,
     amazonId: xmp?.amazonId ?? null,
     hardcoverId: xmp?.hardcoverId ?? null,
+    hardcoverEditionId: xmp?.hardcoverEditionId ?? null,
     openLibraryId: xmp?.openLibraryId ?? null,
     ranobedbId: xmp?.ranobedbId ?? null,
     koboId: xmp?.koboId ?? null,

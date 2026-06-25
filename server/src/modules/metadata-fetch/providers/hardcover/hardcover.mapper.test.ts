@@ -70,6 +70,7 @@ describe('mapSearchDocument', () => {
       coverUrl: 'https://assets.hardcover.app/cover.jpg',
       sourceUrl: 'https://hardcover.app/books/the-name-of-the-wind',
     });
+    expect(result.hardcoverEditionId).toBeUndefined();
   });
 
   it('prefers release_year over release_date for publishedYear', () => {
@@ -144,6 +145,7 @@ describe('mapBookWithEditions', () => {
     expect(result).toEqual({
       provider: MetadataProviderKey.HARDCOVER,
       providerId: 'the-name-of-the-wind',
+      hardcoverEditionId: '1001',
       title: 'The Name of the Wind',
       subtitle: 'Edition Subtitle',
       description: 'A story about a wizard.',
@@ -182,7 +184,9 @@ describe('mapBookWithEditions', () => {
     const results = mapBookWithEditions(book);
     expect(results).toHaveLength(2);
     expect(results[0].isbn13).toBe('9780000000001');
+    expect(results[0].hardcoverEditionId).toBe('1001');
     expect(results[1].isbn13).toBe('9780000000002');
+    expect(results[1].hardcoverEditionId).toBe('1002');
   });
 
   it('uses edition authors when present', () => {

@@ -548,6 +548,8 @@ export class ScannerRepository {
           publisher: bookMetadata.publisher,
           pageCount: bookMetadata.pageCount,
           isbn13: bookMetadata.isbn13,
+          hardcoverId: bookMetadata.hardcoverId,
+          hardcoverEditionId: bookMetadata.hardcoverEditionId,
         })
         .from(books)
         .leftJoin(bookMetadata, eq(bookMetadata.bookId, books.id))

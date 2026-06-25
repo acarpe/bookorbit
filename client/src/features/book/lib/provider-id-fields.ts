@@ -5,6 +5,7 @@ export const PROVIDER_ID_FIELDS = [
   { provider: MetadataProviderKey.GOODREADS, field: 'goodreadsId', label: 'Goodreads' },
   { provider: MetadataProviderKey.AMAZON, field: 'amazonId', label: 'Amazon' },
   { provider: MetadataProviderKey.HARDCOVER, field: 'hardcoverId', label: 'Hardcover' },
+  { provider: MetadataProviderKey.HARDCOVER, field: 'hardcoverEditionId', label: 'Hardcover Edition' },
   { provider: MetadataProviderKey.OPEN_LIBRARY, field: 'openLibraryId', label: 'OpenLibrary' },
   { provider: MetadataProviderKey.ITUNES, field: 'itunesId', label: 'iTunes' },
   { provider: MetadataProviderKey.AUDIBLE, field: 'audibleId', label: 'Audible' },

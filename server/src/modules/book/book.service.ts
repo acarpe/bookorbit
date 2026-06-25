@@ -277,6 +277,7 @@ export class BookService {
     goodreadsId?: string | null;
     amazonId?: string | null;
     hardcoverId?: string | null;
+    hardcoverEditionId?: string | null;
     openLibraryId?: string | null;
     itunesId?: string | null;
     audibleId?: string | null;
@@ -309,6 +310,7 @@ export class BookService {
       | 'goodreadsId'
       | 'amazonId'
       | 'hardcoverId'
+      | 'hardcoverEditionId'
       | 'openLibraryId'
       | 'itunesId'
       | 'audibleId'
@@ -354,6 +356,7 @@ export class BookService {
     if (r.seriesIndex !== undefined) preview.seriesIndex = r.seriesIndex as number | null;
     if (r.seriesMemberships !== undefined) preview.seriesMemberships = r.seriesMemberships as BookMetadataRefreshPreviewFields['seriesMemberships'];
     if (r.coverUrl !== undefined) preview.coverUrl = r.coverUrl as string;
+    if (r.hardcoverEditionId !== undefined) preview.hardcoverEditionId = r.hardcoverEditionId as string | null;
     if (r.comicMetadata !== undefined) preview.comicMetadata = r.comicMetadata as BookMetadataRefreshPreviewFields['comicMetadata'];
 
     if (r.narrators !== undefined || r.duration !== undefined || r.abridged !== undefined || r.chapters !== undefined) {
@@ -697,6 +700,8 @@ export class BookService {
       'publisher',
       'pageCount',
       'isbn13',
+      'hardcoverId',
+      'hardcoverEditionId',
       'genres',
       'tags',
       'narrators',
@@ -850,6 +855,8 @@ export class BookService {
         publisher: row.publisher,
         pageCount: row.pageCount,
         isbn13: row.isbn13,
+        hardcoverId: row.hardcoverId ?? null,
+        hardcoverEditionId: row.hardcoverEditionId ?? null,
         genres: row.genres,
         tags: row.tags,
         narrators: row.narrators,
@@ -1458,6 +1465,7 @@ export class BookService {
     if (dto.goodreadsId !== undefined) scalarFields.goodreadsId = dto.goodreadsId ?? null;
     if (dto.amazonId !== undefined) scalarFields.amazonId = dto.amazonId ?? null;
     if (dto.hardcoverId !== undefined) scalarFields.hardcoverId = dto.hardcoverId ?? null;
+    if (dto.hardcoverEditionId !== undefined) scalarFields.hardcoverEditionId = dto.hardcoverEditionId ?? null;
     if (dto.openLibraryId !== undefined) scalarFields.openLibraryId = dto.openLibraryId ?? null;
     if (dto.itunesId !== undefined) scalarFields.itunesId = dto.itunesId ?? null;
     if (dto.audibleId !== undefined) scalarFields.audibleId = dto.audibleId ?? null;
@@ -2704,6 +2712,7 @@ export class BookService {
       seriesMemberships: seriesMembershipRows,
       rating: personalRating,
       coverSource: (meta?.coverSource as 'extracted' | 'custom' | null) ?? null,
+      hardcoverEditionId: meta?.hardcoverEditionId ?? null,
       lockedFields: this.bookMetadataLockService.normalizeLockedFields(meta?.lockedFields),
       providerIds: {
         [MetadataProviderKey.GOOGLE]: meta?.googleBooksId ?? null,
@@ -2823,6 +2832,7 @@ export class BookService {
           goodreadsId: parsed.goodreadsId,
           amazonId: parsed.amazonId,
           hardcoverId: parsed.hardcoverId,
+          hardcoverEditionId: parsed.hardcoverEditionId,
           openLibraryId: parsed.openLibraryId,
           itunesId: parsed.itunesId,
           koboId: parsed.koboId,
@@ -2856,6 +2866,7 @@ export class BookService {
           goodreadsId: parsed.goodreadsId,
           amazonId: parsed.amazonId,
           hardcoverId: parsed.hardcoverId,
+          hardcoverEditionId: parsed.hardcoverEditionId,
           openLibraryId: parsed.openLibraryId,
           itunesId: parsed.itunesId,
           koboId: parsed.koboId,
@@ -2906,6 +2917,7 @@ export class BookService {
           goodreadsId: parsed.goodreadsId,
           amazonId: parsed.amazonId,
           hardcoverId: parsed.hardcoverId,
+          hardcoverEditionId: parsed.hardcoverEditionId,
           openLibraryId: parsed.openLibraryId,
           itunesId: parsed.itunesId,
           koboId: parsed.koboId,

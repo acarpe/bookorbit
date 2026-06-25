@@ -384,6 +384,12 @@ describe('parseOpf', () => {
       expect(r.hardcoverId).toBe('new-orleans-rush');
     });
 
+    it('parses Hardcover edition ID from opf:scheme, urn, and prefix formats', () => {
+      expect(parseOpf(epub2Opf(`<dc:identifier opf:scheme="HARDCOVER_EDITION">8941973</dc:identifier>`)).hardcoverEditionId).toBe('8941973');
+      expect(parseOpf(epub2Opf(`<dc:identifier>urn:hardcover_edition:8941974</dc:identifier>`)).hardcoverEditionId).toBe('8941974');
+      expect(parseOpf(epub3Opf(`<dc:identifier>hardcover-edition:8941975</dc:identifier>`)).hardcoverEditionId).toBe('8941975');
+    });
+
     it('parses iTunes ID from opf:scheme attribute', () => {
       const xml = epub2Opf(`<dc:identifier opf:scheme="ITUNES">123456789</dc:identifier>`);
       const r = parseOpf(xml);
@@ -461,6 +467,7 @@ describe('parseOpf', () => {
       expect(r.amazonId).toBeNull();
       expect(r.goodreadsId).toBeNull();
       expect(r.hardcoverId).toBeNull();
+      expect(r.hardcoverEditionId).toBeNull();
       expect(r.openLibraryId).toBeNull();
       expect(r.ranobedbId).toBeNull();
       expect(r.itunesId).toBeNull();
@@ -474,6 +481,7 @@ describe('parseOpf', () => {
           <dc:identifier>google:ABCD1234</dc:identifier>
           <dc:identifier>openlibrary:OL99999999W</dc:identifier>
           <dc:identifier>hardcover:test-book-slug</dc:identifier>
+          <dc:identifier>hardcover_edition:8941973</dc:identifier>
           <dc:identifier>kobo:test-kobo-id</dc:identifier>
           <dc:identifier>itunes:987654321</dc:identifier>
           <dc:identifier>lubimyczytac:lub-99999</dc:identifier>
@@ -485,6 +493,7 @@ describe('parseOpf', () => {
         expect(r.googleBooksId).toBe('ABCD1234');
         expect(r.openLibraryId).toBe('OL99999999W');
         expect(r.hardcoverId).toBe('test-book-slug');
+        expect(r.hardcoverEditionId).toBe('8941973');
         expect(r.koboId).toBe('test-kobo-id');
         expect(r.itunesId).toBe('987654321');
         expect(r.lubimyczytacId).toBe('lub-99999');

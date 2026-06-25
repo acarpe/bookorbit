@@ -56,6 +56,7 @@ export class UpdateBookMetadataDto {
   @IsOptional() @IsString() @MaxLength(50) goodreadsId?: string | null;
   @IsOptional() @IsString() @MaxLength(20) amazonId?: string | null;
   @IsOptional() @IsString() @MaxLength(255) hardcoverId?: string | null;
+  @IsOptional() @IsString() @MaxLength(50) hardcoverEditionId?: string | null;
   @IsOptional() @IsString() @MaxLength(50) openLibraryId?: string | null;
   @IsOptional() @IsString() @MaxLength(50) itunesId?: string | null;
   @IsOptional() @IsString() @MaxLength(20) audibleId?: string | null;

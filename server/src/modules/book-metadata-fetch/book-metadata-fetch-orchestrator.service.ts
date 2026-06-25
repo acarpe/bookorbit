@@ -281,6 +281,8 @@ export class BookMetadataFetchOrchestratorService implements OnApplicationBootst
     if (filteredProviderIds[MetadataProviderKey.GOODREADS]) scalarFields.goodreadsId = filteredProviderIds[MetadataProviderKey.GOODREADS];
     if (filteredProviderIds[MetadataProviderKey.AMAZON]) scalarFields.amazonId = filteredProviderIds[MetadataProviderKey.AMAZON];
     if (filteredProviderIds[MetadataProviderKey.HARDCOVER]) scalarFields.hardcoverId = filteredProviderIds[MetadataProviderKey.HARDCOVER];
+    const hardcoverEditionId = this.asNullableString(filteredResolved.hardcoverEditionId);
+    if (hardcoverEditionId !== undefined) scalarFields.hardcoverEditionId = hardcoverEditionId;
     if (filteredProviderIds[MetadataProviderKey.OPEN_LIBRARY]) scalarFields.openLibraryId = filteredProviderIds[MetadataProviderKey.OPEN_LIBRARY];
     if (filteredProviderIds[MetadataProviderKey.ITUNES]) scalarFields.itunesId = filteredProviderIds[MetadataProviderKey.ITUNES];
     if (filteredProviderIds[MetadataProviderKey.AUDIBLE]) scalarFields.audibleId = filteredProviderIds[MetadataProviderKey.AUDIBLE];
@@ -372,6 +374,7 @@ export class BookMetadataFetchOrchestratorService implements OnApplicationBootst
     goodreadsId?: string | null;
     amazonId?: string | null;
     hardcoverId?: string | null;
+    hardcoverEditionId?: string | null;
     openLibraryId?: string | null;
     itunesId?: string | null;
     audibleId?: string | null;

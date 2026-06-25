@@ -34,6 +34,7 @@ export class PdfFormatExtractor implements FormatExtractor {
       goodreadsId: pdf.goodreadsId,
       amazonId: pdf.amazonId,
       hardcoverId: pdf.hardcoverId,
+      hardcoverEditionId: pdf.hardcoverEditionId,
       openLibraryId: pdf.openLibraryId,
       ranobedbId: pdf.ranobedbId,
       koboId: pdf.koboId,

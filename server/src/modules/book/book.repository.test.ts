@@ -85,6 +85,7 @@ describe('BookRepository', () => {
 
     const result = await repo.findCards({ where: undefined as never, orderBy: [] as never, limit: 25, offset: 0, userId: 7 });
 
+    expect(db.select).toHaveBeenNthCalledWith(1, expect.objectContaining({ hardcoverId: expect.anything(), hardcoverEditionId: expect.anything() }));
     expect(result).toEqual({
       rows,
       authorRows,

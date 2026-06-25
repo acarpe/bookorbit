@@ -587,6 +587,7 @@ export class MetadataService {
       goodreadsId: data.goodreadsId,
       amazonId: data.amazonId,
       hardcoverId: data.hardcoverId,
+      hardcoverEditionId: data.hardcoverEditionId,
       openLibraryId: data.openLibraryId,
       ranobedbId: data.ranobedbId,
       koboId: data.koboId,
@@ -613,6 +614,7 @@ export class MetadataService {
     if (filtered.goodreadsId !== undefined) scalarFields.goodreadsId = filtered.goodreadsId;
     if (filtered.amazonId !== undefined) scalarFields.amazonId = filtered.amazonId;
     if (filtered.hardcoverId !== undefined) scalarFields.hardcoverId = filtered.hardcoverId;
+    if (filtered.hardcoverEditionId !== undefined) scalarFields.hardcoverEditionId = filtered.hardcoverEditionId;
     if (filtered.openLibraryId !== undefined) scalarFields.openLibraryId = filtered.openLibraryId;
     if (filtered.ranobedbId !== undefined) scalarFields.ranobedbId = filtered.ranobedbId;
     if (filtered.koboId !== undefined) scalarFields.koboId = filtered.koboId;

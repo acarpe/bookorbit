@@ -21,6 +21,8 @@ export function mergeBookCardWithDetail(book: BookCard, detail: BookDetail): Boo
     publishedYear: detail.publishedYear,
     language: detail.language,
     pageCount: detail.pageCount,
+    hardcoverId: detail.providerIds.hardcover ?? null,
+    hardcoverEditionId: detail.hardcoverEditionId,
     seriesName: detail.seriesName,
     seriesIndex: detail.seriesIndex,
     seriesMemberships: detail.seriesMemberships,

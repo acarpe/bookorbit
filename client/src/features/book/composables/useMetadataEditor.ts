@@ -32,6 +32,7 @@ const ROOT_FIELDS = [
   'goodreadsId',
   'amazonId',
   'hardcoverId',
+  'hardcoverEditionId',
   'openLibraryId',
   'itunesId',
   'audibleId',
@@ -126,6 +127,7 @@ export function useMetadataEditor() {
     goodreadsId: null as string | null,
     amazonId: null as string | null,
     hardcoverId: null as string | null,
+    hardcoverEditionId: null as string | null,
     openLibraryId: null as string | null,
     itunesId: null as string | null,
     audibleId: null as string | null,
@@ -177,6 +179,7 @@ export function useMetadataEditor() {
     form.goodreadsId = book.providerIds.goodreads ?? null
     form.amazonId = book.providerIds.amazon ?? null
     form.hardcoverId = book.providerIds.hardcover ?? null
+    form.hardcoverEditionId = book.hardcoverEditionId
     form.openLibraryId = book.providerIds.openLibrary ?? null
     form.itunesId = book.providerIds.itunes ?? null
     form.audibleId = book.providerIds.audible ?? null

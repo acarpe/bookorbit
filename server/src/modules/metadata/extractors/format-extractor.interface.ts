@@ -19,6 +19,7 @@ export interface ParsedBookData {
   goodreadsId?: string | null;
   amazonId?: string | null;
   hardcoverId?: string | null;
+  hardcoverEditionId?: string | null;
   openLibraryId?: string | null;
   ranobedbId?: string | null;
   koboId?: string | null;

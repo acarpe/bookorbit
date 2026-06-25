@@ -192,6 +192,11 @@ describe('parseXmp', () => {
       const r = parseXmp(xmpDoc('<bookorbit:amazonId>B001234567</bookorbit:amazonId>'));
       expect(r?.amazonId).toBe('B001234567');
     });
+
+    it('parses bookorbit:hardcoverEditionId', () => {
+      const r = parseXmp(xmpDoc('<bookorbit:hardcoverEditionId>8941973</bookorbit:hardcoverEditionId>'));
+      expect(r?.hardcoverEditionId).toBe('8941973');
+    });
   });
 
   describe('multiple rdf:Description blocks', () => {

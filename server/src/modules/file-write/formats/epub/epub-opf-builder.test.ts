@@ -77,6 +77,7 @@ describe('epub-opf-builder', () => {
       goodreadsId: '42129393',
       openLibraryId: 'OL20652610W',
       hardcoverId: 'new-orleans-rush',
+      hardcoverEditionId: '8941973',
       ranobedbId: 'ranobe-1',
       itunesId: '123456789',
     });
@@ -88,6 +89,8 @@ describe('epub-opf-builder', () => {
     expect(result.newOpfXml).toContain('opf:scheme="GOODREADS"');
     expect(result.newOpfXml).toContain('opf:scheme="OPENLIBRARY"');
     expect(result.newOpfXml).toContain('opf:scheme="HARDCOVER"');
+    expect(result.newOpfXml).toContain('opf:scheme="HARDCOVER_EDITION"');
+    expect(result.newOpfXml).toContain('>8941973<');
     expect(result.newOpfXml).toContain('opf:scheme="RANOBEDB"');
     expect(result.newOpfXml).toContain('>ranobe-1<');
     expect(result.newOpfXml).toContain('opf:scheme="ITUNES"');

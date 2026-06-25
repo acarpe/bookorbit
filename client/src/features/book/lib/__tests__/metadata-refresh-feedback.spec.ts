@@ -24,6 +24,7 @@ function makeBook(overrides: Partial<BookDetail> = {}): BookDetail {
     seriesIndex: null,
     rating: null,
     coverSource: null,
+    hardcoverEditionId: null,
     providerIds: {},
     authors: [{ id: 1, name: 'Hanya Yanagihara', sortName: null }],
     genres: [],

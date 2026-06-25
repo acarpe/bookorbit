@@ -31,6 +31,8 @@ type BookRow = {
   publisher: string | null;
   pageCount: number | null;
   isbn13: string | null;
+  hardcoverId: string | null;
+  hardcoverEditionId: string | null;
 };
 
 type CollapsedBookRow = BookRow & {
@@ -185,6 +187,8 @@ export function assembleBookCards(
       publisher: row.publisher ?? null,
       pageCount: row.pageCount ?? null,
       isbn13: row.isbn13 ?? null,
+      hardcoverId: row.hardcoverId ?? null,
+      hardcoverEditionId: row.hardcoverEditionId ?? null,
       narrators: narratorsByBook.get(row.id) ?? [],
       tags: tagsByBook.get(row.id) ?? [],
     };

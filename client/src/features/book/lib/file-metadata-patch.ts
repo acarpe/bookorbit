@@ -17,6 +17,7 @@ const FILE_METADATA_PATCH_FIELDS = [
   'goodreadsId',
   'amazonId',
   'hardcoverId',
+  'hardcoverEditionId',
   'openLibraryId',
   'itunesId',
   'audibleId',

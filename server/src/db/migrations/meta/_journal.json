@@ -176,6 +176,13 @@
       "when": 1782366176669,
       "tag": "0024_custom_metadata",
       "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1782412211738,
+      "tag": "0025_add_hardcover_edition_id",
+      "breakpoints": true
     }
   ]
 }

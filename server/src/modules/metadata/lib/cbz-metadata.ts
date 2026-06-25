@@ -43,6 +43,7 @@ export interface ParsedCbzMetadata {
   goodreadsId: string | null;
   amazonId: string | null;
   hardcoverId: string | null;
+  hardcoverEditionId: string | null;
   openLibraryId: string | null;
   ranobedbId: string | null;
   koboId: string | null;
@@ -266,6 +267,7 @@ function parseComicInfoXml(xmlBuf: Buffer): ParsedCbzMetadata | null {
       goodreadsId: managedNotes.get('goodreadsId') ?? providerIdsFromWeb.goodreadsId ?? null,
       amazonId: managedNotes.get('amazonId') ?? providerIdsFromWeb.amazonId ?? null,
       hardcoverId: managedNotes.get('hardcoverId') ?? providerIdsFromWeb.hardcoverId ?? null,
+      hardcoverEditionId: managedNotes.get('hardcoverEditionId') ?? null,
       openLibraryId: managedNotes.get('openLibraryId') ?? providerIdsFromWeb.openLibraryId ?? null,
       ranobedbId: managedNotes.get('ranobedbId') ?? null,
       koboId: managedNotes.get('koboId') ?? providerIdsFromWeb.koboId ?? null,
@@ -325,6 +327,7 @@ function parseComicBookInfoJson(comment: string): ParsedCbzMetadata | null {
       goodreadsId: null,
       amazonId: null,
       hardcoverId: null,
+      hardcoverEditionId: null,
       openLibraryId: null,
       ranobedbId: null,
       koboId: null,

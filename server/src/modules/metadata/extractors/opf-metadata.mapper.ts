@@ -22,6 +22,7 @@ export function hasOpfMetadata(metadata: ParsedOpf): boolean {
     metadata.goodreadsId !== null ||
     metadata.amazonId !== null ||
     metadata.hardcoverId !== null ||
+    metadata.hardcoverEditionId !== null ||
     metadata.openLibraryId !== null ||
     metadata.ranobedbId !== null ||
     metadata.koboId !== null ||
@@ -52,6 +53,7 @@ export function mapOpfMetadata(metadata: ParsedOpf, cover: Buffer | null): Parse
     goodreadsId: metadata.goodreadsId,
     amazonId: metadata.amazonId,
     hardcoverId: metadata.hardcoverId,
+    hardcoverEditionId: metadata.hardcoverEditionId,
     openLibraryId: metadata.openLibraryId,
     ranobedbId: metadata.ranobedbId,
     koboId: metadata.koboId,

@@ -76,6 +76,7 @@ function mapEdition(edition: HardcoverEdition, book: HardcoverBookWithEditions):
   return {
     provider: MetadataProviderKey.HARDCOVER,
     providerId: book.slug,
+    hardcoverEditionId: String(edition.id),
     title: edition.title ?? book.title,
     subtitle: edition.subtitle ?? book.subtitle,
     description: book.description,

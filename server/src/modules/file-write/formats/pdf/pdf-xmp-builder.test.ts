@@ -77,6 +77,7 @@ describe('buildXmp', () => {
         googleBooksId: 'google-1',
         amazonId: 'amazon-1',
         hardcoverId: 'hardcover-1',
+        hardcoverEditionId: '8941973',
         openLibraryId: 'OL123W',
         itunesId: 'itunes-1',
         tags: ['classic'],
@@ -99,6 +100,7 @@ describe('buildXmp', () => {
         'googleBooksId',
         'amazonId',
         'hardcoverId',
+        'hardcoverEditionId',
         'openLibraryId',
         'itunesId',
         'tags',
@@ -110,6 +112,7 @@ describe('buildXmp', () => {
     expect(xmp).toContain('<dc:publisher>Ace</dc:publisher>');
     expect(xmp).toContain('<bookorbit:isbn13>9780441172719</bookorbit:isbn13>');
     expect(xmp).toContain('<bookorbit:googleBooksId>google-1</bookorbit:googleBooksId>');
+    expect(xmp).toContain('<bookorbit:hardcoverEditionId>8941973</bookorbit:hardcoverEditionId>');
     expect(xmp).toContain('<bookorbit:itunesId>itunes-1</bookorbit:itunesId>');
   });
 });

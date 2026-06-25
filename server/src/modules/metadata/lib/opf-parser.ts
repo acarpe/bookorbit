@@ -20,6 +20,7 @@ export interface ParsedOpf {
   goodreadsId: string | null;
   amazonId: string | null;
   hardcoverId: string | null;
+  hardcoverEditionId: string | null;
   openLibraryId: string | null;
   ranobedbId: string | null;
   koboId: string | null;
@@ -88,7 +89,18 @@ function parseBookOrbitTags(raw: string | null): string[] {
   }
 }
 
-type ProviderKey = 'google' | 'amazon' | 'goodreads' | 'hardcover' | 'openlibrary' | 'ranobedb' | 'kobo' | 'lubimyczytac' | 'aladin' | 'itunes';
+type ProviderKey =
+  | 'google'
+  | 'amazon'
+  | 'goodreads'
+  | 'hardcover'
+  | 'hardcoverEdition'
+  | 'openlibrary'
+  | 'ranobedb'
+  | 'kobo'
+  | 'lubimyczytac'
+  | 'aladin'
+  | 'itunes';
 
 // Calibre 9.x (opf3) writes provider identifiers as bare `prefix:value` text inside <dc:identifier>.
 // Only these known prefixes are recognized, as a lowest-priority fallback after opf:scheme and urn:.
@@ -100,6 +112,9 @@ const PREFIX_TO_PROVIDER: Record<string, ProviderKey> = {
   google: 'google',
   openlibrary: 'openlibrary',
   hardcover: 'hardcover',
+  hardcover_edition: 'hardcoverEdition',
+  'hardcover-edition': 'hardcoverEdition',
+  hardcoveredition: 'hardcoverEdition',
   kobo: 'kobo',
   itunes: 'itunes',
   lubimyczytac: 'lubimyczytac',
@@ -261,6 +276,7 @@ export function parseOpf(xml: string): ParsedOpf {
   let schemeGoodreadsId: string | null = null;
   let schemeAmazonId: string | null = null;
   let schemeHardcoverId: string | null = null;
+  let schemeHardcoverEditionId: string | null = null;
   let schemeOpenLibraryId: string | null = null;
   let schemeRanobedbId: string | null = null;
   let schemeKoboId: string | null = null;
@@ -272,6 +288,7 @@ export function parseOpf(xml: string): ParsedOpf {
   let urnGoodreadsId: string | null = null;
   let urnAmazonId: string | null = null;
   let urnHardcoverId: string | null = null;
+  let urnHardcoverEditionId: string | null = null;
   let urnOpenLibraryId: string | null = null;
   let urnRanobedbId: string | null = null;
   let urnKoboId: string | null = null;
@@ -300,6 +317,9 @@ export function parseOpf(xml: string): ParsedOpf {
     if (scheme === 'amazon') schemeAmazonId ??= value || null;
     if (scheme === 'goodreads') schemeGoodreadsId ??= value || null;
     if (scheme === 'hardcover') schemeHardcoverId ??= value || null;
+    if (scheme === 'hardcover_edition' || scheme === 'hardcover-edition' || scheme === 'hardcoveredition') {
+      schemeHardcoverEditionId ??= value || null;
+    }
     if (scheme === 'openlibrary') schemeOpenLibraryId ??= value || null;
     if (scheme === 'ranobedb') schemeRanobedbId ??= value || null;
     if (scheme === 'kobo') schemeKoboId ??= value || null;
@@ -311,6 +331,8 @@ export function parseOpf(xml: string): ParsedOpf {
     if (value.startsWith('urn:goodreads:')) urnGoodreadsId ??= value.slice('urn:goodreads:'.length) || null;
     if (value.startsWith('urn:amazon:')) urnAmazonId ??= value.slice('urn:amazon:'.length) || null;
     if (value.startsWith('urn:hardcover:')) urnHardcoverId ??= value.slice('urn:hardcover:'.length) || null;
+    if (value.startsWith('urn:hardcover_edition:')) urnHardcoverEditionId ??= value.slice('urn:hardcover_edition:'.length) || null;
+    if (value.startsWith('urn:hardcover-edition:')) urnHardcoverEditionId ??= value.slice('urn:hardcover-edition:'.length) || null;
     if (value.startsWith('urn:google:')) urnGoogleBooksId ??= value.slice('urn:google:'.length) || null;
     if (value.startsWith('urn:openlibrary:')) urnOpenLibraryId ??= value.slice('urn:openlibrary:'.length) || null;
     if (value.startsWith('urn:ranobedb:')) urnRanobedbId ??= value.slice('urn:ranobedb:'.length) || null;
@@ -337,6 +359,7 @@ export function parseOpf(xml: string): ParsedOpf {
   const goodreadsId = schemeGoodreadsId ?? urnGoodreadsId ?? prefixIds.goodreads ?? null;
   const amazonId = schemeAmazonId ?? urnAmazonId ?? prefixIds.amazon ?? null;
   const hardcoverId = schemeHardcoverId ?? urnHardcoverId ?? prefixIds.hardcover ?? null;
+  const hardcoverEditionId = schemeHardcoverEditionId ?? urnHardcoverEditionId ?? prefixIds.hardcoverEdition ?? null;
   const openLibraryId = schemeOpenLibraryId ?? urnOpenLibraryId ?? prefixIds.openlibrary ?? null;
   const ranobedbId = schemeRanobedbId ?? urnRanobedbId ?? prefixIds.ranobedb ?? null;
   const koboId = schemeKoboId ?? urnKoboId ?? prefixIds.kobo ?? null;
@@ -461,6 +484,7 @@ export function parseOpf(xml: string): ParsedOpf {
     goodreadsId,
     amazonId,
     hardcoverId,
+    hardcoverEditionId,
     openLibraryId,
     ranobedbId,
     koboId,

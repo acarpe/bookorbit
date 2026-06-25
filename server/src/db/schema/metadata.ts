@@ -56,6 +56,7 @@ export const bookMetadata = pgTable(
     goodreadsId: varchar('goodreads_id', { length: 50 }),
     amazonId: varchar('amazon_id', { length: 20 }),
     hardcoverId: varchar('hardcover_id', { length: 255 }),
+    hardcoverEditionId: varchar('hardcover_edition_id', { length: 50 }),
     openLibraryId: varchar('open_library_id', { length: 50 }),
     itunesId: varchar('itunes_id', { length: 50 }),
     koboId: varchar('kobo_id', { length: 255 }),

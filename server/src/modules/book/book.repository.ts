@@ -63,6 +63,8 @@ type CollapsedRawRow = {
   locked_fields: string[] | null;
   subtitle: string | null;
   isbn13: string | null;
+  hardcover_id: string | null;
+  hardcover_edition_id: string | null;
   publisher: string | null;
   page_count: number | null;
   sort_title: string | null;
@@ -167,6 +169,8 @@ export class BookRepository {
         publisher: bookMetadata.publisher,
         pageCount: bookMetadata.pageCount,
         isbn13: bookMetadata.isbn13,
+        hardcoverId: bookMetadata.hardcoverId,
+        hardcoverEditionId: bookMetadata.hardcoverEditionId,
         metadataScore: bookMetadata.metadataScore,
         _total: sql<number>`count(*) over()`.as('_total'),
       })
@@ -356,6 +360,8 @@ export class BookRepository {
       publisher: string | null;
       pageCount: number | null;
       isbn13: string | null;
+      hardcoverId: string | null;
+      hardcoverEditionId: string | null;
       bookCount: number | null;
       readCount: number | null;
       coverBookIds: number[] | null;
@@ -409,6 +415,8 @@ export class BookRepository {
           book_metadata.page_count,
           book_metadata.subtitle,
           book_metadata.isbn13,
+          book_metadata.hardcover_id,
+          book_metadata.hardcover_edition_id,
           book_metadata.metadata_score,
           NULLIF(lower(btrim(book_metadata.series_name)), '') AS norm_series
         FROM books
@@ -538,6 +546,8 @@ export class BookRepository {
           base.page_count,
           base.subtitle,
           base.isbn13,
+          base.hardcover_id,
+          base.hardcover_edition_id,
           base.metadata_score,
           base.primary_author_sort_name AS author_sort_name,
           COALESCE(base.norm_series, lower(base.title)) AS sort_title,
@@ -602,6 +612,8 @@ export class BookRepository {
       publisher: r.publisher,
       pageCount: r.page_count !== null ? Number(r.page_count) : null,
       isbn13: r.isbn13,
+      hardcoverId: r.hardcover_id,
+      hardcoverEditionId: r.hardcover_edition_id,
       bookCount: r.book_count !== null ? Number(r.book_count) : null,
       readCount: r.read_count !== null ? Number(r.read_count) : null,
       coverBookIds: r.cover_book_ids,

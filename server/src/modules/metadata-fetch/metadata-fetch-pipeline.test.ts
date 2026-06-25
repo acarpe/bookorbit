@@ -486,6 +486,33 @@ describe('MetadataFetchPipeline', () => {
     expect(providerIds).toEqual({ [MetadataProviderKey.GOOGLE]: 'g1' });
   });
 
+  it('passes through Hardcover edition id with provider ids when saveProviderIds is enabled', async () => {
+    const prefs = createPreferences((fields) => {
+      fields.title = {
+        enabled: true,
+        providers: [MetadataProviderKey.HARDCOVER],
+        mergeStrategy: 'overwriteIfProvided',
+      };
+    });
+    prefs.options = {
+      genres: { mode: 'firstProvider', blocklist: [] },
+      saveProviderIds: true,
+    };
+
+    preferencesService.getGlobal.mockResolvedValue(prefs);
+    resolver.resolve.mockReturnValue(prefs);
+    resolver.withForwardCompatibility.mockReturnValue(prefs);
+    registry.all.mockReturnValue([{ key: MetadataProviderKey.HARDCOVER }] as never);
+    fetchService.search.mockReturnValue(
+      of(candidate(MetadataProviderKey.HARDCOVER, 'the-name-of-the-wind', { title: 'Fetched Title', hardcoverEditionId: '1001' })),
+    );
+
+    const { resolved, providerIds } = await pipeline.runWithSources({ title: 'Query' }, {});
+
+    expect(resolved.hardcoverEditionId).toBe('1001');
+    expect(providerIds).toEqual({ [MetadataProviderKey.HARDCOVER]: 'the-name-of-the-wind' });
+  });
+
   it('does not return provider ids when saveProviderIds is disabled', async () => {
     const prefs = createPreferences((fields) => {
       fields.title = {
@@ -507,6 +534,33 @@ describe('MetadataFetchPipeline', () => {
 
     const { providerIds } = await pipeline.runWithSources({ title: 'Query' }, {});
 
+    expect(providerIds).toEqual({});
+  });
+
+  it('does not pass through Hardcover edition id when provider id saving is disabled', async () => {
+    const prefs = createPreferences((fields) => {
+      fields.title = {
+        enabled: true,
+        providers: [MetadataProviderKey.HARDCOVER],
+        mergeStrategy: 'overwriteIfProvided',
+      };
+    });
+    prefs.options = {
+      genres: { mode: 'firstProvider', blocklist: [] },
+      saveProviderIds: false,
+    };
+
+    preferencesService.getGlobal.mockResolvedValue(prefs);
+    resolver.resolve.mockReturnValue(prefs);
+    resolver.withForwardCompatibility.mockReturnValue(prefs);
+    registry.all.mockReturnValue([{ key: MetadataProviderKey.HARDCOVER }] as never);
+    fetchService.search.mockReturnValue(
+      of(candidate(MetadataProviderKey.HARDCOVER, 'the-name-of-the-wind', { title: 'Fetched Title', hardcoverEditionId: '1001' })),
+    );
+
+    const { resolved, providerIds } = await pipeline.runWithSources({ title: 'Query' }, {});
+
+    expect(resolved.hardcoverEditionId).toBeUndefined();
     expect(providerIds).toEqual({});
   });
 

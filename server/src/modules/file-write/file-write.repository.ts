@@ -206,6 +206,7 @@ export class FileWriteRepository {
       goodreadsId: meta.goodreadsId,
       amazonId: meta.amazonId,
       hardcoverId: meta.hardcoverId,
+      hardcoverEditionId: meta.hardcoverEditionId,
       openLibraryId: meta.openLibraryId,
       ranobedbId: meta.ranobedbId,
       koboId: meta.koboId,

@@ -47,6 +47,7 @@ function makeDetail(overrides: Partial<BookDetail> = {}): BookDetail {
     seriesMemberships: [],
     rating: null,
     coverSource: null,
+    hardcoverEditionId: null,
     providerIds: {},
     authors: [],
     genres: [],
@@ -76,6 +77,8 @@ describe('mergeBookCardWithDetail', () => {
       publishedYear: 2021,
       language: 'en',
       pageCount: 350,
+      providerIds: { hardcover: 'new-book-slug' },
+      hardcoverEditionId: '8941973',
       seriesName: 'My Series',
       seriesIndex: 2,
       rating: 8,
@@ -92,6 +95,8 @@ describe('mergeBookCardWithDetail', () => {
     expect(result.publishedYear).toBe(2021)
     expect(result.language).toBe('en')
     expect(result.pageCount).toBe(350)
+    expect(result.hardcoverId).toBe('new-book-slug')
+    expect(result.hardcoverEditionId).toBe('8941973')
     expect(result.seriesName).toBe('My Series')
     expect(result.seriesIndex).toBe(2)
     expect(result.rating).toBe(8)

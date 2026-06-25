@@ -43,6 +43,7 @@ export type DiffFieldKey =
   | 'durationSeconds'
   | 'abridged'
   | 'coverUrl'
+  | 'hardcoverEditionId'
   | ProviderIdPatchField
   | 'sourceUrl'
   | ComicDiffFieldKey
@@ -93,6 +94,7 @@ export interface MetadataPatch {
   goodreadsId?: string | null
   amazonId?: string | null
   hardcoverId?: string | null
+  hardcoverEditionId?: string | null
   openLibraryId?: string | null
   itunesId?: string | null
   audibleId?: string | null
@@ -123,6 +125,7 @@ export const FIELD_DEFS: { key: DiffFieldKey; label: string }[] = [
   { key: 'narrators', label: 'Narrators' },
   { key: 'durationSeconds', label: 'Duration (seconds)' },
   { key: 'abridged', label: 'Abridged' },
+  { key: 'hardcoverEditionId', label: 'Hardcover Edition ID' },
 ]
 
 export interface ComicFieldDef {
@@ -515,6 +518,14 @@ export function useMetadataDiff(
       const idField = PROVIDER_ID_FIELD[provider]
       if (idField && formPatch[idField] === undefined) {
         formPatch[idField] = candidate.providerId
+      }
+      if (
+        provider === 'hardcover' &&
+        candidate.hardcoverEditionId &&
+        formPatch.hardcoverEditionId === undefined &&
+        !lockedFieldSet.value.has('hardcoverEditionId')
+      ) {
+        formPatch.hardcoverEditionId = candidate.hardcoverEditionId
       }
     }
 

@@ -327,6 +327,8 @@ function makeBookCard(id: number, overrides?: Record<string, unknown>) {
     publisher: 'Pub',
     pageCount: 320,
     isbn13: '9780000000000',
+    hardcoverId: 'hardcover-book-slug',
+    hardcoverEditionId: '8941973',
     narrators: [],
     ...(overrides ?? {}),
   };
@@ -629,6 +631,8 @@ describe('BookService', () => {
       expect(exported.content).toContain('\uFEFF');
       expect(exported.content).toContain('# schemaVersion=1');
       expect(exported.content).toContain('bookId,libraryId,libraryName,status,title');
+      expect(exported.content).toContain('isbn13,hardcoverId,hardcoverEditionId,genres');
+      expect(exported.content).toContain('9780000000000,hardcover-book-slug,8941973');
       expect(exported.content).toContain('1,5,Main Library,present,Book 1');
     });
 

@@ -163,6 +163,7 @@ export class BookMetadataLockService {
     this.copyResolvedField(filteredResolved, resolved, 'narrators', 'narrators', lockedSet, skippedFields);
     this.copyResolvedField(filteredResolved, resolved, 'duration', 'durationSeconds', lockedSet, skippedFields);
     this.copyResolvedField(filteredResolved, resolved, 'abridged', 'abridged', lockedSet, skippedFields);
+    this.copyResolvedField(filteredResolved, resolved, 'hardcoverEditionId', 'hardcoverEditionId', lockedSet, skippedFields);
 
     if (resolved.chapters !== undefined) {
       filteredResolved.chapters = resolved.chapters;
@@ -246,6 +247,7 @@ export class BookMetadataLockService {
     this.copyUpdateField(filteredDto, dto, 'goodreadsId', 'goodreadsId', lockedSet, skippedFields);
     this.copyUpdateField(filteredDto, dto, 'amazonId', 'amazonId', lockedSet, skippedFields);
     this.copyUpdateField(filteredDto, dto, 'hardcoverId', 'hardcoverId', lockedSet, skippedFields);
+    this.copyUpdateField(filteredDto, dto, 'hardcoverEditionId', 'hardcoverEditionId', lockedSet, skippedFields);
     this.copyUpdateField(filteredDto, dto, 'openLibraryId', 'openLibraryId', lockedSet, skippedFields);
     this.copyUpdateField(filteredDto, dto, 'itunesId', 'itunesId', lockedSet, skippedFields);
     this.copyUpdateField(filteredDto, dto, 'audibleId', 'audibleId', lockedSet, skippedFields);
@@ -377,6 +379,7 @@ export class BookMetadataLockService {
     this.addFieldIfPresent(fields, dto, 'goodreadsId', 'goodreadsId');
     this.addFieldIfPresent(fields, dto, 'amazonId', 'amazonId');
     this.addFieldIfPresent(fields, dto, 'hardcoverId', 'hardcoverId');
+    this.addFieldIfPresent(fields, dto, 'hardcoverEditionId', 'hardcoverEditionId');
     this.addFieldIfPresent(fields, dto, 'openLibraryId', 'openLibraryId');
     this.addFieldIfPresent(fields, dto, 'itunesId', 'itunesId');
     this.addFieldIfPresent(fields, dto, 'audibleId', 'audibleId');

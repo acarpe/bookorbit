@@ -18,6 +18,8 @@ function makeBookRow(id: number, overrides?: Partial<Parameters<typeof assembleB
     publisher: null,
     pageCount: null,
     isbn13: null,
+    hardcoverId: null,
+    hardcoverEditionId: null,
     ...overrides,
   };
 }
@@ -45,6 +47,15 @@ describe('assembleBookCards', () => {
     expect(card.updatedAt).toBe('2024-02-01T00:00:00.000Z');
     expect(card.metadataScore).toBe(88);
     expect(card.files).toEqual([{ id: 10, format: 'epub', role: 'primary', sizeBytes: 4096 }]);
+  });
+
+  it('passes through Hardcover book and edition identifiers', () => {
+    const rows = [makeBookRow(1, { hardcoverId: 'new-orleans-rush', hardcoverEditionId: '8941973' })];
+
+    const [card] = assembleBookCards(rows, [], [], [], []);
+
+    expect(card.hardcoverId).toBe('new-orleans-rush');
+    expect(card.hardcoverEditionId).toBe('8941973');
   });
 
   it('falls back to basename of folderPath when title is null', () => {
@@ -351,6 +362,8 @@ function makeBookCard(id: number, overrides?: Record<string, unknown>) {
     publisher: null as string | null,
     pageCount: null as number | null,
     isbn13: null as string | null,
+    hardcoverId: null as string | null,
+    hardcoverEditionId: null as string | null,
     narrators: [] as string[],
     ...overrides,
   };
