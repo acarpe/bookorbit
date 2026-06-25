@@ -6,6 +6,7 @@ import { ArrowUpDown, Filter, Search, SlidersHorizontal, X } from '@lucide/vue'
 import ViewHeader from '@/components/ViewHeader.vue'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { useDisplaySettings } from '@/composables/useDisplaySettings'
+import { useScrollRestoreOnActivate } from '@/features/book/composables/useScrollRestoreOnActivate'
 import { useLibraries } from '@/features/library/composables/useLibraries'
 import { storage } from '@/services/storage'
 import SeriesCard from '../components/SeriesCard.vue'
@@ -15,6 +16,8 @@ import type { CompletionStatus, SeriesListSort, SortDirection } from '../types/s
 
 const router = useRouter()
 const route = useRoute()
+const mainRef = ref<HTMLElement | null>(null)
+useScrollRestoreOnActivate(mainRef)
 const { viewMode } = useDisplaySettings()
 const { libraries, fetchLibraries } = useLibraries()
 const { items, total, loading, error, hasMore, q, sort, order, libraryId, completionStatus, load } = useSeriesList()
@@ -252,6 +255,8 @@ watch(seriesGridGap, (value) => {
   }
   storage.set(SERIES_GRID_GAP_STORAGE_KEY, normalized)
 })
+
+defineOptions({ name: 'SeriesView' })
 </script>
 
 <template>
@@ -465,7 +470,7 @@ watch(seriesGridGap, (value) => {
       />
     </div>
 
-    <main class="flex-1 min-h-0 overflow-y-auto pr-2">
+    <main ref="mainRef" class="flex-1 min-h-0 overflow-y-auto pr-2">
       <!-- Grid -->
       <div
         class="series-grid grid"

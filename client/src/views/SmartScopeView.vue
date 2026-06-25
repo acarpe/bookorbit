@@ -40,6 +40,7 @@ import { SORT_FIELD_LABELS } from '@/features/book/lib/filter-labels'
 import { DEFAULT_COVER_ASPECT_RATIO } from '@/features/book/lib/cover-aspect-ratio'
 import { usePageTitle } from '@/composables/usePageTitle'
 import { useBookNavigation } from '@/features/book/composables/useBookNavigation'
+import { useScrollRestoreOnActivate } from '@/features/book/composables/useScrollRestoreOnActivate'
 import { useBookViewContext } from '@/features/book/composables/useBookViewContext'
 import { useBookTableShell } from '@/features/book/composables/useBookTableShell'
 import { useInfiniteScrollSentinel } from '@/features/book/composables/useInfiniteScrollSentinel'
@@ -95,6 +96,8 @@ const {
   q: debouncedQuery,
 })
 const { setBookContext } = useBookNavigation()
+const mainRef = ref<HTMLElement | null>(null)
+useScrollRestoreOnActivate(mainRef)
 useBookViewContext(slots, total, loadMorePrefix)
 const { smartScopes, loaded: smartScopesLoaded, error: smartScopesError, fetchSmartScopes, deleteSmartScope } = useSmartScopes()
 const smartScopeNotFound = ref(false)
@@ -361,365 +364,369 @@ watch(smartScopeId, async () => {
   clearSearch()
   await retrySmartScopeLoad()
 })
+
+defineOptions({ name: 'SmartScopeView' })
 </script>
 
 <template>
-  <SmartScopeEditorPanel :open="editorOpen" :smartScope="smartScope" @close="editorOpen = false" @saved="onSaved" />
+  <div class="flex h-full flex-col">
+    <SmartScopeEditorPanel :open="editorOpen" :smartScope="smartScope" @close="editorOpen = false" @saved="onSaved" />
 
-  <BookQuickView
-    :book-id="quickViewBookId"
-    :open="quickViewOpen"
-    @update:open="quickViewOpen = $event"
-    @action="quickViewBookId !== null && handleBookAction({ id: quickViewBookId } as BookCard, $event)"
-  />
+    <BookQuickView
+      :book-id="quickViewBookId"
+      :open="quickViewOpen"
+      @update:open="quickViewOpen = $event"
+      @action="quickViewBookId !== null && handleBookAction({ id: quickViewBookId } as BookCard, $event)"
+    />
 
-  <SelectionActionBar
-    :visible="selectionMode"
-    :count="selectedCount"
-    :in-flight="inFlight"
-    @send="sendBookOpen = true"
-    @download="handleDownloadFiles"
-    @export-metadata="openMetadataExport"
-    @add-to-collection="addToCollectionOpen = true"
-    @edit="handleEditSelected"
-    @edit-individually="handleEditIndividually"
-    @refresh-metadata="handleBulkRefreshMetadata"
-    @re-extract-cover="handleBulkReExtractCover"
-    @set-status="handleBulkSetStatus"
-    @set-rating="handleBulkSetRating"
-    @set-field="handleBulkSetField"
-    @lock-metadata="handleBulkSetMetadataLock"
-    @delete="handleDeleteSelected"
-    @exit="exitSelectionMode"
-  />
+    <SelectionActionBar
+      :visible="selectionMode"
+      :count="selectedCount"
+      :in-flight="inFlight"
+      @send="sendBookOpen = true"
+      @download="handleDownloadFiles"
+      @export-metadata="openMetadataExport"
+      @add-to-collection="addToCollectionOpen = true"
+      @edit="handleEditSelected"
+      @edit-individually="handleEditIndividually"
+      @refresh-metadata="handleBulkRefreshMetadata"
+      @re-extract-cover="handleBulkReExtractCover"
+      @set-status="handleBulkSetStatus"
+      @set-rating="handleBulkSetRating"
+      @set-field="handleBulkSetField"
+      @lock-metadata="handleBulkSetMetadataLock"
+      @delete="handleDeleteSelected"
+      @exit="exitSelectionMode"
+    />
 
-  <MetadataExportDialog
-    :open="metadataExportOpen"
-    view-type="smartScope"
-    :selected-book-ids="[...selectedIds]"
-    :selected-count="selectedCount"
-    :total-count="total"
-    :sort="tableSort"
-    :visible-columns="visibleExportColumns"
-    default-scope="selected"
-    @update:open="metadataExportOpen = $event"
-  />
+    <MetadataExportDialog
+      :open="metadataExportOpen"
+      view-type="smartScope"
+      :selected-book-ids="[...selectedIds]"
+      :selected-count="selectedCount"
+      :total-count="total"
+      :sort="tableSort"
+      :visible-columns="visibleExportColumns"
+      default-scope="selected"
+      @update:open="metadataExportOpen = $event"
+    />
 
-  <AddToCollectionSheet
-    :open="addToCollectionOpen"
-    :selection-payload="{ bookIds: [...selectedIds] }"
-    :selected-count="selectedCount"
-    @update:open="addToCollectionOpen = $event"
-    @done="exitSelectionMode"
-  />
-  <BulkEditMetadataDialog
-    :open="bulkEditOpen"
-    :book-count="bulkEditCount"
-    :submitting="bulkEditSubmitting"
-    @update:open="bulkEditOpen = $event"
-    @confirm="handleBulkEditConfirm"
-  />
-  <SendBookDialog
-    :open="sendBookOpen"
-    :selection-payload="{ bookIds: [...selectedIds] }"
-    :selected-count="selectedCount"
-    @update:open="sendBookOpen = $event"
-    @sent="exitSelectionMode"
-  />
+    <AddToCollectionSheet
+      :open="addToCollectionOpen"
+      :selection-payload="{ bookIds: [...selectedIds] }"
+      :selected-count="selectedCount"
+      @update:open="addToCollectionOpen = $event"
+      @done="exitSelectionMode"
+    />
+    <BulkEditMetadataDialog
+      :open="bulkEditOpen"
+      :book-count="bulkEditCount"
+      :submitting="bulkEditSubmitting"
+      @update:open="bulkEditOpen = $event"
+      @confirm="handleBulkEditConfirm"
+    />
+    <SendBookDialog
+      :open="sendBookOpen"
+      :selection-payload="{ bookIds: [...selectedIds] }"
+      :selected-count="selectedCount"
+      @update:open="sendBookOpen = $event"
+      @sent="exitSelectionMode"
+    />
 
-  <DeleteBookDialog :open="deleteBookId !== null" :deleting="deletingBook" @confirm="confirmDelete" @cancel="cancelDelete" />
+    <DeleteBookDialog :open="deleteBookId !== null" :deleting="deletingBook" @confirm="confirmDelete" @cancel="cancelDelete" />
 
-  <section class="flex h-full flex-col">
-    <ViewHeader
-      :title="smartScope?.name ?? 'SmartScope'"
-      :icon="smartScope?.icon ?? undefined"
-      :total="total"
-      v-model:coverSize="coverSize"
-      v-model:gridGap="gridGap"
-      v-model:viewMode="viewMode"
-      :selection-mode="selectionMode"
-      :searchable="true"
-      :mobile-search-in-menu="false"
-      v-model:searchQuery="searchQuery"
-      @toggle-selection="toggleSelectionMode"
-    >
-      <template #actions>
-        <button
-          class="sm:hidden flex h-8 w-8 items-center justify-center rounded-md border border-input text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-          @click="toggleMobileControls"
-        >
-          <SlidersHorizontal :size="14" />
-        </button>
-
-        <button
-          v-if="smartScope?.filter || sortChip"
-          @click="filterExpanded = !filterExpanded"
-          class="hidden md:flex items-center gap-1.5 h-8 px-3 rounded-md border border-input text-sm text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
-          :title="filterExpanded ? 'Hide filter' : 'Show filter'"
-        >
-          <component :is="filterExpanded ? ChevronUp : ChevronDown" :size="13" />
-          <span>Filter</span>
-        </button>
-        <button
-          v-if="hasPermission('library_download') && !isDemoRestrictedAccount"
-          @click="openMetadataExport"
-          class="hidden md:flex items-center gap-1.5 h-8 px-3 rounded-md border border-input text-sm text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
-        >
-          <FileSpreadsheet :size="13" />
-          <span>Export</span>
-        </button>
-        <button
-          @click="openEditor"
-          class="hidden md:flex items-center gap-1.5 h-8 px-3 rounded-md border border-input text-sm text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
-        >
-          <Settings2 :size="13" />
-          <span>Edit</span>
-        </button>
-        <button
-          @click="handleDelete"
-          :disabled="deleting"
-          class="hidden md:flex items-center gap-1.5 h-8 px-3 rounded-md border text-sm transition-colors"
-          :class="
-            confirmSmartScopeDelete
-              ? 'border-destructive text-destructive bg-destructive/10 hover:bg-destructive/20'
-              : 'border-input text-muted-foreground hover:text-destructive hover:border-destructive'
-          "
-        >
-          <Trash2 :size="13" />
-          <span>{{ confirmSmartScopeDelete ? 'Confirm?' : 'Delete' }}</span>
-        </button>
-      </template>
-      <template v-if="effectiveViewMode === 'table'" #columns>
-        <TableColumnPanel
-          v-if="tableRef"
-          :all-columns="tableRef.allColumns"
-          :all-presets="tableRef.allPresets"
-          :saved-views="allSavedViews"
-          :table-density="tableDensity"
-          @toggle-column="handleToggleColumn"
-          @reorder-columns="handleColumnPanelReorder"
-          @apply-preset="handleApplyTablePreset"
-          @save-preset="handleSaveTablePreset"
-          @delete-preset="handleDeleteTablePreset"
-          @rename-preset="handleRenameTablePreset"
-          @duplicate-preset="handleDuplicateTablePreset"
-          @favorite-preset="handleTogglePresetFavorite"
-          @apply-view="handleApplySavedView"
-          @save-view="handleSaveCurrentView"
-          @delete-view="deleteView"
-          @rename-view="renameView"
-          @duplicate-view="duplicateView"
-          @favorite-view="toggleFavorite"
-          @update:density="handleTableDensityChange"
-          @export-backup="handleExportTableBackup"
-          @import-backup="handleImportTableBackup"
-          @reset="handleResetColumns"
-        />
-      </template>
-    </ViewHeader>
-
-    <section v-if="mobileControlsExpanded" class="mb-3 rounded-lg border border-border/70 bg-card/70 p-2 sm:hidden">
-      <div class="mb-2 flex h-9 items-center rounded-md border border-input bg-background px-2.5">
-        <Search :size="13" class="mr-1.5 shrink-0 text-muted-foreground/85" />
-        <input
-          v-model="searchQuery"
-          type="search"
-          placeholder="Search title, author, series, narrator..."
-          class="mobile-search-input h-full w-full bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground/85"
-        />
-        <button v-if="searchQuery.trim()" class="ml-1 text-muted-foreground/85 transition-colors hover:text-foreground" @click="clearSearch">
-          <X :size="12" />
-        </button>
-      </div>
-
-      <div class="flex flex-wrap items-center gap-2">
-        <button
-          v-if="smartScope?.filter || sortChip"
-          @click="toggleFilterSummary"
-          class="flex h-8 items-center gap-1.5 rounded-md border border-input px-2.5 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-        >
-          <component :is="filterExpanded ? ChevronUp : ChevronDown" :size="13" />
-          <span>{{ filterExpanded ? 'Hide Filter' : 'Show Filter' }}</span>
-        </button>
-        <button
-          v-if="hasPermission('library_download') && !isDemoRestrictedAccount"
-          @click="openMetadataExport"
-          class="flex h-8 items-center gap-1.5 rounded-md border border-input px-2.5 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-        >
-          <FileSpreadsheet :size="13" />
-          <span>Export</span>
-        </button>
-        <button
-          @click="openEditor"
-          class="flex h-8 items-center gap-1.5 rounded-md border border-input px-2.5 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-        >
-          <Settings2 :size="13" />
-          <span>Edit</span>
-        </button>
-        <button
-          @click="handleDelete"
-          :disabled="deleting"
-          class="flex h-8 items-center gap-1.5 rounded-md border px-2.5 text-sm transition-colors"
-          :class="
-            confirmSmartScopeDelete
-              ? 'border-destructive text-destructive bg-destructive/10 hover:bg-destructive/20'
-              : 'border-input text-muted-foreground hover:text-destructive hover:border-destructive'
-          "
-        >
-          <Trash2 :size="13" />
-          <span>{{ confirmSmartScopeDelete ? 'Confirm?' : 'Delete' }}</span>
-        </button>
-        <button
-          class="flex h-8 items-center gap-1.5 rounded-md border border-input px-2.5 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-          @click="closeMobileControls"
-        >
-          <X :size="13" />
-          <span>Close</span>
-        </button>
-      </div>
-    </section>
-
-    <main :class="effectiveViewMode === 'table' ? 'flex-1 min-h-0 flex flex-col overflow-hidden' : 'flex-1 min-h-0 overflow-y-auto'">
-      <div v-if="smartScopeLoadError" class="flex flex-col items-center justify-center gap-3 py-24 text-center">
-        <div class="flex h-16 w-16 items-center justify-center rounded-full bg-destructive/10 text-destructive">
-          <AlertTriangle :size="28" />
-        </div>
-        <p class="text-sm font-medium text-foreground">Could not load this SmartScope</p>
-        <p class="max-w-md text-xs text-muted-foreground">{{ smartScopeLoadError }}</p>
-        <button
-          class="rounded-md border border-input px-3 py-2 text-sm text-foreground transition-colors hover:bg-muted"
-          @click="retrySmartScopeLoad"
-        >
-          Retry
-        </button>
-      </div>
-
-      <EntityNotFound v-else-if="smartScopeNotFound" entity="SmartScope" />
-
-      <template v-else>
-        <!-- Filter summary -->
-        <div
-          v-if="filterExpanded && (smartScope?.filter || sortChip)"
-          class="flex flex-wrap items-center gap-2 mb-4 cursor-pointer"
-          @click="editorOpen = true"
-        >
-          <FilterSummary v-if="smartScope?.filter" :node="smartScope.filter as GroupRule" />
-          <span v-if="sortChip" class="inline-flex items-center text-xs rounded-md border border-border/60 overflow-hidden">
-            <span class="inline-flex items-center gap-1 px-2 py-0.5 bg-muted text-muted-foreground border-r border-border/60">
-              <ArrowUpDown :size="10" class="shrink-0" />
-              <span class="font-semibold">Sort</span>
-            </span>
-            <span class="px-2 py-0.5 bg-muted/40 text-foreground font-medium">{{ sortChip }}</span>
-          </span>
-        </div>
-
-        <!-- Empty state: no rules configured -->
-        <div
-          v-if="booksInitialized && !loading && !smartScope?.filter && books.length === 0"
-          class="flex flex-col items-center justify-center py-24 gap-4 text-center"
-        >
-          <div class="h-16 w-16 rounded-full bg-muted flex items-center justify-center">
-            <Settings2 :size="28" class="text-muted-foreground/70" />
-          </div>
-          <div class="flex flex-col gap-1">
-            <p class="text-sm font-medium text-foreground">No rules configured</p>
-            <p class="text-xs text-muted-foreground max-w-xs">
-              Open the editor to define which books appear in this smartScope using filters and sort rules.
-            </p>
-          </div>
+    <section class="flex flex-1 flex-col min-h-0">
+      <ViewHeader
+        :title="smartScope?.name ?? 'SmartScope'"
+        :icon="smartScope?.icon ?? undefined"
+        :total="total"
+        v-model:coverSize="coverSize"
+        v-model:gridGap="gridGap"
+        v-model:viewMode="viewMode"
+        :selection-mode="selectionMode"
+        :searchable="true"
+        :mobile-search-in-menu="false"
+        v-model:searchQuery="searchQuery"
+        @toggle-selection="toggleSelectionMode"
+      >
+        <template #actions>
           <button
-            @click="editorOpen = true"
-            class="h-9 px-5 rounded-md bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors"
+            class="sm:hidden flex h-8 w-8 items-center justify-center rounded-md border border-input text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+            @click="toggleMobileControls"
           >
-            Configure SmartScope
+            <SlidersHorizontal :size="14" />
+          </button>
+
+          <button
+            v-if="smartScope?.filter || sortChip"
+            @click="filterExpanded = !filterExpanded"
+            class="hidden md:flex items-center gap-1.5 h-8 px-3 rounded-md border border-input text-sm text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+            :title="filterExpanded ? 'Hide filter' : 'Show filter'"
+          >
+            <component :is="filterExpanded ? ChevronUp : ChevronDown" :size="13" />
+            <span>Filter</span>
+          </button>
+          <button
+            v-if="hasPermission('library_download') && !isDemoRestrictedAccount"
+            @click="openMetadataExport"
+            class="hidden md:flex items-center gap-1.5 h-8 px-3 rounded-md border border-input text-sm text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+          >
+            <FileSpreadsheet :size="13" />
+            <span>Export</span>
+          </button>
+          <button
+            @click="openEditor"
+            class="hidden md:flex items-center gap-1.5 h-8 px-3 rounded-md border border-input text-sm text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+          >
+            <Settings2 :size="13" />
+            <span>Edit</span>
+          </button>
+          <button
+            @click="handleDelete"
+            :disabled="deleting"
+            class="hidden md:flex items-center gap-1.5 h-8 px-3 rounded-md border text-sm transition-colors"
+            :class="
+              confirmSmartScopeDelete
+                ? 'border-destructive text-destructive bg-destructive/10 hover:bg-destructive/20'
+                : 'border-input text-muted-foreground hover:text-destructive hover:border-destructive'
+            "
+          >
+            <Trash2 :size="13" />
+            <span>{{ confirmSmartScopeDelete ? 'Confirm?' : 'Delete' }}</span>
+          </button>
+        </template>
+        <template v-if="effectiveViewMode === 'table'" #columns>
+          <TableColumnPanel
+            v-if="tableRef"
+            :all-columns="tableRef.allColumns"
+            :all-presets="tableRef.allPresets"
+            :saved-views="allSavedViews"
+            :table-density="tableDensity"
+            @toggle-column="handleToggleColumn"
+            @reorder-columns="handleColumnPanelReorder"
+            @apply-preset="handleApplyTablePreset"
+            @save-preset="handleSaveTablePreset"
+            @delete-preset="handleDeleteTablePreset"
+            @rename-preset="handleRenameTablePreset"
+            @duplicate-preset="handleDuplicateTablePreset"
+            @favorite-preset="handleTogglePresetFavorite"
+            @apply-view="handleApplySavedView"
+            @save-view="handleSaveCurrentView"
+            @delete-view="deleteView"
+            @rename-view="renameView"
+            @duplicate-view="duplicateView"
+            @favorite-view="toggleFavorite"
+            @update:density="handleTableDensityChange"
+            @export-backup="handleExportTableBackup"
+            @import-backup="handleImportTableBackup"
+            @reset="handleResetColumns"
+          />
+        </template>
+      </ViewHeader>
+
+      <section v-if="mobileControlsExpanded" class="mb-3 rounded-lg border border-border/70 bg-card/70 p-2 sm:hidden">
+        <div class="mb-2 flex h-9 items-center rounded-md border border-input bg-background px-2.5">
+          <Search :size="13" class="mr-1.5 shrink-0 text-muted-foreground/85" />
+          <input
+            v-model="searchQuery"
+            type="search"
+            placeholder="Search title, author, series, narrator..."
+            class="mobile-search-input h-full w-full bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground/85"
+          />
+          <button v-if="searchQuery.trim()" class="ml-1 text-muted-foreground/85 transition-colors hover:text-foreground" @click="clearSearch">
+            <X :size="12" />
           </button>
         </div>
 
-        <!-- Empty state: rules set but no matches -->
-        <div
-          v-else-if="booksInitialized && !loading && books.length === 0 && smartScope?.filter"
-          class="flex flex-col items-center justify-center py-24 gap-3 text-center"
-        >
-          <div class="h-16 w-16 rounded-full bg-muted flex items-center justify-center">
-            <Aperture :size="28" class="text-muted-foreground/70" />
+        <div class="flex flex-wrap items-center gap-2">
+          <button
+            v-if="smartScope?.filter || sortChip"
+            @click="toggleFilterSummary"
+            class="flex h-8 items-center gap-1.5 rounded-md border border-input px-2.5 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+          >
+            <component :is="filterExpanded ? ChevronUp : ChevronDown" :size="13" />
+            <span>{{ filterExpanded ? 'Hide Filter' : 'Show Filter' }}</span>
+          </button>
+          <button
+            v-if="hasPermission('library_download') && !isDemoRestrictedAccount"
+            @click="openMetadataExport"
+            class="flex h-8 items-center gap-1.5 rounded-md border border-input px-2.5 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+          >
+            <FileSpreadsheet :size="13" />
+            <span>Export</span>
+          </button>
+          <button
+            @click="openEditor"
+            class="flex h-8 items-center gap-1.5 rounded-md border border-input px-2.5 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+          >
+            <Settings2 :size="13" />
+            <span>Edit</span>
+          </button>
+          <button
+            @click="handleDelete"
+            :disabled="deleting"
+            class="flex h-8 items-center gap-1.5 rounded-md border px-2.5 text-sm transition-colors"
+            :class="
+              confirmSmartScopeDelete
+                ? 'border-destructive text-destructive bg-destructive/10 hover:bg-destructive/20'
+                : 'border-input text-muted-foreground hover:text-destructive hover:border-destructive'
+            "
+          >
+            <Trash2 :size="13" />
+            <span>{{ confirmSmartScopeDelete ? 'Confirm?' : 'Delete' }}</span>
+          </button>
+          <button
+            class="flex h-8 items-center gap-1.5 rounded-md border border-input px-2.5 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+            @click="closeMobileControls"
+          >
+            <X :size="13" />
+            <span>Close</span>
+          </button>
+        </div>
+      </section>
+
+      <main ref="mainRef" :class="effectiveViewMode === 'table' ? 'flex-1 min-h-0 flex flex-col overflow-hidden' : 'flex-1 min-h-0 overflow-y-auto'">
+        <div v-if="smartScopeLoadError" class="flex flex-col items-center justify-center gap-3 py-24 text-center">
+          <div class="flex h-16 w-16 items-center justify-center rounded-full bg-destructive/10 text-destructive">
+            <AlertTriangle :size="28" />
           </div>
-          <p class="text-sm font-medium text-foreground">No books match this smartScope</p>
-          <p class="text-xs text-muted-foreground">Try adjusting the filter rules.</p>
-          <button @click="editorOpen = true" class="text-xs text-primary hover:underline">Edit SmartScope</button>
+          <p class="text-sm font-medium text-foreground">Could not load this SmartScope</p>
+          <p class="max-w-md text-xs text-muted-foreground">{{ smartScopeLoadError }}</p>
+          <button
+            class="rounded-md border border-input px-3 py-2 text-sm text-foreground transition-colors hover:bg-muted"
+            @click="retrySmartScopeLoad"
+          >
+            Retry
+          </button>
         </div>
 
-        <!-- Grid view -->
-        <VirtualBookGrid
-          v-if="effectiveViewMode === 'grid' && books.length > 0"
-          ref="bookGridRef"
-          :books="slots"
-          :cover-size="coverSize"
-          :grid-gap="gridGap"
-          :selection-mode="selectionMode"
-          :is-selected="isSelected"
-          :rail-gutter="railGutterReserved"
-          @range="handleRange"
-          @first-visible-index="handleFirstVisibleIndex"
-          @action="handleBookAction"
-          @select="handleSelect"
-        />
+        <EntityNotFound v-else-if="smartScopeNotFound" entity="SmartScope" />
 
-        <!-- List view -->
-        <div v-if="effectiveViewMode === 'list' && contiguousPrefix.length > 0" class="flex flex-col divide-y divide-border">
-          <BookListRow
-            v-for="book in contiguousPrefix"
-            :key="book.id"
-            :book="book"
+        <template v-else>
+          <!-- Filter summary -->
+          <div
+            v-if="filterExpanded && (smartScope?.filter || sortChip)"
+            class="flex flex-wrap items-center gap-2 mb-4 cursor-pointer"
+            @click="editorOpen = true"
+          >
+            <FilterSummary v-if="smartScope?.filter" :node="smartScope.filter as GroupRule" />
+            <span v-if="sortChip" class="inline-flex items-center text-xs rounded-md border border-border/60 overflow-hidden">
+              <span class="inline-flex items-center gap-1 px-2 py-0.5 bg-muted text-muted-foreground border-r border-border/60">
+                <ArrowUpDown :size="10" class="shrink-0" />
+                <span class="font-semibold">Sort</span>
+              </span>
+              <span class="px-2 py-0.5 bg-muted/40 text-foreground font-medium">{{ sortChip }}</span>
+            </span>
+          </div>
+
+          <!-- Empty state: no rules configured -->
+          <div
+            v-if="booksInitialized && !loading && !smartScope?.filter && books.length === 0"
+            class="flex flex-col items-center justify-center py-24 gap-4 text-center"
+          >
+            <div class="h-16 w-16 rounded-full bg-muted flex items-center justify-center">
+              <Settings2 :size="28" class="text-muted-foreground/70" />
+            </div>
+            <div class="flex flex-col gap-1">
+              <p class="text-sm font-medium text-foreground">No rules configured</p>
+              <p class="text-xs text-muted-foreground max-w-xs">
+                Open the editor to define which books appear in this smartScope using filters and sort rules.
+              </p>
+            </div>
+            <button
+              @click="editorOpen = true"
+              class="h-9 px-5 rounded-md bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors"
+            >
+              Configure SmartScope
+            </button>
+          </div>
+
+          <!-- Empty state: rules set but no matches -->
+          <div
+            v-else-if="booksInitialized && !loading && books.length === 0 && smartScope?.filter"
+            class="flex flex-col items-center justify-center py-24 gap-3 text-center"
+          >
+            <div class="h-16 w-16 rounded-full bg-muted flex items-center justify-center">
+              <Aperture :size="28" class="text-muted-foreground/70" />
+            </div>
+            <p class="text-sm font-medium text-foreground">No books match this smartScope</p>
+            <p class="text-xs text-muted-foreground">Try adjusting the filter rules.</p>
+            <button @click="editorOpen = true" class="text-xs text-primary hover:underline">Edit SmartScope</button>
+          </div>
+
+          <!-- Grid view -->
+          <VirtualBookGrid
+            v-if="effectiveViewMode === 'grid' && books.length > 0"
+            ref="bookGridRef"
+            :books="slots"
+            :cover-size="coverSize"
+            :grid-gap="gridGap"
             :selection-mode="selectionMode"
-            :selected="isSelected(book.id)"
-            @select="handleSelect(book.id, $event)"
-            @action="handleBookAction(book, $event)"
+            :is-selected="isSelected"
+            :rail-gutter="railGutterReserved"
+            @range="handleRange"
+            @first-visible-index="handleFirstVisibleIndex"
+            @action="handleBookAction"
+            @select="handleSelect"
           />
-        </div>
 
-        <!-- Table view -->
-        <VirtualBookTable
-          v-if="effectiveViewMode === 'table'"
-          ref="tableRef"
-          :books="slots"
-          :in-flight="inFlight"
-          :sort="tableSort"
-          :loading="loading"
-          :total="total"
-          view-type="smartScope"
-          :selection-mode="selectionMode"
-          :is-selected="isSelected"
-          :selected-count="selectedCount"
-          :initialized="booksInitialized"
-          @update:sort="tableSort = $event"
-          @action="handleBookAction"
-          @select="handleSelect"
-          @update:book="handleTableBookUpdate"
-          @visible-range="handleRange"
-          @first-visible-index="handleFirstVisibleIndex"
-          @select-all="handleSelectAllLoaded"
-          @enter-selection="enterSelectionMode"
-        />
+          <!-- List view -->
+          <div v-if="effectiveViewMode === 'list' && contiguousPrefix.length > 0" class="flex flex-col divide-y divide-border">
+            <BookListRow
+              v-for="book in contiguousPrefix"
+              :key="book.id"
+              :book="book"
+              :selection-mode="selectionMode"
+              :selected="isSelected(book.id)"
+              @select="handleSelect(book.id, $event)"
+              @action="handleBookAction(book, $event)"
+            />
+          </div>
 
-        <div v-if="effectiveViewMode === 'list'" ref="sentinel" class="h-8 mt-4 flex items-center justify-center">
-          <span v-if="loading" class="text-xs text-muted-foreground">Loading...</span>
-          <span v-else-if="!hasMorePrefix && contiguousPrefix.length > 0" class="text-xs text-muted-foreground">
-            All {{ total.toLocaleString() }} books loaded
-          </span>
-        </div>
+          <!-- Table view -->
+          <VirtualBookTable
+            v-if="effectiveViewMode === 'table'"
+            ref="tableRef"
+            :books="slots"
+            :in-flight="inFlight"
+            :sort="tableSort"
+            :loading="loading"
+            :total="total"
+            view-type="smartScope"
+            :selection-mode="selectionMode"
+            :is-selected="isSelected"
+            :selected-count="selectedCount"
+            :initialized="booksInitialized"
+            @update:sort="tableSort = $event"
+            @action="handleBookAction"
+            @select="handleSelect"
+            @update:book="handleTableBookUpdate"
+            @visible-range="handleRange"
+            @first-visible-index="handleFirstVisibleIndex"
+            @select-all="handleSelectAllLoaded"
+            @enter-selection="enterSelectionMode"
+          />
 
-        <JumpRail
-          :visible="railVisible"
-          :buckets="buckets"
-          :kind="bucketKind ?? 'letter'"
-          :active-key="activeBucketKey"
-          :template="bucketKind === 'letter' ? letterTemplate : undefined"
-          @jump="handleJump"
-          @after-leave="releaseRailGutter"
-        />
-      </template>
-    </main>
-  </section>
+          <div v-if="effectiveViewMode === 'list'" ref="sentinel" class="h-8 mt-4 flex items-center justify-center">
+            <span v-if="loading" class="text-xs text-muted-foreground">Loading...</span>
+            <span v-else-if="!hasMorePrefix && contiguousPrefix.length > 0" class="text-xs text-muted-foreground">
+              All {{ total.toLocaleString() }} books loaded
+            </span>
+          </div>
+
+          <JumpRail
+            :visible="railVisible"
+            :buckets="buckets"
+            :kind="bucketKind ?? 'letter'"
+            :active-key="activeBucketKey"
+            :template="bucketKind === 'letter' ? letterTemplate : undefined"
+            @jump="handleJump"
+            @after-leave="releaseRailGutter"
+          />
+        </template>
+      </main>
+    </section>
+  </div>
 </template>
 
 <style scoped>

@@ -9,6 +9,7 @@ import VirtualBookGrid from '@/features/book/components/VirtualBookGrid.vue'
 import BookCoverArtwork from '@/features/book/components/BookCoverArtwork.vue'
 import { bookCoverStyle } from '@/features/book/lib/book-cover'
 import { useCoverVersions } from '@/features/book/composables/useCoverVersions'
+import { useScrollRestoreOnActivate } from '@/features/book/composables/useScrollRestoreOnActivate'
 import { useDisplaySettings } from '@/composables/useDisplaySettings'
 import { usePermissions } from '@/features/auth/composables/usePermissions'
 import { useBookNavigation } from '@/features/book/composables/useBookNavigation'
@@ -40,6 +41,8 @@ import {
 
 const route = useRoute()
 const router = useRouter()
+const mainRef = ref<HTMLElement | null>(null)
+useScrollRestoreOnActivate(mainRef)
 const { hasPermission } = usePermissions()
 const { setBookContext } = useBookNavigation()
 const { coverUrl } = useCoverVersions()
@@ -437,276 +440,282 @@ watch(
   },
   { flush: 'post' },
 )
+
+defineOptions({ name: 'SeriesDetailView' })
 </script>
 
 <template>
-  <main class="flex-1 overflow-y-auto py-2">
-    <div class="mb-4">
-      <button class="flex items-center gap-1 text-sm text-muted-foreground transition-colors hover:text-foreground" @click="goBack">
-        <ChevronLeft :size="16" />
-        Back
-      </button>
-    </div>
-
-    <div v-if="notFound">
-      <EntityNotFound entity="Series" />
-    </div>
-
-    <template v-else>
-      <div v-if="booksError" class="mb-3 rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive">
-        {{ booksError }}
+  <div class="flex h-full flex-col">
+    <main ref="mainRef" class="flex-1 min-h-0 overflow-y-auto py-2">
+      <div class="mb-4">
+        <button class="flex items-center gap-1 text-sm text-muted-foreground transition-colors hover:text-foreground" @click="goBack">
+          <ChevronLeft :size="16" />
+          Back
+        </button>
       </div>
 
-      <!-- Series header -->
-      <div v-if="seriesInfo" class="mb-4 rounded-lg border border-border/70 bg-card/60 p-4">
-        <div class="flex flex-col gap-4 md:flex-row md:items-start">
-          <div class="mx-auto w-full max-w-[360px] md:mx-0 md:w-[340px] md:shrink-0 lg:w-[360px]">
-            <div
-              class="series-cover-stack-container relative isolate rounded-lg border border-border/60 bg-linear-to-b from-white/[0.035] via-background/5 to-black/[0.07]"
-              style="aspect-ratio: 11 / 8; transform-style: preserve-3d; perspective: 1000px"
-            >
-              <!-- Contained background decorative effects -->
-              <div class="absolute inset-0 overflow-hidden rounded-lg pointer-events-none z-0">
-                <div class="absolute -right-8 -top-12 h-36 w-36 rounded-full bg-primary/10 blur-3xl" />
-                <div class="absolute -bottom-12 -left-10 h-32 w-32 rounded-full bg-primary/8 blur-3xl" />
-                <div class="absolute inset-x-[21%] bottom-[5%] h-4 rounded-full bg-black/10 blur-2xl opacity-38" />
-              </div>
+      <div v-if="notFound">
+        <EntityNotFound entity="Series" />
+      </div>
 
+      <template v-else>
+        <div v-if="booksError" class="mb-3 rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive">
+          {{ booksError }}
+        </div>
+
+        <!-- Series header -->
+        <div v-if="seriesInfo" class="mb-4 rounded-lg border border-border/70 bg-card/60 p-4">
+          <div class="flex flex-col gap-4 md:flex-row md:items-start">
+            <div class="mx-auto w-full max-w-[360px] md:mx-0 md:w-[340px] md:shrink-0 lg:w-[360px]">
               <div
-                v-for="(bookId, i) in visibleLeadCoverBookIds"
-                :key="bookId"
-                class="series-cover-stack-item absolute overflow-hidden rounded-lg"
-                :style="{
-                  ...(scaledLeadCoverStyles[i] ?? {}),
-                  '--offset': i - (visibleLeadCoverBookIds.length - 1) / 2,
-                  '--abs-offset': Math.abs(i - (visibleLeadCoverBookIds.length - 1) / 2),
-                }"
+                class="series-cover-stack-container relative isolate rounded-lg border border-border/60 bg-linear-to-b from-white/[0.035] via-background/5 to-black/[0.07]"
+                style="aspect-ratio: 11 / 8; transform-style: preserve-3d; perspective: 1000px"
               >
-                <BookCoverArtwork
-                  :src="coverUrl(bookId)"
-                  :has-cover="true"
-                  :title="seriesInfo.name"
-                  :seed="`${seriesInfo.name}-${bookId}`"
-                  alt=""
-                  :mode="leadCoverDisplayModes[i]"
-                  :frame-aspect-ratio="leadCoverFrameAspectRatios[i] ?? PORTRAIT_STACK_FRAME_ASPECT_RATIO"
-                  loading="lazy"
-                  decoding="async"
-                  :spine="true"
-                  @load="handleLeadCoverLoad(bookId, $event)"
-                  @error="handleLeadCoverError(bookId)"
-                />
-              </div>
-
-              <div
-                v-if="visibleLeadCoverBookIds.length === 0"
-                class="absolute inset-x-[28.5%] bottom-[5.5%] top-[5.5%] flex select-none items-center justify-center rounded-[14px] text-4xl font-bold shadow-[0_12px_28px_-18px_rgba(15,23,42,0.7)]"
-                :style="{ background: leadFallbackStyle.background, color: leadFallbackStyle.color }"
-              >
-                {{ leadInitial }}
-              </div>
-            </div>
-          </div>
-
-          <div class="min-w-0 flex-1 md:border-l md:border-border/60 md:pl-6">
-            <div class="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-              <div class="min-w-0">
-                <h1 class="text-xl font-bold text-foreground">{{ seriesInfo.name }}</h1>
-                <div class="mt-2 flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
-                  <span>{{ seriesInfo.bookCount }} {{ seriesInfo.bookCount === 1 ? 'book' : 'books' }}</span>
-                  <span v-if="visibleSeriesAuthors.length > 0">
-                    by {{ visibleSeriesAuthors.join(', ') }}
-                    <span v-if="hiddenSeriesAuthorsCount > 0"> +{{ hiddenSeriesAuthorsCount }} more</span>
-                  </span>
-                </div>
-              </div>
-
-              <button
-                v-if="canEditMetadata && books.length > 0"
-                class="flex h-8 w-full items-center justify-center gap-1.5 rounded-lg border border-input bg-background px-2.5 text-sm transition-colors hover:bg-muted disabled:opacity-40 sm:px-3 md:w-auto"
-                :disabled="openingSeriesEditor || loadingBooks"
-                @click="editSeriesMetadata"
-              >
-                <Pencil :size="14" />
-                {{ openingSeriesEditor ? 'Preparing editor...' : 'Edit Metadata' }}
-              </button>
-            </div>
-
-            <SeriesCompletionBar :read-count="seriesInfo.readCount" :total-count="seriesInfo.bookCount" class="mt-3 max-w-xs" />
-            <SeriesGapBanner v-if="seriesInfo.possibleGaps.length > 0" :gaps="seriesInfo.possibleGaps" class="mt-3" />
-
-            <div class="mt-4 border-t border-border/60 pt-4">
-              <div class="mb-2">
-                <p class="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground/90">First in Series</p>
-                <p v-if="leadBook" class="mt-1 text-base font-semibold leading-tight text-foreground">
-                  {{ leadBook.title ?? 'Untitled' }}
-                  <span v-if="leadBook.seriesIndex != null" class="text-muted-foreground">#{{ leadBook.seriesIndex }}</span>
-                </p>
-                <p v-if="leadMetaItems.length > 0" class="mt-1 text-[11px] text-muted-foreground">
-                  {{ leadMetaItems.join(' • ') }}
-                </p>
-              </div>
-
-              <div v-if="loadingLeadBook && !leadBook" class="text-sm text-muted-foreground">Loading first book preview...</div>
-              <div v-else-if="leadBookError" class="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive">
-                {{ leadBookError }}
-              </div>
-              <div v-else-if="leadBook" class="space-y-3">
-                <div v-if="leadBook.genres.length" class="flex flex-wrap items-center gap-1.5">
-                  <span
-                    v-for="(genre, index) in displayedLeadGenres"
-                    :key="`${genre}-${index}`"
-                    class="rounded-full border border-primary/40 px-2.5 py-0.5 text-xs text-primary/85"
-                  >
-                    {{ genre }}
-                  </span>
-                  <button
-                    v-if="hiddenLeadGenres > 0"
-                    type="button"
-                    class="whitespace-nowrap text-xs font-medium text-foreground/75 transition-colors hover:text-foreground"
-                    @click="toggleLeadGenresExpanded"
-                  >
-                    {{ leadGenresExpanded ? 'Show less' : `+${hiddenLeadGenres} more` }}
-                  </button>
+                <!-- Contained background decorative effects -->
+                <div class="absolute inset-0 overflow-hidden rounded-lg pointer-events-none z-0">
+                  <div class="absolute -right-8 -top-12 h-36 w-36 rounded-full bg-primary/10 blur-3xl" />
+                  <div class="absolute -bottom-12 -left-10 h-32 w-32 rounded-full bg-primary/8 blur-3xl" />
+                  <div class="absolute inset-x-[21%] bottom-[5%] h-4 rounded-full bg-black/10 blur-2xl opacity-38" />
                 </div>
 
-                <div>
-                  <p class="mb-2 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Synopsis</p>
-                  <div v-if="leadBook.description">
-                    <div
-                      class="text-sm leading-relaxed text-foreground/85"
-                      :class="leadDescriptionExpanded ? '' : 'line-clamp-3'"
-                      v-html="safeLeadDescription"
-                    />
-                    <button
-                      type="button"
-                      class="mt-2 text-xs text-muted-foreground transition-colors hover:text-foreground"
-                      @click="toggleLeadDescriptionExpanded"
+                <div
+                  v-for="(bookId, i) in visibleLeadCoverBookIds"
+                  :key="bookId"
+                  class="series-cover-stack-item absolute overflow-hidden rounded-lg"
+                  :style="{
+                    ...(scaledLeadCoverStyles[i] ?? {}),
+                    '--offset': i - (visibleLeadCoverBookIds.length - 1) / 2,
+                    '--abs-offset': Math.abs(i - (visibleLeadCoverBookIds.length - 1) / 2),
+                  }"
+                >
+                  <BookCoverArtwork
+                    :src="coverUrl(bookId)"
+                    :has-cover="true"
+                    :title="seriesInfo.name"
+                    :seed="`${seriesInfo.name}-${bookId}`"
+                    alt=""
+                    :mode="leadCoverDisplayModes[i]"
+                    :frame-aspect-ratio="leadCoverFrameAspectRatios[i] ?? PORTRAIT_STACK_FRAME_ASPECT_RATIO"
+                    loading="lazy"
+                    decoding="async"
+                    :spine="true"
+                    @load="handleLeadCoverLoad(bookId, $event)"
+                    @error="handleLeadCoverError(bookId)"
+                  />
+                </div>
+
+                <div
+                  v-if="visibleLeadCoverBookIds.length === 0"
+                  class="absolute inset-x-[28.5%] bottom-[5.5%] top-[5.5%] flex select-none items-center justify-center rounded-[14px] text-4xl font-bold shadow-[0_12px_28px_-18px_rgba(15,23,42,0.7)]"
+                  :style="{ background: leadFallbackStyle.background, color: leadFallbackStyle.color }"
+                >
+                  {{ leadInitial }}
+                </div>
+              </div>
+            </div>
+
+            <div class="min-w-0 flex-1 md:border-l md:border-border/60 md:pl-6">
+              <div class="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                <div class="min-w-0">
+                  <h1 class="text-xl font-bold text-foreground">{{ seriesInfo.name }}</h1>
+                  <div class="mt-2 flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
+                    <span>{{ seriesInfo.bookCount }} {{ seriesInfo.bookCount === 1 ? 'book' : 'books' }}</span>
+                    <span v-if="visibleSeriesAuthors.length > 0">
+                      by {{ visibleSeriesAuthors.join(', ') }}
+                      <span v-if="hiddenSeriesAuthorsCount > 0"> +{{ hiddenSeriesAuthorsCount }} more</span>
+                    </span>
+                  </div>
+                </div>
+
+                <button
+                  v-if="canEditMetadata && books.length > 0"
+                  class="flex h-8 w-full items-center justify-center gap-1.5 rounded-lg border border-input bg-background px-2.5 text-sm transition-colors hover:bg-muted disabled:opacity-40 sm:px-3 md:w-auto"
+                  :disabled="openingSeriesEditor || loadingBooks"
+                  @click="editSeriesMetadata"
+                >
+                  <Pencil :size="14" />
+                  {{ openingSeriesEditor ? 'Preparing editor...' : 'Edit Metadata' }}
+                </button>
+              </div>
+
+              <SeriesCompletionBar :read-count="seriesInfo.readCount" :total-count="seriesInfo.bookCount" class="mt-3 max-w-xs" />
+              <SeriesGapBanner v-if="seriesInfo.possibleGaps.length > 0" :gaps="seriesInfo.possibleGaps" class="mt-3" />
+
+              <div class="mt-4 border-t border-border/60 pt-4">
+                <div class="mb-2">
+                  <p class="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground/90">First in Series</p>
+                  <p v-if="leadBook" class="mt-1 text-base font-semibold leading-tight text-foreground">
+                    {{ leadBook.title ?? 'Untitled' }}
+                    <span v-if="leadBook.seriesIndex != null" class="text-muted-foreground">#{{ leadBook.seriesIndex }}</span>
+                  </p>
+                  <p v-if="leadMetaItems.length > 0" class="mt-1 text-[11px] text-muted-foreground">
+                    {{ leadMetaItems.join(' • ') }}
+                  </p>
+                </div>
+
+                <div v-if="loadingLeadBook && !leadBook" class="text-sm text-muted-foreground">Loading first book preview...</div>
+                <div v-else-if="leadBookError" class="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive">
+                  {{ leadBookError }}
+                </div>
+                <div v-else-if="leadBook" class="space-y-3">
+                  <div v-if="leadBook.genres.length" class="flex flex-wrap items-center gap-1.5">
+                    <span
+                      v-for="(genre, index) in displayedLeadGenres"
+                      :key="`${genre}-${index}`"
+                      class="rounded-full border border-primary/40 px-2.5 py-0.5 text-xs text-primary/85"
                     >
-                      {{ leadDescriptionExpanded ? 'Show less' : 'Show more' }}
+                      {{ genre }}
+                    </span>
+                    <button
+                      v-if="hiddenLeadGenres > 0"
+                      type="button"
+                      class="whitespace-nowrap text-xs font-medium text-foreground/75 transition-colors hover:text-foreground"
+                      @click="toggleLeadGenresExpanded"
+                    >
+                      {{ leadGenresExpanded ? 'Show less' : `+${hiddenLeadGenres} more` }}
                     </button>
                   </div>
-                  <p v-else class="text-sm italic text-muted-foreground">No description available.</p>
+
+                  <div>
+                    <p class="mb-2 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Synopsis</p>
+                    <div v-if="leadBook.description">
+                      <div
+                        class="text-sm leading-relaxed text-foreground/85"
+                        :class="leadDescriptionExpanded ? '' : 'line-clamp-3'"
+                        v-html="safeLeadDescription"
+                      />
+                      <button
+                        type="button"
+                        class="mt-2 text-xs text-muted-foreground transition-colors hover:text-foreground"
+                        @click="toggleLeadDescriptionExpanded"
+                      >
+                        {{ leadDescriptionExpanded ? 'Show less' : 'Show more' }}
+                      </button>
+                    </div>
+                    <p v-else class="text-sm italic text-muted-foreground">No description available.</p>
+                  </div>
+                  <p v-if="loadingLeadBook" class="text-xs text-muted-foreground">Updating preview...</p>
                 </div>
-                <p v-if="loadingLeadBook" class="text-xs text-muted-foreground">Updating preview...</p>
+                <div v-else class="text-sm text-muted-foreground">No books available to preview.</div>
               </div>
-              <div v-else class="text-sm text-muted-foreground">No books available to preview.</div>
             </div>
           </div>
         </div>
-      </div>
 
-      <!-- Loading state -->
-      <div v-if="loadingBooks && !seriesInfo" class="mb-4 rounded-lg border border-border/70 bg-card/60 p-4 text-sm text-muted-foreground">
-        Loading series...
-      </div>
+        <!-- Loading state -->
+        <div v-if="loadingBooks && !seriesInfo" class="mb-4 rounded-lg border border-border/70 bg-card/60 p-4 text-sm text-muted-foreground">
+          Loading series...
+        </div>
 
-      <!-- Books section -->
-      <section v-if="seriesInfo" class="rounded-lg border border-border/70 bg-card/60 p-3">
-        <div
-          class="sticky top-0 z-20 -mx-3 mb-3 border-b border-border/60 bg-card/92 px-3 pb-3 pt-1 backdrop-blur supports-backdrop-filter:bg-card/78"
-        >
-          <div class="flex flex-col gap-2 md:flex-row md:items-center" :class="groupByMedia ? 'md:justify-end' : 'md:justify-between'">
-            <h2 v-if="!groupByMedia" data-testid="series-books-section-heading" class="text-sm font-semibold text-foreground">Books</h2>
-            <div class="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
-              <select
-                v-model="sort"
-                class="h-8 w-full min-w-0 rounded-md border border-input bg-background px-2.5 text-sm outline-none transition-colors focus:border-primary/60 sm:w-auto"
-              >
-                <option value="seriesIndex">Series Order</option>
-                <option value="title">Title</option>
-                <option value="addedAt">Recently Added</option>
-              </select>
+        <!-- Books section -->
+        <section v-if="seriesInfo" class="rounded-lg border border-border/70 bg-card/60 p-3">
+          <div
+            class="sticky top-0 z-20 -mx-3 mb-3 border-b border-border/60 bg-card/92 px-3 pb-3 pt-1 backdrop-blur supports-backdrop-filter:bg-card/78"
+          >
+            <div class="flex flex-col gap-2 md:flex-row md:items-center" :class="groupByMedia ? 'md:justify-end' : 'md:justify-between'">
+              <h2 v-if="!groupByMedia" data-testid="series-books-section-heading" class="text-sm font-semibold text-foreground">Books</h2>
+              <div class="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
+                <select
+                  v-model="sort"
+                  class="h-8 w-full min-w-0 rounded-md border border-input bg-background px-2.5 text-sm outline-none transition-colors focus:border-primary/60 sm:w-auto"
+                >
+                  <option value="seriesIndex">Series Order</option>
+                  <option value="title">Title</option>
+                  <option value="addedAt">Recently Added</option>
+                </select>
 
-              <select
-                v-model="order"
-                class="h-8 w-full min-w-0 rounded-md border border-input bg-background px-2.5 text-sm outline-none transition-colors focus:border-primary/60 sm:w-auto"
-              >
-                <option value="asc">Ascending</option>
-                <option value="desc">Descending</option>
-              </select>
+                <select
+                  v-model="order"
+                  class="h-8 w-full min-w-0 rounded-md border border-input bg-background px-2.5 text-sm outline-none transition-colors focus:border-primary/60 sm:w-auto"
+                >
+                  <option value="asc">Ascending</option>
+                  <option value="desc">Descending</option>
+                </select>
 
-              <select
-                :value="libraryId ?? ''"
-                class="h-8 w-full min-w-0 rounded-md border border-input bg-background px-2.5 text-sm outline-none transition-colors focus:border-primary/60 sm:w-auto"
-                @change="onLibraryFilterChange"
-              >
-                <option value="">All Libraries</option>
-                <option v-for="library in libraries" :key="library.id" :value="library.id">{{ library.name }}</option>
-              </select>
+                <select
+                  :value="libraryId ?? ''"
+                  class="h-8 w-full min-w-0 rounded-md border border-input bg-background px-2.5 text-sm outline-none transition-colors focus:border-primary/60 sm:w-auto"
+                  @change="onLibraryFilterChange"
+                >
+                  <option value="">All Libraries</option>
+                  <option v-for="library in libraries" :key="library.id" :value="library.id">{{ library.name }}</option>
+                </select>
 
-              <div class="flex h-8 w-full items-center justify-between gap-2 rounded-md border border-input px-2.5 text-sm sm:w-auto">
-                <span class="whitespace-nowrap text-muted-foreground">Group by media</span>
-                <ToggleSwitch
-                  :model-value="groupByMedia"
-                  aria-label="Group by media"
-                  data-testid="series-group-by-media-toggle"
-                  @update:model-value="handleGroupByMediaUpdate"
+                <div class="flex h-8 w-full items-center justify-between gap-2 rounded-md border border-input px-2.5 text-sm sm:w-auto">
+                  <span class="whitespace-nowrap text-muted-foreground">Group by media</span>
+                  <ToggleSwitch
+                    :model-value="groupByMedia"
+                    aria-label="Group by media"
+                    data-testid="series-group-by-media-toggle"
+                    @update:model-value="handleGroupByMediaUpdate"
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div v-if="!loadingBooks && books.length === 0" class="flex flex-col items-center justify-center gap-2 py-16 text-center">
+            <p class="text-sm font-medium text-foreground">No books found in this series</p>
+            <p class="text-xs text-muted-foreground">Try selecting another library.</p>
+          </div>
+
+          <template v-if="books.length > 0">
+            <div v-if="groupByMedia" class="space-y-7">
+              <section v-for="group in nonEmptyMediaGroups" :key="group.key" class="space-y-3" :data-testid="`series-media-group-${group.key}`">
+                <div class="flex items-center justify-between border-b border-border/60 pb-2">
+                  <h3 class="text-sm font-semibold text-foreground">{{ group.label }}</h3>
+                  <span class="text-xs text-muted-foreground">{{ group.books.length.toLocaleString() }}</span>
+                </div>
+                <VirtualBookGrid
+                  :books="group.books"
+                  :cover-size="seriesBooksCoverSize"
+                  :grid-gap="gridGap"
+                  :audio-cover-scale="SERIES_AUDIOBOOK_COVER_SCALE"
+                  :virtualized="false"
+                  @action="handleBookAction"
+                  @update:book="handleBookUpdate"
                 />
-              </div>
+              </section>
             </div>
+
+            <VirtualBookGrid
+              v-else
+              :books="books"
+              :cover-size="seriesBooksCoverSize"
+              :grid-gap="gridGap"
+              :audio-cover-scale="SERIES_AUDIOBOOK_COVER_SCALE"
+              :virtualized="false"
+              @action="handleBookAction"
+              @update:book="handleBookUpdate"
+            />
+          </template>
+
+          <div ref="sentinel" class="mt-4 flex h-8 items-center justify-center">
+            <span v-if="loadingBooks" class="text-xs text-muted-foreground">Loading...</span>
+            <span v-else-if="!hasMore && books.length > 0" class="text-xs text-muted-foreground">
+              All {{ total.toLocaleString() }} books loaded
+            </span>
           </div>
-        </div>
+        </section>
+      </template>
+    </main>
 
-        <div v-if="!loadingBooks && books.length === 0" class="flex flex-col items-center justify-center gap-2 py-16 text-center">
-          <p class="text-sm font-medium text-foreground">No books found in this series</p>
-          <p class="text-xs text-muted-foreground">Try selecting another library.</p>
-        </div>
+    <AddToCollectionSheet
+      :open="addToCollectionOpen"
+      :selection-payload="{ bookIds: addToCollectionBookId ? [addToCollectionBookId] : [] }"
+      :selected-count="addToCollectionBookId ? 1 : 0"
+      @update:open="handleAddToCollectionOpenChange"
+    />
 
-        <template v-if="books.length > 0">
-          <div v-if="groupByMedia" class="space-y-7">
-            <section v-for="group in nonEmptyMediaGroups" :key="group.key" class="space-y-3" :data-testid="`series-media-group-${group.key}`">
-              <div class="flex items-center justify-between border-b border-border/60 pb-2">
-                <h3 class="text-sm font-semibold text-foreground">{{ group.label }}</h3>
-                <span class="text-xs text-muted-foreground">{{ group.books.length.toLocaleString() }}</span>
-              </div>
-              <VirtualBookGrid
-                :books="group.books"
-                :cover-size="seriesBooksCoverSize"
-                :grid-gap="gridGap"
-                :audio-cover-scale="SERIES_AUDIOBOOK_COVER_SCALE"
-                :virtualized="false"
-                @action="handleBookAction"
-                @update:book="handleBookUpdate"
-              />
-            </section>
-          </div>
+    <BookQuickView
+      :book-id="quickViewBookId"
+      :open="quickViewOpen"
+      @update:open="quickViewOpen = $event"
+      @action="quickViewBookId !== null && handleBookAction({ id: quickViewBookId } as BookCard, $event)"
+    />
 
-          <VirtualBookGrid
-            v-else
-            :books="books"
-            :cover-size="seriesBooksCoverSize"
-            :grid-gap="gridGap"
-            :audio-cover-scale="SERIES_AUDIOBOOK_COVER_SCALE"
-            :virtualized="false"
-            @action="handleBookAction"
-            @update:book="handleBookUpdate"
-          />
-        </template>
-
-        <div ref="sentinel" class="mt-4 flex h-8 items-center justify-center">
-          <span v-if="loadingBooks" class="text-xs text-muted-foreground">Loading...</span>
-          <span v-else-if="!hasMore && books.length > 0" class="text-xs text-muted-foreground"> All {{ total.toLocaleString() }} books loaded </span>
-        </div>
-      </section>
-    </template>
-  </main>
-
-  <AddToCollectionSheet
-    :open="addToCollectionOpen"
-    :selection-payload="{ bookIds: addToCollectionBookId ? [addToCollectionBookId] : [] }"
-    :selected-count="addToCollectionBookId ? 1 : 0"
-    @update:open="handleAddToCollectionOpenChange"
-  />
-
-  <BookQuickView
-    :book-id="quickViewBookId"
-    :open="quickViewOpen"
-    @update:open="quickViewOpen = $event"
-    @action="quickViewBookId !== null && handleBookAction({ id: quickViewBookId } as BookCard, $event)"
-  />
-
-  <DeleteBookDialog :open="deleteBookId !== null" :deleting="deletingBook" @confirm="confirmDelete" @cancel="cancelDelete" />
+    <DeleteBookDialog :open="deleteBookId !== null" :deleting="deletingBook" @confirm="confirmDelete" @cancel="cancelDelete" />
+  </div>
 </template>
 
 <style scoped>

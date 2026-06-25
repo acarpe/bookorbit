@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, watch, nextTick, onMounted, onUnmounted } from 'vue'
+import { ref, computed, watch, nextTick, onMounted, onUnmounted, onActivated, onDeactivated } from 'vue'
 import { breakpointsTailwind, useBreakpoints } from '@vueuse/core'
 import { useVirtualizer } from '@tanstack/vue-virtual'
 import { AlertTriangle, ArrowDown, ArrowUp, BookOpen, CheckCircle2, ChevronUp, Loader2, RotateCcw, X } from '@lucide/vue'
@@ -490,6 +490,23 @@ onMounted(() => {
 
 onUnmounted(() => {
   scrollContainerRef.value?.removeEventListener('scroll', onScroll)
+})
+
+let savedTableRowIndex = 0
+
+onDeactivated(() => {
+  const offset = virtualizer.value.scrollOffset ?? scrollContainerRef.value?.scrollTop ?? 0
+  savedTableRowIndex = Math.max(0, Math.floor(offset / rowEstimate.value))
+})
+
+onActivated(() => {
+  void nextTick(() => {
+    requestAnimationFrame(() => {
+      if (savedTableRowIndex > 0) {
+        virtualizer.value.scrollToIndex(Math.min(savedTableRowIndex, props.books.length - 1), { align: 'start' })
+      }
+    })
+  })
 })
 
 // Bump tbody key on sort change to trigger enter animation

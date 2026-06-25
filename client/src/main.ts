@@ -9,6 +9,30 @@ import router from './router'
 import { useAuth } from './features/auth/composables/useAuth'
 import { useSetupStatus } from './features/auth/composables/useSetupStatus'
 
+// Chrome 124+ blocks aria-hidden from being applied to an element that contains
+// a focused descendant. Reka UI's dialog uses the aria-hidden package which sets
+// aria-hidden="true" on background content when a modal opens. If the focused
+// element is in the background (e.g. a book card dropdown trigger), Chrome blocks
+// it and logs a warning, leaving the background incorrectly accessible to screen
+// readers. This observer proactively blurs the focused descendant the moment
+// aria-hidden="true" lands, allowing the aria-hidden to succeed.
+const ariaHiddenObserver = new MutationObserver((mutations) => {
+  for (const mutation of mutations) {
+    if (mutation.type !== 'attributes' || mutation.attributeName !== 'aria-hidden') continue
+    const target = mutation.target as HTMLElement
+    if (target.getAttribute('aria-hidden') !== 'true') continue
+    const focused = document.activeElement
+    if (focused instanceof HTMLElement && target.contains(focused)) {
+      focused.blur()
+    }
+  }
+})
+ariaHiddenObserver.observe(document.body, {
+  subtree: true,
+  attributes: true,
+  attributeFilter: ['aria-hidden'],
+})
+
 const app = createApp(App)
 
 app.use(createPinia())

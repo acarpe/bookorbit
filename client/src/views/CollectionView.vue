@@ -28,6 +28,7 @@ import { useViewDisplaySettings } from '@/composables/useViewDisplaySettings'
 import { usePageTitle } from '@/composables/usePageTitle'
 import { DEFAULT_COVER_ASPECT_RATIO } from '@/features/book/lib/cover-aspect-ratio'
 import { useViewSort } from '@/features/book/composables/useViewSort'
+import { useScrollRestoreOnActivate } from '@/features/book/composables/useScrollRestoreOnActivate'
 import { useDisplaySettings } from '@/composables/useDisplaySettings'
 import { usePermissions } from '@/features/auth/composables/usePermissions'
 import { useBookNavigation } from '@/features/book/composables/useBookNavigation'
@@ -105,6 +106,8 @@ const {
   q: debouncedQuery,
 })
 const { sortModel: tableSortModel } = useViewSort(tableSort, 'collection', collectionId)
+const mainRef = ref<HTMLElement | null>(null)
+useScrollRestoreOnActivate(mainRef)
 const collectionLoadError = computed(() => collectionsError.value ?? booksError.value)
 const { setBookContext } = useBookNavigation()
 useBookViewContext(slots, total, loadMorePrefix)
@@ -342,331 +345,335 @@ watch(collectionId, async () => {
   clearSearch()
   await retryCollectionLoad()
 })
+
+defineOptions({ name: 'CollectionView' })
 </script>
 
 <template>
-  <BookQuickView
-    :book-id="quickViewBookId"
-    :open="quickViewOpen"
-    @update:open="quickViewOpen = $event"
-    @action="quickViewBookId !== null && handleBookAction({ id: quickViewBookId } as BookCard, $event)"
-  />
+  <div class="flex h-full flex-col">
+    <BookQuickView
+      :book-id="quickViewBookId"
+      :open="quickViewOpen"
+      @update:open="quickViewOpen = $event"
+      @action="quickViewBookId !== null && handleBookAction({ id: quickViewBookId } as BookCard, $event)"
+    />
 
-  <SelectionActionBar
-    :visible="selectionMode"
-    :count="selectedCount"
-    :in-collection="true"
-    :in-flight="inFlight"
-    @send="sendBookOpen = true"
-    @download="handleDownloadFiles"
-    @export-metadata="openMetadataExport"
-    @add-to-collection="addToCollectionOpen = true"
-    @remove-from-collection="handleRemoveFromCollection"
-    @edit="handleEditSelected"
-    @edit-individually="handleEditIndividually"
-    @refresh-metadata="handleBulkRefreshMetadata"
-    @re-extract-cover="handleBulkReExtractCover"
-    @set-status="handleBulkSetStatus"
-    @set-rating="handleBulkSetRating"
-    @set-field="handleBulkSetField"
-    @lock-metadata="handleBulkSetMetadataLock"
-    @delete="handleDeleteSelected"
-    @exit="exitSelectionMode"
-  />
+    <SelectionActionBar
+      :visible="selectionMode"
+      :count="selectedCount"
+      :in-collection="true"
+      :in-flight="inFlight"
+      @send="sendBookOpen = true"
+      @download="handleDownloadFiles"
+      @export-metadata="openMetadataExport"
+      @add-to-collection="addToCollectionOpen = true"
+      @remove-from-collection="handleRemoveFromCollection"
+      @edit="handleEditSelected"
+      @edit-individually="handleEditIndividually"
+      @refresh-metadata="handleBulkRefreshMetadata"
+      @re-extract-cover="handleBulkReExtractCover"
+      @set-status="handleBulkSetStatus"
+      @set-rating="handleBulkSetRating"
+      @set-field="handleBulkSetField"
+      @lock-metadata="handleBulkSetMetadataLock"
+      @delete="handleDeleteSelected"
+      @exit="exitSelectionMode"
+    />
 
-  <MetadataExportDialog
-    :open="metadataExportOpen"
-    view-type="collection"
-    :selected-book-ids="[...selectedIds]"
-    :selected-count="selectedCount"
-    :total-count="total"
-    :sort="tableSort"
-    :visible-columns="visibleExportColumns"
-    default-scope="selected"
-    @update:open="metadataExportOpen = $event"
-  />
+    <MetadataExportDialog
+      :open="metadataExportOpen"
+      view-type="collection"
+      :selected-book-ids="[...selectedIds]"
+      :selected-count="selectedCount"
+      :total-count="total"
+      :sort="tableSort"
+      :visible-columns="visibleExportColumns"
+      default-scope="selected"
+      @update:open="metadataExportOpen = $event"
+    />
 
-  <AddToCollectionSheet
-    :open="addToCollectionOpen"
-    :selection-payload="{ bookIds: [...selectedIds] }"
-    :selected-count="selectedCount"
-    @update:open="addToCollectionOpen = $event"
-    @done="exitSelectionMode"
-  />
-  <BulkEditMetadataDialog
-    :open="bulkEditOpen"
-    :book-count="bulkEditCount"
-    :submitting="bulkEditSubmitting"
-    @update:open="bulkEditOpen = $event"
-    @confirm="handleBulkEditConfirm"
-  />
+    <AddToCollectionSheet
+      :open="addToCollectionOpen"
+      :selection-payload="{ bookIds: [...selectedIds] }"
+      :selected-count="selectedCount"
+      @update:open="addToCollectionOpen = $event"
+      @done="exitSelectionMode"
+    />
+    <BulkEditMetadataDialog
+      :open="bulkEditOpen"
+      :book-count="bulkEditCount"
+      :submitting="bulkEditSubmitting"
+      @update:open="bulkEditOpen = $event"
+      @confirm="handleBulkEditConfirm"
+    />
 
-  <EditCollectionDialog
-    v-if="collection"
-    :open="editCollectionOpen"
-    :collection="collection"
-    @close="editCollectionOpen = false"
-    @deleted="handleCollectionDeleted"
-  />
-  <SendBookDialog
-    :open="sendBookOpen"
-    :selection-payload="{ bookIds: [...selectedIds] }"
-    :selected-count="selectedCount"
-    @update:open="sendBookOpen = $event"
-    @sent="exitSelectionMode"
-  />
-  <DeleteBookDialog :open="deleteBookId !== null" :deleting="deletingBook" @confirm="confirmDelete" @cancel="cancelDelete" />
+    <EditCollectionDialog
+      v-if="collection"
+      :open="editCollectionOpen"
+      :collection="collection"
+      @close="editCollectionOpen = false"
+      @deleted="handleCollectionDeleted"
+    />
+    <SendBookDialog
+      :open="sendBookOpen"
+      :selection-payload="{ bookIds: [...selectedIds] }"
+      :selected-count="selectedCount"
+      @update:open="sendBookOpen = $event"
+      @sent="exitSelectionMode"
+    />
+    <DeleteBookDialog :open="deleteBookId !== null" :deleting="deletingBook" @confirm="confirmDelete" @cancel="cancelDelete" />
 
-  <section class="flex h-full flex-col">
-    <ViewHeader
-      :title="collection?.name ?? 'Collection'"
-      :icon="collection?.icon || 'FolderOpen'"
-      :total="total"
-      v-model:coverSize="coverSize"
-      v-model:gridGap="gridGap"
-      v-model:viewMode="viewMode"
-      :selection-mode="selectionMode"
-      :searchable="true"
-      :mobile-search-in-menu="false"
-      v-model:searchQuery="searchQuery"
-      @toggle-selection="toggleSelectionMode"
-    >
-      <template #toolbar>
-        <Tooltip>
-          <TooltipTrigger as-child>
-            <button
-              class="hidden sm:flex h-8 w-8 items-center justify-center rounded-md border transition-colors"
-              :class="
-                collapseEnabledRef
-                  ? 'border-primary text-primary bg-primary/10'
-                  : 'border-input text-muted-foreground bg-background hover:text-foreground hover:bg-muted'
-              "
-              @click="handleToggleCollapse"
-            >
-              <Layers :size="14" />
-            </button>
-          </TooltipTrigger>
-          <TooltipContent>{{ collapseEnabledRef ? 'Expand series' : 'Collapse series' }}</TooltipContent>
-        </Tooltip>
-
-        <Tooltip>
-          <TooltipTrigger as-child>
-            <button
-              v-if="hasPermission('library_download') && !isDemoRestrictedAccount"
-              class="hidden sm:flex h-8 w-8 items-center justify-center rounded-md border border-input text-muted-foreground bg-background transition-colors hover:text-foreground hover:bg-muted"
-              @click="openMetadataExport"
-            >
-              <FileSpreadsheet :size="14" />
-            </button>
-          </TooltipTrigger>
-          <TooltipContent>Export metadata</TooltipContent>
-        </Tooltip>
-
-        <Tooltip>
-          <TooltipTrigger as-child>
-            <button
-              v-if="collection"
-              class="hidden sm:flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
-              @click="openCollectionEditor"
-            >
-              <Pencil :size="14" />
-            </button>
-          </TooltipTrigger>
-          <TooltipContent>Edit collection</TooltipContent>
-        </Tooltip>
-
-        <button
-          class="sm:hidden flex h-8 w-8 items-center justify-center rounded-md border border-input text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-          @click="toggleMobileControls"
-        >
-          <SlidersHorizontal :size="14" />
-        </button>
-      </template>
-      <template #mobile-menu>
-        <DropdownMenuItem @click="handleToggleCollapse">
-          <CheckSquare v-if="collapseEnabledRef" :size="14" class="mr-2" />
-          <Square v-else :size="14" class="mr-2" />
-          Collapse series
-        </DropdownMenuItem>
-      </template>
-      <template v-if="effectiveViewMode === 'table'" #columns>
-        <TableColumnPanel
-          v-if="tableRef"
-          :all-columns="tableRef.allColumns"
-          :all-presets="tableRef.allPresets"
-          :saved-views="allSavedViews"
-          :table-density="tableDensity"
-          @toggle-column="handleToggleColumn"
-          @reorder-columns="handleColumnPanelReorder"
-          @apply-preset="handleApplyTablePreset"
-          @save-preset="handleSaveTablePreset"
-          @delete-preset="handleDeleteTablePreset"
-          @rename-preset="handleRenameTablePreset"
-          @duplicate-preset="handleDuplicateTablePreset"
-          @favorite-preset="handleTogglePresetFavorite"
-          @apply-view="handleApplySavedView"
-          @save-view="handleSaveCurrentView"
-          @delete-view="deleteView"
-          @rename-view="renameView"
-          @duplicate-view="duplicateView"
-          @favorite-view="toggleFavorite"
-          @update:density="handleTableDensityChange"
-          @export-backup="handleExportTableBackup"
-          @import-backup="handleImportTableBackup"
-          @reset="handleResetColumns"
-        />
-      </template>
-    </ViewHeader>
-
-    <section v-if="mobileControlsExpanded" class="mb-3 rounded-lg border border-border/70 bg-card/70 p-2 sm:hidden">
-      <div class="mb-2 flex h-9 items-center rounded-md border border-input bg-background px-2.5">
-        <Search :size="13" class="mr-1.5 shrink-0 text-muted-foreground/85" />
-        <input
-          v-model="searchQuery"
-          type="search"
-          placeholder="Search title, author, series, narrator..."
-          class="mobile-search-input h-full w-full bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground/85"
-        />
-        <button v-if="searchQuery.trim()" class="ml-1 text-muted-foreground/85 transition-colors hover:text-foreground" @click="clearSearch">
-          <X :size="12" />
-        </button>
-      </div>
-
-      <div class="flex flex-wrap items-center gap-2">
-        <button
-          class="flex h-8 items-center gap-1.5 rounded-md border px-2.5 text-sm transition-colors"
-          :class="
-            collapseEnabledRef
-              ? 'border-primary text-primary bg-primary/10'
-              : 'border-input text-muted-foreground hover:bg-muted hover:text-foreground'
-          "
-          @click="handleToggleCollapse"
-        >
-          <Layers :size="13" />
-          <span>{{ collapseEnabledRef ? 'Expanded' : 'Collapse series' }}</span>
-        </button>
-        <button
-          v-if="hasPermission('library_download') && !isDemoRestrictedAccount"
-          class="flex h-8 items-center gap-1.5 rounded-md border border-input px-2.5 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-          @click="openMetadataExport"
-        >
-          <FileSpreadsheet :size="13" />
-          <span>Export</span>
-        </button>
-        <button
-          v-if="collection"
-          class="flex h-8 items-center gap-1.5 rounded-md border border-input px-2.5 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-          @click="openCollectionEditor"
-        >
-          <Pencil :size="13" />
-          <span>Edit</span>
-        </button>
-        <button
-          class="flex h-8 items-center gap-1.5 rounded-md border border-input px-2.5 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-          @click="closeMobileControls"
-        >
-          <X :size="13" />
-          <span>Close</span>
-        </button>
-      </div>
-    </section>
-
-    <main :class="effectiveViewMode === 'table' ? 'flex-1 min-h-0 flex flex-col overflow-hidden' : 'flex-1 min-h-0 overflow-y-auto'">
-      <div v-if="collectionLoadError" class="flex flex-col items-center justify-center gap-3 py-24 text-center">
-        <div class="flex h-16 w-16 items-center justify-center rounded-full bg-destructive/10 text-destructive">
-          <AlertTriangle :size="28" />
-        </div>
-        <p class="text-sm font-medium text-foreground">Could not load this collection</p>
-        <p class="max-w-md text-xs text-muted-foreground">{{ collectionLoadError }}</p>
-        <button
-          class="rounded-md border border-input px-3 py-2 text-sm text-foreground transition-colors hover:bg-muted"
-          @click="retryCollectionLoad"
-        >
-          Retry
-        </button>
-      </div>
-
-      <EntityNotFound v-else-if="collectionNotFound" entity="Collection" />
-
-      <div v-else-if="booksInitialized && !loading && books.length === 0" class="flex flex-col items-center justify-center gap-3 py-24 text-center">
-        <div class="h-16 w-16 rounded-full bg-muted flex items-center justify-center">
-          <FolderOpen :size="28" class="text-muted-foreground/70" />
-        </div>
-        <p class="text-sm font-medium text-foreground">{{ debouncedQuery ? 'No books match this search' : 'No books in this collection' }}</p>
-        <p class="text-xs text-muted-foreground">
-          {{ debouncedQuery ? 'Try a different search term or clear the search.' : 'Select books from your library and add them here.' }}
-        </p>
-      </div>
-
-      <VirtualBookGrid
-        v-if="effectiveViewMode === 'grid' && books.length > 0"
-        ref="bookGridRef"
-        :books="slots"
-        :cover-size="coverSize"
-        :grid-gap="gridGap"
-        :selection-mode="selectionMode"
-        :is-selected="isSelected"
-        :rail-gutter="railGutterReserved"
-        @range="handleRange"
-        @first-visible-index="handleFirstVisibleIndex"
-        @action="handleBookAction"
-        @select="handleSelect"
-      />
-
-      <div v-if="effectiveViewMode === 'list' && contiguousPrefix.length > 0" class="flex flex-col divide-y divide-border">
-        <BookListRow
-          v-for="book in contiguousPrefix"
-          :key="book.id"
-          :book="book"
-          :selection-mode="selectionMode"
-          :selected="isSelected(book.id)"
-          @action="handleBookAction(book, $event)"
-          @select="handleSelect(book.id, $event)"
-        />
-      </div>
-
-      <!-- Table view -->
-      <VirtualBookTable
-        v-if="effectiveViewMode === 'table'"
-        ref="tableRef"
-        :books="slots"
-        :in-flight="inFlight"
-        :sort="tableSort"
-        :loading="loading"
+    <section class="flex flex-1 flex-col min-h-0">
+      <ViewHeader
+        :title="collection?.name ?? 'Collection'"
+        :icon="collection?.icon || 'FolderOpen'"
         :total="total"
-        view-type="collection"
+        v-model:coverSize="coverSize"
+        v-model:gridGap="gridGap"
+        v-model:viewMode="viewMode"
         :selection-mode="selectionMode"
-        :is-selected="isSelected"
-        :selected-count="selectedCount"
-        :initialized="booksInitialized"
-        @update:sort="tableSortModel = $event"
-        @action="handleBookAction"
-        @select="handleSelect"
-        @update:book="handleTableBookUpdate"
-        @visible-range="handleRange"
-        @first-visible-index="handleFirstVisibleIndex"
-        @select-all="handleSelectAllLoaded"
-        @enter-selection="enterSelectionMode"
-      />
+        :searchable="true"
+        :mobile-search-in-menu="false"
+        v-model:searchQuery="searchQuery"
+        @toggle-selection="toggleSelectionMode"
+      >
+        <template #toolbar>
+          <Tooltip>
+            <TooltipTrigger as-child>
+              <button
+                class="hidden sm:flex h-8 w-8 items-center justify-center rounded-md border transition-colors"
+                :class="
+                  collapseEnabledRef
+                    ? 'border-primary text-primary bg-primary/10'
+                    : 'border-input text-muted-foreground bg-background hover:text-foreground hover:bg-muted'
+                "
+                @click="handleToggleCollapse"
+              >
+                <Layers :size="14" />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent>{{ collapseEnabledRef ? 'Expand series' : 'Collapse series' }}</TooltipContent>
+          </Tooltip>
 
-      <div v-if="effectiveViewMode === 'list'" ref="sentinel" class="h-8 mt-4 flex items-center justify-center">
-        <span v-if="loading" class="text-xs text-muted-foreground">Loading...</span>
-        <span v-else-if="!hasMorePrefix && contiguousPrefix.length > 0" class="text-xs text-muted-foreground"
-          >All {{ total.toLocaleString() }} books loaded</span
-        >
-      </div>
+          <Tooltip>
+            <TooltipTrigger as-child>
+              <button
+                v-if="hasPermission('library_download') && !isDemoRestrictedAccount"
+                class="hidden sm:flex h-8 w-8 items-center justify-center rounded-md border border-input text-muted-foreground bg-background transition-colors hover:text-foreground hover:bg-muted"
+                @click="openMetadataExport"
+              >
+                <FileSpreadsheet :size="14" />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent>Export metadata</TooltipContent>
+          </Tooltip>
 
-      <JumpRail
-        :visible="railVisible"
-        :buckets="buckets"
-        :kind="bucketKind ?? 'letter'"
-        :active-key="activeBucketKey"
-        :template="bucketKind === 'letter' ? letterTemplate : undefined"
-        @jump="handleJump"
-        @after-leave="releaseRailGutter"
-      />
-    </main>
-  </section>
+          <Tooltip>
+            <TooltipTrigger as-child>
+              <button
+                v-if="collection"
+                class="hidden sm:flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                @click="openCollectionEditor"
+              >
+                <Pencil :size="14" />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent>Edit collection</TooltipContent>
+          </Tooltip>
+
+          <button
+            class="sm:hidden flex h-8 w-8 items-center justify-center rounded-md border border-input text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+            @click="toggleMobileControls"
+          >
+            <SlidersHorizontal :size="14" />
+          </button>
+        </template>
+        <template #mobile-menu>
+          <DropdownMenuItem @click="handleToggleCollapse">
+            <CheckSquare v-if="collapseEnabledRef" :size="14" class="mr-2" />
+            <Square v-else :size="14" class="mr-2" />
+            Collapse series
+          </DropdownMenuItem>
+        </template>
+        <template v-if="effectiveViewMode === 'table'" #columns>
+          <TableColumnPanel
+            v-if="tableRef"
+            :all-columns="tableRef.allColumns"
+            :all-presets="tableRef.allPresets"
+            :saved-views="allSavedViews"
+            :table-density="tableDensity"
+            @toggle-column="handleToggleColumn"
+            @reorder-columns="handleColumnPanelReorder"
+            @apply-preset="handleApplyTablePreset"
+            @save-preset="handleSaveTablePreset"
+            @delete-preset="handleDeleteTablePreset"
+            @rename-preset="handleRenameTablePreset"
+            @duplicate-preset="handleDuplicateTablePreset"
+            @favorite-preset="handleTogglePresetFavorite"
+            @apply-view="handleApplySavedView"
+            @save-view="handleSaveCurrentView"
+            @delete-view="deleteView"
+            @rename-view="renameView"
+            @duplicate-view="duplicateView"
+            @favorite-view="toggleFavorite"
+            @update:density="handleTableDensityChange"
+            @export-backup="handleExportTableBackup"
+            @import-backup="handleImportTableBackup"
+            @reset="handleResetColumns"
+          />
+        </template>
+      </ViewHeader>
+
+      <section v-if="mobileControlsExpanded" class="mb-3 rounded-lg border border-border/70 bg-card/70 p-2 sm:hidden">
+        <div class="mb-2 flex h-9 items-center rounded-md border border-input bg-background px-2.5">
+          <Search :size="13" class="mr-1.5 shrink-0 text-muted-foreground/85" />
+          <input
+            v-model="searchQuery"
+            type="search"
+            placeholder="Search title, author, series, narrator..."
+            class="mobile-search-input h-full w-full bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground/85"
+          />
+          <button v-if="searchQuery.trim()" class="ml-1 text-muted-foreground/85 transition-colors hover:text-foreground" @click="clearSearch">
+            <X :size="12" />
+          </button>
+        </div>
+
+        <div class="flex flex-wrap items-center gap-2">
+          <button
+            class="flex h-8 items-center gap-1.5 rounded-md border px-2.5 text-sm transition-colors"
+            :class="
+              collapseEnabledRef
+                ? 'border-primary text-primary bg-primary/10'
+                : 'border-input text-muted-foreground hover:bg-muted hover:text-foreground'
+            "
+            @click="handleToggleCollapse"
+          >
+            <Layers :size="13" />
+            <span>{{ collapseEnabledRef ? 'Expanded' : 'Collapse series' }}</span>
+          </button>
+          <button
+            v-if="hasPermission('library_download') && !isDemoRestrictedAccount"
+            class="flex h-8 items-center gap-1.5 rounded-md border border-input px-2.5 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+            @click="openMetadataExport"
+          >
+            <FileSpreadsheet :size="13" />
+            <span>Export</span>
+          </button>
+          <button
+            v-if="collection"
+            class="flex h-8 items-center gap-1.5 rounded-md border border-input px-2.5 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+            @click="openCollectionEditor"
+          >
+            <Pencil :size="13" />
+            <span>Edit</span>
+          </button>
+          <button
+            class="flex h-8 items-center gap-1.5 rounded-md border border-input px-2.5 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+            @click="closeMobileControls"
+          >
+            <X :size="13" />
+            <span>Close</span>
+          </button>
+        </div>
+      </section>
+
+      <main ref="mainRef" :class="effectiveViewMode === 'table' ? 'flex-1 min-h-0 flex flex-col overflow-hidden' : 'flex-1 min-h-0 overflow-y-auto'">
+        <div v-if="collectionLoadError" class="flex flex-col items-center justify-center gap-3 py-24 text-center">
+          <div class="flex h-16 w-16 items-center justify-center rounded-full bg-destructive/10 text-destructive">
+            <AlertTriangle :size="28" />
+          </div>
+          <p class="text-sm font-medium text-foreground">Could not load this collection</p>
+          <p class="max-w-md text-xs text-muted-foreground">{{ collectionLoadError }}</p>
+          <button
+            class="rounded-md border border-input px-3 py-2 text-sm text-foreground transition-colors hover:bg-muted"
+            @click="retryCollectionLoad"
+          >
+            Retry
+          </button>
+        </div>
+
+        <EntityNotFound v-else-if="collectionNotFound" entity="Collection" />
+
+        <div v-else-if="booksInitialized && !loading && books.length === 0" class="flex flex-col items-center justify-center gap-3 py-24 text-center">
+          <div class="h-16 w-16 rounded-full bg-muted flex items-center justify-center">
+            <FolderOpen :size="28" class="text-muted-foreground/70" />
+          </div>
+          <p class="text-sm font-medium text-foreground">{{ debouncedQuery ? 'No books match this search' : 'No books in this collection' }}</p>
+          <p class="text-xs text-muted-foreground">
+            {{ debouncedQuery ? 'Try a different search term or clear the search.' : 'Select books from your library and add them here.' }}
+          </p>
+        </div>
+
+        <VirtualBookGrid
+          v-if="effectiveViewMode === 'grid' && books.length > 0"
+          ref="bookGridRef"
+          :books="slots"
+          :cover-size="coverSize"
+          :grid-gap="gridGap"
+          :selection-mode="selectionMode"
+          :is-selected="isSelected"
+          :rail-gutter="railGutterReserved"
+          @range="handleRange"
+          @first-visible-index="handleFirstVisibleIndex"
+          @action="handleBookAction"
+          @select="handleSelect"
+        />
+
+        <div v-if="effectiveViewMode === 'list' && contiguousPrefix.length > 0" class="flex flex-col divide-y divide-border">
+          <BookListRow
+            v-for="book in contiguousPrefix"
+            :key="book.id"
+            :book="book"
+            :selection-mode="selectionMode"
+            :selected="isSelected(book.id)"
+            @action="handleBookAction(book, $event)"
+            @select="handleSelect(book.id, $event)"
+          />
+        </div>
+
+        <!-- Table view -->
+        <VirtualBookTable
+          v-if="effectiveViewMode === 'table'"
+          ref="tableRef"
+          :books="slots"
+          :in-flight="inFlight"
+          :sort="tableSort"
+          :loading="loading"
+          :total="total"
+          view-type="collection"
+          :selection-mode="selectionMode"
+          :is-selected="isSelected"
+          :selected-count="selectedCount"
+          :initialized="booksInitialized"
+          @update:sort="tableSortModel = $event"
+          @action="handleBookAction"
+          @select="handleSelect"
+          @update:book="handleTableBookUpdate"
+          @visible-range="handleRange"
+          @first-visible-index="handleFirstVisibleIndex"
+          @select-all="handleSelectAllLoaded"
+          @enter-selection="enterSelectionMode"
+        />
+
+        <div v-if="effectiveViewMode === 'list'" ref="sentinel" class="h-8 mt-4 flex items-center justify-center">
+          <span v-if="loading" class="text-xs text-muted-foreground">Loading...</span>
+          <span v-else-if="!hasMorePrefix && contiguousPrefix.length > 0" class="text-xs text-muted-foreground"
+            >All {{ total.toLocaleString() }} books loaded</span
+          >
+        </div>
+
+        <JumpRail
+          :visible="railVisible"
+          :buckets="buckets"
+          :kind="bucketKind ?? 'letter'"
+          :active-key="activeBucketKey"
+          :template="bucketKind === 'letter' ? letterTemplate : undefined"
+          @jump="handleJump"
+          @after-leave="releaseRailGutter"
+        />
+      </main>
+    </section>
+  </div>
 </template>
 
 <style scoped>

@@ -10,6 +10,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useDisplaySettings } from '@/composables/useDisplaySettings'
 import { usePermissions } from '@/features/auth/composables/usePermissions'
+import { useScrollRestoreOnActivate } from '@/features/book/composables/useScrollRestoreOnActivate'
 import { useLibraries } from '@/features/library/composables/useLibraries'
 import { bulkRefreshAuthorsMetadata, deleteAuthors, refreshAuthorMetadata } from '../api/author'
 import AuthorCard from '../components/AuthorCard.vue'
@@ -24,6 +25,8 @@ import type { BookViewMode } from '@/composables/useDisplaySettings'
 
 const router = useRouter()
 const route = useRoute()
+const mainRef = ref<HTMLElement | null>(null)
+useScrollRestoreOnActivate(mainRef)
 const { gridGap, viewMode, authorCoverSize, authorCoverShape } = useDisplaySettings()
 const { libraries, fetchLibraries } = useLibraries()
 const { hasPermission, isDemoRestrictedAccount, isSuperuser } = usePermissions()
@@ -423,387 +426,391 @@ watch(
   },
   { flush: 'post' },
 )
+
+defineOptions({ name: 'AuthorsView' })
 </script>
 
 <template>
-  <section class="flex h-full flex-col">
-    <ViewHeader
-      title="Authors"
-      icon="Users"
-      :total="total"
-      v-model:coverSize="authorCoverSize"
-      v-model:gridGap="gridGap"
-      v-model:viewMode="authorViewMode"
-      v-model:coverShape="authorCoverShape"
-      :allowed-view-modes="['grid', 'list']"
-      :selection-mode="selectionMode"
-      @toggle-selection="toggleSelectionMode"
-    >
-      <template #toolbar>
-        <div class="hidden lg:flex h-8 w-64 items-center rounded-md border border-input bg-background px-2.5">
-          <Search :size="13" class="mr-1.5 shrink-0 text-muted-foreground/85" />
+  <div class="flex h-full flex-col">
+    <section class="flex flex-1 flex-col min-h-0">
+      <ViewHeader
+        title="Authors"
+        icon="Users"
+        :total="total"
+        v-model:coverSize="authorCoverSize"
+        v-model:gridGap="gridGap"
+        v-model:viewMode="authorViewMode"
+        v-model:coverShape="authorCoverShape"
+        :allowed-view-modes="['grid', 'list']"
+        :selection-mode="selectionMode"
+        @toggle-selection="toggleSelectionMode"
+      >
+        <template #toolbar>
+          <div class="hidden lg:flex h-8 w-64 items-center rounded-md border border-input bg-background px-2.5">
+            <Search :size="13" class="mr-1.5 shrink-0 text-muted-foreground/85" />
+            <input
+              v-model="q"
+              type="search"
+              placeholder="Search authors"
+              class="author-search-input h-full w-full bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground/85"
+            />
+            <button v-if="q.trim()" class="ml-1 text-muted-foreground/85 transition-colors hover:text-foreground" @click="clearSearchQuery">
+              <X :size="12" />
+            </button>
+          </div>
+
+          <div class="hidden lg:block h-5 w-px shrink-0 bg-border" />
+
+          <div class="hidden sm:flex items-center gap-1">
+            <Popover>
+              <PopoverTrigger as-child>
+                <button
+                  class="flex h-8 items-center gap-1.5 rounded-md border px-3 text-sm transition-colors"
+                  :class="
+                    !isDefaultSort
+                      ? 'border-primary text-primary bg-primary/10'
+                      : 'border-input text-muted-foreground bg-background hover:text-foreground hover:bg-muted'
+                  "
+                >
+                  <ArrowUpDown :size="13" />
+                  <span class="hidden lg:inline">{{ sortSummary }}</span>
+                  <span class="lg:hidden">Sort</span>
+                </button>
+              </PopoverTrigger>
+              <PopoverContent align="start" class="w-56 p-2">
+                <div class="mb-2 px-1 text-xs font-medium text-muted-foreground">Sort by</div>
+                <div class="flex flex-col gap-0.5">
+                  <button
+                    v-for="field in ['name', 'sortName', 'bookCount', 'lastAddedAt', 'lastEnrichedAt'] as const"
+                    :key="field"
+                    class="flex items-center justify-between rounded-sm px-2 py-1.5 text-sm transition-colors hover:bg-muted"
+                    :class="sort === field ? 'text-foreground font-medium' : 'text-muted-foreground'"
+                    @click="setSortField(field)"
+                  >
+                    {{ SORT_LABELS[field] }}
+                    <span v-if="sort === field" class="text-xs text-primary">{{ order === 'asc' ? '↑' : '↓' }}</span>
+                  </button>
+                </div>
+                <div class="my-2 border-t border-border" />
+                <div class="flex gap-1">
+                  <button
+                    v-for="dir in ['asc', 'desc'] as const"
+                    :key="dir"
+                    class="flex-1 rounded-sm px-2 py-1.5 text-sm transition-colors hover:bg-muted"
+                    :class="order === dir ? 'bg-muted text-foreground font-medium' : 'text-muted-foreground'"
+                    @click="setSortOrder(dir)"
+                  >
+                    {{ dir === 'asc' ? 'Ascending' : 'Descending' }}
+                  </button>
+                </div>
+              </PopoverContent>
+            </Popover>
+            <button
+              v-if="!isDefaultSort"
+              class="flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:text-destructive hover:bg-muted"
+              @click="resetSort"
+            >
+              <X :size="13" />
+            </button>
+          </div>
+
+          <div class="hidden sm:block h-5 w-px shrink-0 bg-border" />
+
+          <button
+            @click="toggleFiltersOpen"
+            class="hidden sm:flex h-8 items-center gap-1.5 rounded-md border px-3 text-sm transition-colors"
+            :class="
+              activeFilterCount > 0
+                ? 'border-primary text-primary bg-primary/10'
+                : 'border-input text-muted-foreground bg-background hover:text-foreground hover:bg-muted'
+            "
+          >
+            <Filter :size="13" />
+            <span>Filters</span>
+            <span v-if="activeFilterCount > 0" class="text-xs font-semibold">({{ activeFilterCount }})</span>
+          </button>
+
+          <button
+            v-if="activeFilterCount > 0 || !isDefaultSort"
+            @click="clearFilters"
+            class="hidden sm:flex h-8 items-center gap-1 rounded-md px-2 text-sm text-muted-foreground transition-colors hover:text-destructive"
+          >
+            <X :size="13" />
+            Clear
+          </button>
+
+          <button
+            class="sm:hidden relative flex h-8 w-8 items-center justify-center rounded-md border transition-colors"
+            :class="
+              mobileControlsExpanded
+                ? 'border-primary text-primary bg-primary/10'
+                : 'border-input bg-background text-muted-foreground hover:bg-muted hover:text-foreground'
+            "
+            @click="toggleMobileControls"
+          >
+            <SlidersHorizontal :size="14" />
+            <span
+              v-if="mobileControlsBadgeCount > 0"
+              class="absolute -right-1 -top-1 inline-flex min-h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-semibold leading-none text-primary-foreground"
+            >
+              {{ mobileControlsBadgeCount }}
+            </span>
+          </button>
+        </template>
+      </ViewHeader>
+
+      <section v-if="mobileControlsExpanded" class="mb-3 space-y-2 rounded-lg border border-border/70 bg-card/70 p-2 sm:hidden">
+        <div class="flex items-center gap-1 rounded-md border border-input bg-background px-2.5">
+          <Search :size="13" class="shrink-0 text-muted-foreground/85" />
           <input
+            ref="mobileSearchInput"
             v-model="q"
             type="search"
             placeholder="Search authors"
-            class="author-search-input h-full w-full bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground/85"
+            class="mobile-search-input h-9 w-full bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground/85"
           />
-          <button v-if="q.trim()" class="ml-1 text-muted-foreground/85 transition-colors hover:text-foreground" @click="clearSearchQuery">
+          <button v-if="q.trim()" class="text-muted-foreground/85 transition-colors hover:text-foreground" @click="clearSearchQuery">
             <X :size="12" />
           </button>
         </div>
 
-        <div class="hidden lg:block h-5 w-px shrink-0 bg-border" />
+        <div class="flex flex-wrap items-center gap-2">
+          <div class="relative min-w-0 flex-1">
+            <select
+              :value="sort"
+              class="h-8 w-full appearance-none rounded-md border border-input bg-background px-2.5 pr-8 text-sm text-foreground outline-none transition-colors focus:border-primary/60"
+              @change="onMobileSortChange"
+            >
+              <option v-for="field in ['name', 'sortName', 'bookCount', 'lastAddedAt', 'lastEnrichedAt'] as const" :key="field" :value="field">
+                {{ SORT_LABELS[field] }}
+              </option>
+            </select>
+            <ArrowUpDown :size="13" class="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground/85" />
+          </div>
 
-        <div class="hidden sm:flex items-center gap-1">
-          <Popover>
-            <PopoverTrigger as-child>
-              <button
-                class="flex h-8 items-center gap-1.5 rounded-md border px-3 text-sm transition-colors"
-                :class="
-                  !isDefaultSort
-                    ? 'border-primary text-primary bg-primary/10'
-                    : 'border-input text-muted-foreground bg-background hover:text-foreground hover:bg-muted'
-                "
-              >
-                <ArrowUpDown :size="13" />
-                <span class="hidden lg:inline">{{ sortSummary }}</span>
-                <span class="lg:hidden">Sort</span>
-              </button>
-            </PopoverTrigger>
-            <PopoverContent align="start" class="w-56 p-2">
-              <div class="mb-2 px-1 text-xs font-medium text-muted-foreground">Sort by</div>
-              <div class="flex flex-col gap-0.5">
-                <button
-                  v-for="field in ['name', 'sortName', 'bookCount', 'lastAddedAt', 'lastEnrichedAt'] as const"
-                  :key="field"
-                  class="flex items-center justify-between rounded-sm px-2 py-1.5 text-sm transition-colors hover:bg-muted"
-                  :class="sort === field ? 'text-foreground font-medium' : 'text-muted-foreground'"
-                  @click="setSortField(field)"
-                >
-                  {{ SORT_LABELS[field] }}
-                  <span v-if="sort === field" class="text-xs text-primary">{{ order === 'asc' ? '↑' : '↓' }}</span>
-                </button>
-              </div>
-              <div class="my-2 border-t border-border" />
-              <div class="flex gap-1">
-                <button
-                  v-for="dir in ['asc', 'desc'] as const"
-                  :key="dir"
-                  class="flex-1 rounded-sm px-2 py-1.5 text-sm transition-colors hover:bg-muted"
-                  :class="order === dir ? 'bg-muted text-foreground font-medium' : 'text-muted-foreground'"
-                  @click="setSortOrder(dir)"
-                >
-                  {{ dir === 'asc' ? 'Ascending' : 'Descending' }}
-                </button>
-              </div>
-            </PopoverContent>
-          </Popover>
           <button
-            v-if="!isDefaultSort"
-            class="flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:text-destructive hover:bg-muted"
-            @click="resetSort"
+            class="flex h-8 items-center rounded-md border px-2.5 text-sm transition-colors"
+            :class="
+              order === 'asc'
+                ? 'border-primary text-primary bg-primary/10'
+                : 'border-input text-muted-foreground bg-background hover:text-foreground hover:bg-muted'
+            "
+            @click="setSortOrder(order === 'asc' ? 'desc' : 'asc')"
           >
-            <X :size="13" />
+            {{ order === 'asc' ? 'Asc' : 'Desc' }}
+          </button>
+
+          <button
+            v-if="activeFilterCount > 0 || !isDefaultSort"
+            class="h-8 rounded-md px-2 text-sm text-muted-foreground transition-colors hover:text-destructive"
+            @click="clearFilters"
+          >
+            Clear
           </button>
         </div>
 
-        <div class="hidden sm:block h-5 w-px shrink-0 bg-border" />
-
-        <button
-          @click="toggleFiltersOpen"
-          class="hidden sm:flex h-8 items-center gap-1.5 rounded-md border px-3 text-sm transition-colors"
-          :class="
-            activeFilterCount > 0
-              ? 'border-primary text-primary bg-primary/10'
-              : 'border-input text-muted-foreground bg-background hover:text-foreground hover:bg-muted'
-          "
-        >
-          <Filter :size="13" />
-          <span>Filters</span>
-          <span v-if="activeFilterCount > 0" class="text-xs font-semibold">({{ activeFilterCount }})</span>
-        </button>
-
-        <button
-          v-if="activeFilterCount > 0 || !isDefaultSort"
-          @click="clearFilters"
-          class="hidden sm:flex h-8 items-center gap-1 rounded-md px-2 text-sm text-muted-foreground transition-colors hover:text-destructive"
-        >
-          <X :size="13" />
-          Clear
-        </button>
-
-        <button
-          class="sm:hidden relative flex h-8 w-8 items-center justify-center rounded-md border transition-colors"
-          :class="
-            mobileControlsExpanded
-              ? 'border-primary text-primary bg-primary/10'
-              : 'border-input bg-background text-muted-foreground hover:bg-muted hover:text-foreground'
-          "
-          @click="toggleMobileControls"
-        >
-          <SlidersHorizontal :size="14" />
-          <span
-            v-if="mobileControlsBadgeCount > 0"
-            class="absolute -right-1 -top-1 inline-flex min-h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-semibold leading-none text-primary-foreground"
-          >
-            {{ mobileControlsBadgeCount }}
-          </span>
-        </button>
-      </template>
-    </ViewHeader>
-
-    <section v-if="mobileControlsExpanded" class="mb-3 space-y-2 rounded-lg border border-border/70 bg-card/70 p-2 sm:hidden">
-      <div class="flex items-center gap-1 rounded-md border border-input bg-background px-2.5">
-        <Search :size="13" class="shrink-0 text-muted-foreground/85" />
-        <input
-          ref="mobileSearchInput"
-          v-model="q"
-          type="search"
-          placeholder="Search authors"
-          class="mobile-search-input h-9 w-full bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground/85"
+        <AuthorFilters
+          v-model:library-id="libraryId"
+          v-model:has-photo="hasPhoto"
+          v-model:min-book-count="minBookCount"
+          :active-count="activeFilterCount"
+          embedded
+          :libraries="libraries.map((library) => ({ id: library.id, name: library.name }))"
+          @clear="clearFilters"
         />
-        <button v-if="q.trim()" class="text-muted-foreground/85 transition-colors hover:text-foreground" @click="clearSearchQuery">
-          <X :size="12" />
-        </button>
+      </section>
+
+      <!-- Desktop filters panel rendered outside <main> so it stays anchored when the list is scrolled -->
+      <div v-if="filtersOpen && !mobileControlsExpanded" class="pr-2">
+        <AuthorFilters
+          v-model:library-id="libraryId"
+          v-model:has-photo="hasPhoto"
+          v-model:min-book-count="minBookCount"
+          :active-count="activeFilterCount"
+          closable
+          :libraries="libraries.map((library) => ({ id: library.id, name: library.name }))"
+          @clear="clearFilters"
+          @close="closeFiltersPanel"
+        />
       </div>
 
-      <div class="flex flex-wrap items-center gap-2">
-        <div class="relative min-w-0 flex-1">
-          <select
-            :value="sort"
-            class="h-8 w-full appearance-none rounded-md border border-input bg-background px-2.5 pr-8 text-sm text-foreground outline-none transition-colors focus:border-primary/60"
-            @change="onMobileSortChange"
-          >
-            <option v-for="field in ['name', 'sortName', 'bookCount', 'lastAddedAt', 'lastEnrichedAt'] as const" :key="field" :value="field">
-              {{ SORT_LABELS[field] }}
-            </option>
-          </select>
-          <ArrowUpDown :size="13" class="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground/85" />
+      <main ref="mainRef" class="flex-1 min-h-0 overflow-y-auto pr-2">
+        <div v-if="error" class="mb-3 rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive">
+          {{ error }}
         </div>
 
-        <button
-          class="flex h-8 items-center rounded-md border px-2.5 text-sm transition-colors"
-          :class="
-            order === 'asc'
-              ? 'border-primary text-primary bg-primary/10'
-              : 'border-input text-muted-foreground bg-background hover:text-foreground hover:bg-muted'
-          "
-          @click="setSortOrder(order === 'asc' ? 'desc' : 'asc')"
+        <div
+          v-if="!initialLoadComplete && loading"
+          class="grid"
+          :style="{ gridTemplateColumns: `repeat(auto-fill, minmax(${authorCoverSize}px, 1fr))`, gap: `${gridGap}px` }"
         >
-          {{ order === 'asc' ? 'Asc' : 'Desc' }}
-        </button>
+          <div
+            v-for="index in INITIAL_SKELETON_COUNT"
+            :key="`author-skeleton-${index}`"
+            class="w-full animate-pulse bg-muted/50"
+            :class="authorCoverShape === 'circle' ? 'rounded-full aspect-square' : 'rounded-sm aspect-[2/3]'"
+          />
+        </div>
 
-        <button
-          v-if="activeFilterCount > 0 || !isDefaultSort"
-          class="h-8 rounded-md px-2 text-sm text-muted-foreground transition-colors hover:text-destructive"
-          @click="clearFilters"
+        <div v-if="!loading && items.length === 0" class="flex flex-col items-center justify-center gap-2 py-24 text-center">
+          <p class="text-sm font-medium text-foreground">No authors found</p>
+          <p class="text-xs text-muted-foreground">Try changing search text, sort, or library filter.</p>
+        </div>
+
+        <div
+          v-show="authorViewMode === 'grid' && items.length > 0"
+          class="grid"
+          :style="{ gridTemplateColumns: `repeat(auto-fill, minmax(${authorCoverSize}px, 1fr))`, gap: `${gridGap}px` }"
         >
-          Clear
-        </button>
-      </div>
+          <AuthorCard
+            v-for="author in items"
+            :key="author.id"
+            :author="author"
+            :shape="authorCoverShape"
+            :selection-mode="selectionMode"
+            :selected="isSelected(author.id)"
+            :can-refresh="canRefreshMetadata"
+            :can-delete="canDeleteAuthors"
+            :refreshing="isRefreshing(author.id)"
+            :deleting="deletingAuthorId === author.id"
+            @open="openAuthor"
+            @select="handleAuthorSelect(author.id, $event)"
+            @refresh="refreshSingleAuthorMetadata"
+            @delete="promptDeleteSingleAuthor"
+          />
+        </div>
 
-      <AuthorFilters
-        v-model:library-id="libraryId"
-        v-model:has-photo="hasPhoto"
-        v-model:min-book-count="minBookCount"
-        :active-count="activeFilterCount"
-        embedded
-        :libraries="libraries.map((library) => ({ id: library.id, name: library.name }))"
-        @clear="clearFilters"
-      />
+        <div v-show="authorViewMode === 'list' && items.length > 0" class="flex flex-col divide-y divide-border">
+          <AuthorListRow
+            v-for="author in items"
+            :key="author.id"
+            :author="author"
+            :selection-mode="selectionMode"
+            :selected="isSelected(author.id)"
+            :refreshing="isRefreshing(author.id)"
+            @open="openAuthor"
+            @select="handleAuthorSelect(author.id, $event)"
+          />
+        </div>
+
+        <div ref="sentinel" class="mt-4 flex h-8 items-center justify-center">
+          <span v-if="loading" class="text-xs text-muted-foreground">Loading...</span>
+          <span v-else-if="initialLoadComplete && !hasMore && items.length > 0" class="text-xs text-muted-foreground">
+            All {{ total.toLocaleString() }} authors loaded
+          </span>
+        </div>
+      </main>
     </section>
 
-    <!-- Desktop filters panel rendered outside <main> so it stays anchored when the list is scrolled -->
-    <div v-if="filtersOpen && !mobileControlsExpanded" class="pr-2">
-      <AuthorFilters
-        v-model:library-id="libraryId"
-        v-model:has-photo="hasPhoto"
-        v-model:min-book-count="minBookCount"
-        :active-count="activeFilterCount"
-        closable
-        :libraries="libraries.map((library) => ({ id: library.id, name: library.name }))"
-        @clear="clearFilters"
-        @close="closeFiltersPanel"
-      />
-    </div>
+    <SelectionActionBar :visible="selectionMode" :count="selectedCount" @exit="exitSelectionMode">
+      <template #content>
+        <template v-if="!confirmingBulkDelete">
+          <span class="px-2.5 py-0.5 text-sm font-semibold tabular-nums whitespace-nowrap rounded-full bg-primary/10 text-primary">{{
+            selectedCount
+          }}</span>
 
-    <main class="flex-1 min-h-0 overflow-y-auto pr-2">
-      <div v-if="error" class="mb-3 rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive">
-        {{ error }}
-      </div>
+          <div class="w-px h-5 bg-border mx-1 shrink-0" />
 
-      <div
-        v-if="!initialLoadComplete && loading"
-        class="grid"
-        :style="{ gridTemplateColumns: `repeat(auto-fill, minmax(${authorCoverSize}px, 1fr))`, gap: `${gridGap}px` }"
-      >
-        <div
-          v-for="index in INITIAL_SKELETON_COUNT"
-          :key="`author-skeleton-${index}`"
-          class="w-full animate-pulse bg-muted/50"
-          :class="authorCoverShape === 'circle' ? 'rounded-full aspect-square' : 'rounded-sm aspect-[2/3]'"
-        />
-      </div>
+          <Tooltip>
+            <TooltipTrigger as-child>
+              <button
+                :disabled="selectedCount === 0"
+                class="h-9 w-9 flex items-center justify-center rounded-full transition-colors"
+                :class="
+                  selectedCount > 0 ? 'text-foreground hover:bg-primary hover:text-primary-foreground' : 'text-muted-foreground/60 cursor-not-allowed'
+                "
+                @click="selectAllVisible"
+              >
+                <CheckCheck :size="17" />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent side="top">Select visible</TooltipContent>
+          </Tooltip>
 
-      <div v-if="!loading && items.length === 0" class="flex flex-col items-center justify-center gap-2 py-24 text-center">
-        <p class="text-sm font-medium text-foreground">No authors found</p>
-        <p class="text-xs text-muted-foreground">Try changing search text, sort, or library filter.</p>
-      </div>
+          <Tooltip v-if="canRefreshMetadata">
+            <TooltipTrigger as-child>
+              <button
+                :disabled="selectedCount === 0 || bulkRefreshing"
+                class="h-9 w-9 flex items-center justify-center rounded-full transition-colors"
+                :class="selectedCount > 0 ? 'text-foreground hover:bg-muted' : 'text-muted-foreground/60 cursor-not-allowed'"
+                @click="refreshSelectedAuthorsMetadata"
+              >
+                <RefreshCcw :size="17" :class="bulkRefreshing ? 'animate-spin' : ''" />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent side="top">{{ bulkRefreshing ? 'Refreshing metadata...' : 'Refresh metadata' }}</TooltipContent>
+          </Tooltip>
 
-      <div
-        v-show="authorViewMode === 'grid' && items.length > 0"
-        class="grid"
-        :style="{ gridTemplateColumns: `repeat(auto-fill, minmax(${authorCoverSize}px, 1fr))`, gap: `${gridGap}px` }"
-      >
-        <AuthorCard
-          v-for="author in items"
-          :key="author.id"
-          :author="author"
-          :shape="authorCoverShape"
-          :selection-mode="selectionMode"
-          :selected="isSelected(author.id)"
-          :can-refresh="canRefreshMetadata"
-          :can-delete="canDeleteAuthors"
-          :refreshing="isRefreshing(author.id)"
-          :deleting="deletingAuthorId === author.id"
-          @open="openAuthor"
-          @select="handleAuthorSelect(author.id, $event)"
-          @refresh="refreshSingleAuthorMetadata"
-          @delete="promptDeleteSingleAuthor"
-        />
-      </div>
+          <Tooltip v-if="canDeleteAuthors">
+            <TooltipTrigger as-child>
+              <button
+                :disabled="selectedCount === 0 || bulkDeleting"
+                class="h-9 w-9 flex items-center justify-center rounded-full transition-colors"
+                :class="
+                  selectedCount > 0
+                    ? 'text-destructive hover:bg-destructive hover:text-destructive-foreground'
+                    : 'text-muted-foreground/60 cursor-not-allowed'
+                "
+                @click="confirmingBulkDelete = true"
+              >
+                <Trash2 :size="17" />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent side="top">{{ bulkDeleting ? 'Deleting...' : 'Delete selected' }}</TooltipContent>
+          </Tooltip>
 
-      <div v-show="authorViewMode === 'list' && items.length > 0" class="flex flex-col divide-y divide-border">
-        <AuthorListRow
-          v-for="author in items"
-          :key="author.id"
-          :author="author"
-          :selection-mode="selectionMode"
-          :selected="isSelected(author.id)"
-          :refreshing="isRefreshing(author.id)"
-          @open="openAuthor"
-          @select="handleAuthorSelect(author.id, $event)"
-        />
-      </div>
+          <div class="w-px h-5 bg-border mx-1 shrink-0" />
 
-      <div ref="sentinel" class="mt-4 flex h-8 items-center justify-center">
-        <span v-if="loading" class="text-xs text-muted-foreground">Loading...</span>
-        <span v-else-if="initialLoadComplete && !hasMore && items.length > 0" class="text-xs text-muted-foreground">
-          All {{ total.toLocaleString() }} authors loaded
-        </span>
-      </div>
-    </main>
-  </section>
+          <Tooltip>
+            <TooltipTrigger as-child>
+              <button
+                class="h-9 w-9 flex items-center justify-center rounded-full text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                @click="exitSelectionMode"
+              >
+                <X :size="17" />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent side="top">Exit selection</TooltipContent>
+          </Tooltip>
+        </template>
 
-  <SelectionActionBar :visible="selectionMode" :count="selectedCount" @exit="exitSelectionMode">
-    <template #content>
-      <template v-if="!confirmingBulkDelete">
-        <span class="px-2.5 py-0.5 text-sm font-semibold tabular-nums whitespace-nowrap rounded-full bg-primary/10 text-primary">{{
-          selectedCount
-        }}</span>
+        <template v-else>
+          <span class="px-3 text-sm font-semibold text-destructive whitespace-nowrap"
+            >Delete {{ selectedCount }} author{{ selectedCount === 1 ? '' : 's' }}?</span
+          >
 
-        <div class="w-px h-5 bg-border mx-1 shrink-0" />
+          <div class="w-px h-5 bg-border mx-1 shrink-0" />
 
-        <Tooltip>
-          <TooltipTrigger as-child>
-            <button
-              :disabled="selectedCount === 0"
-              class="h-9 w-9 flex items-center justify-center rounded-full transition-colors"
-              :class="
-                selectedCount > 0 ? 'text-foreground hover:bg-primary hover:text-primary-foreground' : 'text-muted-foreground/60 cursor-not-allowed'
-              "
-              @click="selectAllVisible"
-            >
-              <CheckCheck :size="17" />
-            </button>
-          </TooltipTrigger>
-          <TooltipContent side="top">Select visible</TooltipContent>
-        </Tooltip>
+          <button
+            class="h-8 px-3 rounded-full text-sm font-medium text-destructive hover:bg-destructive hover:text-destructive-foreground transition-colors"
+            :disabled="bulkDeleting"
+            @click="confirmDeleteSelectedFromPopover"
+          >
+            {{ bulkDeleting ? 'Deleting...' : 'Delete' }}
+          </button>
 
-        <Tooltip v-if="canRefreshMetadata">
-          <TooltipTrigger as-child>
-            <button
-              :disabled="selectedCount === 0 || bulkRefreshing"
-              class="h-9 w-9 flex items-center justify-center rounded-full transition-colors"
-              :class="selectedCount > 0 ? 'text-foreground hover:bg-muted' : 'text-muted-foreground/60 cursor-not-allowed'"
-              @click="refreshSelectedAuthorsMetadata"
-            >
-              <RefreshCcw :size="17" :class="bulkRefreshing ? 'animate-spin' : ''" />
-            </button>
-          </TooltipTrigger>
-          <TooltipContent side="top">{{ bulkRefreshing ? 'Refreshing metadata...' : 'Refresh metadata' }}</TooltipContent>
-        </Tooltip>
-
-        <Tooltip v-if="canDeleteAuthors">
-          <TooltipTrigger as-child>
-            <button
-              :disabled="selectedCount === 0 || bulkDeleting"
-              class="h-9 w-9 flex items-center justify-center rounded-full transition-colors"
-              :class="
-                selectedCount > 0
-                  ? 'text-destructive hover:bg-destructive hover:text-destructive-foreground'
-                  : 'text-muted-foreground/60 cursor-not-allowed'
-              "
-              @click="confirmingBulkDelete = true"
-            >
-              <Trash2 :size="17" />
-            </button>
-          </TooltipTrigger>
-          <TooltipContent side="top">{{ bulkDeleting ? 'Deleting...' : 'Delete selected' }}</TooltipContent>
-        </Tooltip>
-
-        <div class="w-px h-5 bg-border mx-1 shrink-0" />
-
-        <Tooltip>
-          <TooltipTrigger as-child>
-            <button
-              class="h-9 w-9 flex items-center justify-center rounded-full text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
-              @click="exitSelectionMode"
-            >
-              <X :size="17" />
-            </button>
-          </TooltipTrigger>
-          <TooltipContent side="top">Exit selection</TooltipContent>
-        </Tooltip>
+          <button
+            class="h-8 px-3 rounded-full text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+            :disabled="bulkDeleting"
+            @click="confirmingBulkDelete = false"
+          >
+            Cancel
+          </button>
+        </template>
       </template>
+    </SelectionActionBar>
 
-      <template v-else>
-        <span class="px-3 text-sm font-semibold text-destructive whitespace-nowrap"
-          >Delete {{ selectedCount }} author{{ selectedCount === 1 ? '' : 's' }}?</span
-        >
-
-        <div class="w-px h-5 bg-border mx-1 shrink-0" />
-
-        <button
-          class="h-8 px-3 rounded-full text-sm font-medium text-destructive hover:bg-destructive hover:text-destructive-foreground transition-colors"
-          :disabled="bulkDeleting"
-          @click="confirmDeleteSelectedFromPopover"
-        >
-          {{ bulkDeleting ? 'Deleting...' : 'Delete' }}
-        </button>
-
-        <button
-          class="h-8 px-3 rounded-full text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
-          :disabled="bulkDeleting"
-          @click="confirmingBulkDelete = false"
-        >
-          Cancel
-        </button>
-      </template>
-    </template>
-  </SelectionActionBar>
-
-  <AuthorConfirmDialog
-    :open="deleteDialogOpen"
-    :title="deleteDialogTitle"
-    :description="deleteDialogDescription"
-    confirm-label="Delete"
-    :loading="deleteDialogLoading"
-    destructive
-    @confirm="confirmDeleteAuthors"
-    @cancel="cancelDeleteAuthors"
-  />
+    <AuthorConfirmDialog
+      :open="deleteDialogOpen"
+      :title="deleteDialogTitle"
+      :description="deleteDialogDescription"
+      confirm-label="Delete"
+      :loading="deleteDialogLoading"
+      destructive
+      @confirm="confirmDeleteAuthors"
+      @cancel="cancelDeleteAuthors"
+    />
+  </div>
 </template>
 
 <style scoped>

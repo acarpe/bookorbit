@@ -8,6 +8,7 @@ import { toast } from 'vue-sonner'
 import type { AuthorSummary, BookCard } from '@bookorbit/types'
 import VirtualBookGrid from '@/features/book/components/VirtualBookGrid.vue'
 import BookListRow from '@/features/book/components/BookListRow.vue'
+import { useScrollRestoreOnActivate } from '@/features/book/composables/useScrollRestoreOnActivate'
 import { useDisplaySettings } from '@/composables/useDisplaySettings'
 import { useLibraries } from '@/features/library/composables/useLibraries'
 import { usePermissions } from '@/features/auth/composables/usePermissions'
@@ -31,6 +32,8 @@ import EntityNotFound from '@/components/EntityNotFound.vue'
 
 const route = useRoute()
 const router = useRouter()
+const mainRef = ref<HTMLElement | null>(null)
+useScrollRestoreOnActivate(mainRef)
 const { hasPermission, isSuperuser } = usePermissions()
 const { width: windowWidth } = useWindowSize()
 
@@ -409,163 +412,230 @@ watch(
 watch(authorName, () => {
   void loadMetadataPreview()
 })
+
+defineOptions({ name: 'AuthorDetailView' })
 </script>
 
 <template>
-  <main class="flex min-h-full w-full min-w-0 flex-col overflow-x-hidden pr-0 sm:pr-2">
-    <div class="mb-3 mt-2 mr-0 sm:mr-4 flex items-center gap-2 px-1">
-      <button
-        class="inline-flex h-8 items-center gap-1 rounded-md border border-input px-2.5 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-        @click="goBack"
-      >
-        <ChevronLeft :size="14" />
-        Back
-      </button>
-    </div>
-
-    <div v-if="authorNotFound">
-      <EntityNotFound entity="Author" />
-    </div>
-
-    <template v-else>
-      <div v-if="authorError" class="mb-3 rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive">
-        {{ authorError }}
+  <div class="flex h-full flex-col">
+    <main ref="mainRef" class="flex flex-1 min-h-0 w-full min-w-0 flex-col overflow-y-auto overflow-x-hidden pr-0 sm:pr-2">
+      <div class="mb-3 mt-2 mr-0 sm:mr-4 flex items-center gap-2 px-1">
+        <button
+          class="inline-flex h-8 items-center gap-1 rounded-md border border-input px-2.5 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+          @click="goBack"
+        >
+          <ChevronLeft :size="14" />
+          Back
+        </button>
       </div>
 
-      <div v-if="loadingAuthor && !author" class="mb-4 rounded-lg border border-border/70 bg-card/60 p-4 text-sm text-muted-foreground">
-        Loading author...
-      </div>
-      <AuthorHeader
-        v-else-if="author"
-        :author="author"
-        :image-url="author.imageUrl ?? metadataPreview?.imageUrl ?? null"
-        :preview-description="metadataPreview?.description ?? null"
-        :preview-provider="metadataPreview?.provider ?? null"
-        :loading-preview="loadingMetadataPreview"
-        :can-update="canUpdate"
-        :can-merge="canMerge"
-        :can-delete="canDelete"
-        :refreshing="refreshingMetadata"
-        @edit="toggleEdit"
-        @merge="toggleMerge"
-        @refresh="refreshMetadata"
-        @delete="confirmDeleteOpen = true"
-      />
-
-      <div v-if="metadataPreviewError" class="mt-3 rounded-md border border-border/70 bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
-        Could not load external author preview metadata right now.
+      <div v-if="authorNotFound">
+        <EntityNotFound entity="Author" />
       </div>
 
-      <section v-if="author && (editOpen || mergeOpen)" class="mt-4 rounded-lg border border-border/70 bg-card/60 p-3 space-y-3">
-        <div v-if="editOpen && canUpdate" class="space-y-2">
-          <div class="grid gap-2 md:grid-cols-2">
-            <label class="text-xs text-muted-foreground">
-              Name
-              <input v-model="draftName" class="mt-1 h-9 w-full rounded-md border border-input bg-background px-2.5 text-sm" />
+      <template v-else>
+        <div v-if="authorError" class="mb-3 rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive">
+          {{ authorError }}
+        </div>
+
+        <div v-if="loadingAuthor && !author" class="mb-4 rounded-lg border border-border/70 bg-card/60 p-4 text-sm text-muted-foreground">
+          Loading author...
+        </div>
+        <AuthorHeader
+          v-else-if="author"
+          :author="author"
+          :image-url="author.imageUrl ?? metadataPreview?.imageUrl ?? null"
+          :preview-description="metadataPreview?.description ?? null"
+          :preview-provider="metadataPreview?.provider ?? null"
+          :loading-preview="loadingMetadataPreview"
+          :can-update="canUpdate"
+          :can-merge="canMerge"
+          :can-delete="canDelete"
+          :refreshing="refreshingMetadata"
+          @edit="toggleEdit"
+          @merge="toggleMerge"
+          @refresh="refreshMetadata"
+          @delete="confirmDeleteOpen = true"
+        />
+
+        <div v-if="metadataPreviewError" class="mt-3 rounded-md border border-border/70 bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
+          Could not load external author preview metadata right now.
+        </div>
+
+        <section v-if="author && (editOpen || mergeOpen)" class="mt-4 rounded-lg border border-border/70 bg-card/60 p-3 space-y-3">
+          <div v-if="editOpen && canUpdate" class="space-y-2">
+            <div class="grid gap-2 md:grid-cols-2">
+              <label class="text-xs text-muted-foreground">
+                Name
+                <input v-model="draftName" class="mt-1 h-9 w-full rounded-md border border-input bg-background px-2.5 text-sm" />
+              </label>
+              <label class="text-xs text-muted-foreground">
+                Sort Name
+                <input v-model="draftSortName" class="mt-1 h-9 w-full rounded-md border border-input bg-background px-2.5 text-sm" />
+              </label>
+            </div>
+            <label class="block text-xs text-muted-foreground">
+              Description
+              <textarea v-model="draftDescription" rows="3" class="mt-1 w-full rounded-md border border-input bg-background px-2.5 py-2 text-sm" />
             </label>
-            <label class="text-xs text-muted-foreground">
-              Sort Name
-              <input v-model="draftSortName" class="mt-1 h-9 w-full rounded-md border border-input bg-background px-2.5 text-sm" />
-            </label>
-          </div>
-          <label class="block text-xs text-muted-foreground">
-            Description
-            <textarea v-model="draftDescription" rows="3" class="mt-1 w-full rounded-md border border-input bg-background px-2.5 py-2 text-sm" />
-          </label>
-          <div class="space-y-1.5">
-            <p class="text-xs text-muted-foreground">Image</p>
-            <input ref="authorImageInput" type="file" accept="image/*" class="hidden" :disabled="authorImageBusy" @change="onAuthorImageSelected" />
-            <div class="flex flex-wrap items-center gap-2">
-              <button
-                :disabled="authorImageBusy"
-                class="inline-flex h-8 items-center gap-1.5 rounded-md border border-input px-3 text-sm text-foreground transition-colors hover:bg-muted disabled:opacity-60"
-                @click="openAuthorImagePicker"
-              >
-                <Upload :size="14" />
-                {{ uploadingImage ? 'Uploading...' : author?.imageUrl ? 'Replace image' : 'Upload image' }}
+            <div class="space-y-1.5">
+              <p class="text-xs text-muted-foreground">Image</p>
+              <input ref="authorImageInput" type="file" accept="image/*" class="hidden" :disabled="authorImageBusy" @change="onAuthorImageSelected" />
+              <div class="flex flex-wrap items-center gap-2">
+                <button
+                  :disabled="authorImageBusy"
+                  class="inline-flex h-8 items-center gap-1.5 rounded-md border border-input px-3 text-sm text-foreground transition-colors hover:bg-muted disabled:opacity-60"
+                  @click="openAuthorImagePicker"
+                >
+                  <Upload :size="14" />
+                  {{ uploadingImage ? 'Uploading...' : author?.imageUrl ? 'Replace image' : 'Upload image' }}
+                </button>
+                <button
+                  :disabled="authorImageBusy || !author?.imageUrl"
+                  class="inline-flex h-8 items-center gap-1.5 rounded-md border border-input px-3 text-sm text-muted-foreground transition-colors hover:bg-muted disabled:opacity-60"
+                  @click="removeAuthorImage"
+                >
+                  <ImageMinus :size="14" />
+                  {{ removingImage ? 'Removing...' : 'Remove image' }}
+                </button>
+              </div>
+              <p class="text-[11px] text-muted-foreground">PNG/JPEG/WEBP/GIF/BMP up to {{ Math.floor(MAX_AUTHOR_IMAGE_BYTES / 1024 / 1024) }} MB</p>
+            </div>
+            <div class="flex items-center justify-end gap-2">
+              <button class="h-8 rounded-md border border-input px-3 text-sm text-muted-foreground hover:bg-muted" @click="editOpen = false">
+                Cancel
               </button>
               <button
-                :disabled="authorImageBusy || !author?.imageUrl"
-                class="inline-flex h-8 items-center gap-1.5 rounded-md border border-input px-3 text-sm text-muted-foreground transition-colors hover:bg-muted disabled:opacity-60"
-                @click="removeAuthorImage"
+                :disabled="savingEdit"
+                class="h-8 rounded-md bg-primary px-3 text-sm font-medium text-primary-foreground disabled:opacity-60"
+                @click="saveAuthorEdits"
               >
-                <ImageMinus :size="14" />
-                {{ removingImage ? 'Removing...' : 'Remove image' }}
+                {{ savingEdit ? 'Saving...' : 'Save' }}
               </button>
             </div>
-            <p class="text-[11px] text-muted-foreground">PNG/JPEG/WEBP/GIF/BMP up to {{ Math.floor(MAX_AUTHOR_IMAGE_BYTES / 1024 / 1024) }} MB</p>
-          </div>
-          <div class="flex items-center justify-end gap-2">
-            <button class="h-8 rounded-md border border-input px-3 text-sm text-muted-foreground hover:bg-muted" @click="editOpen = false">
-              Cancel
-            </button>
-            <button
-              :disabled="savingEdit"
-              class="h-8 rounded-md bg-primary px-3 text-sm font-medium text-primary-foreground disabled:opacity-60"
-              @click="saveAuthorEdits"
-            >
-              {{ savingEdit ? 'Saving...' : 'Save' }}
-            </button>
-          </div>
-        </div>
-
-        <div v-if="mergeOpen && canMerge" class="space-y-2">
-          <input
-            v-model="mergeQuery"
-            class="h-9 w-full rounded-md border border-input bg-background px-2.5 text-sm"
-            placeholder="Search authors to merge into this author"
-          />
-
-          <div v-if="searchingMergeCandidates" class="text-xs text-muted-foreground">Searching...</div>
-
-          <div v-if="mergeCandidates.length > 0" class="max-h-48 space-y-1 overflow-y-auto rounded-md border border-border/70 bg-background/50 p-2">
-            <label v-for="candidate in mergeCandidates" :key="candidate.id" class="flex items-center gap-2 text-sm">
-              <input type="checkbox" :checked="selectedMergeIds.includes(candidate.id)" @change="onMergeCandidateToggle(candidate.id, $event)" />
-              <span class="min-w-0 flex-1 truncate">{{ candidate.name }}</span>
-              <span class="text-xs text-muted-foreground">{{ candidate.bookCount }} books</span>
-            </label>
           </div>
 
-          <div v-if="selectedMergeIds.length > 0" class="text-xs text-muted-foreground">
-            Selected {{ selectedMergeIds.length }} author(s), approx. {{ selectedMergeBookCount }} books affected.
-          </div>
+          <div v-if="mergeOpen && canMerge" class="space-y-2">
+            <input
+              v-model="mergeQuery"
+              class="h-9 w-full rounded-md border border-input bg-background px-2.5 text-sm"
+              placeholder="Search authors to merge into this author"
+            />
 
-          <div class="flex items-center justify-end">
-            <button
-              :disabled="merging || selectedMergeIds.length === 0"
-              class="h-8 rounded-md bg-primary px-3 text-sm font-medium text-primary-foreground disabled:opacity-60"
-              @click="promptRunMerge"
-            >
-              {{ merging ? 'Merging...' : 'Merge Selected' }}
-            </button>
-          </div>
-        </div>
-      </section>
+            <div v-if="searchingMergeCandidates" class="text-xs text-muted-foreground">Searching...</div>
 
-      <section class="mt-4 rounded-lg border border-border/70 bg-card/60 p-3">
-        <div class="mb-3 flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-          <h2 class="text-sm font-semibold text-foreground">Books</h2>
-          <div class="w-full space-y-2 sm:hidden">
-            <div class="grid grid-cols-[minmax(0,1fr)_auto_auto] gap-2">
-              <div class="relative min-w-0">
-                <select
-                  :value="sort"
-                  class="h-8 w-full appearance-none rounded-md border border-input bg-background px-2.5 pr-8 text-sm text-foreground outline-none transition-colors focus:border-primary/60"
-                  @change="onMobileSortChange"
+            <div v-if="mergeCandidates.length > 0" class="max-h-48 space-y-1 overflow-y-auto rounded-md border border-border/70 bg-background/50 p-2">
+              <label v-for="candidate in mergeCandidates" :key="candidate.id" class="flex items-center gap-2 text-sm">
+                <input type="checkbox" :checked="selectedMergeIds.includes(candidate.id)" @change="onMergeCandidateToggle(candidate.id, $event)" />
+                <span class="min-w-0 flex-1 truncate">{{ candidate.name }}</span>
+                <span class="text-xs text-muted-foreground">{{ candidate.bookCount }} books</span>
+              </label>
+            </div>
+
+            <div v-if="selectedMergeIds.length > 0" class="text-xs text-muted-foreground">
+              Selected {{ selectedMergeIds.length }} author(s), approx. {{ selectedMergeBookCount }} books affected.
+            </div>
+
+            <div class="flex items-center justify-end">
+              <button
+                :disabled="merging || selectedMergeIds.length === 0"
+                class="h-8 rounded-md bg-primary px-3 text-sm font-medium text-primary-foreground disabled:opacity-60"
+                @click="promptRunMerge"
+              >
+                {{ merging ? 'Merging...' : 'Merge Selected' }}
+              </button>
+            </div>
+          </div>
+        </section>
+
+        <section class="mt-4 rounded-lg border border-border/70 bg-card/60 p-3">
+          <div class="mb-3 flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+            <h2 class="text-sm font-semibold text-foreground">Books</h2>
+            <div class="w-full space-y-2 sm:hidden">
+              <div class="grid grid-cols-[minmax(0,1fr)_auto_auto] gap-2">
+                <div class="relative min-w-0">
+                  <select
+                    :value="sort"
+                    class="h-8 w-full appearance-none rounded-md border border-input bg-background px-2.5 pr-8 text-sm text-foreground outline-none transition-colors focus:border-primary/60"
+                    @change="onMobileSortChange"
+                  >
+                    <option v-for="opt in BOOK_SORT_OPTIONS" :key="opt.value" :value="opt.value">
+                      {{ opt.label }}
+                    </option>
+                  </select>
+                  <ArrowUpDown :size="13" class="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground/85" />
+                </div>
+
+                <button
+                  class="h-8 rounded-md border border-input bg-background px-2.5 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                  @click="toggleBookOrder"
                 >
-                  <option v-for="opt in BOOK_SORT_OPTIONS" :key="opt.value" :value="opt.value">
-                    {{ opt.label }}
-                  </option>
-                </select>
-                <ArrowUpDown :size="13" class="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground/85" />
+                  {{ order === 'asc' ? 'Asc' : 'Desc' }}
+                </button>
+
+                <div class="flex items-center rounded-md border border-input bg-background">
+                  <button
+                    class="flex h-8 w-8 items-center justify-center rounded-l-md transition-colors"
+                    :class="
+                      authorBooksViewMode === 'grid' ? 'text-primary bg-primary/10' : 'text-muted-foreground hover:text-foreground hover:bg-muted'
+                    "
+                    @click="authorBooksViewMode = 'grid'"
+                  >
+                    <LayoutGrid :size="14" />
+                  </button>
+                  <button
+                    class="flex h-8 w-8 items-center justify-center rounded-r-md transition-colors"
+                    :class="
+                      authorBooksViewMode === 'list' ? 'text-primary bg-primary/10' : 'text-muted-foreground hover:text-foreground hover:bg-muted'
+                    "
+                    @click="authorBooksViewMode = 'list'"
+                  >
+                    <List :size="14" />
+                  </button>
+                </div>
               </div>
 
-              <button
-                class="h-8 rounded-md border border-input bg-background px-2.5 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-                @click="toggleBookOrder"
+              <div class="relative min-w-0">
+                <select
+                  :value="libraryId ?? ''"
+                  class="h-8 w-full appearance-none rounded-md border border-input bg-background px-2.5 pr-8 text-sm text-foreground outline-none transition-colors focus:border-primary/60"
+                  @change="onLibraryFilterChange"
+                >
+                  <option value="">All Libraries</option>
+                  <option v-for="library in libraries" :key="library.id" :value="library.id">
+                    {{ library.name }}
+                  </option>
+                </select>
+                <ChevronDown :size="14" class="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground/85" />
+              </div>
+            </div>
+
+            <div class="hidden flex-wrap items-center gap-2 sm:flex">
+              <select
+                v-model="sort"
+                class="h-8 w-full min-w-0 rounded-md border border-input bg-background px-2.5 text-sm outline-none transition-colors focus:border-primary/60 sm:w-auto"
               >
-                {{ order === 'asc' ? 'Asc' : 'Desc' }}
-              </button>
+                <option value="addedAt">Recently Added</option>
+                <option value="title">Title</option>
+                <option value="publishedYear">Published Year</option>
+              </select>
+
+              <select
+                v-model="order"
+                class="h-8 w-full min-w-0 rounded-md border border-input bg-background px-2.5 text-sm outline-none transition-colors focus:border-primary/60 sm:w-auto"
+              >
+                <option value="desc">Descending</option>
+                <option value="asc">Ascending</option>
+              </select>
+
+              <select
+                :value="libraryId ?? ''"
+                class="h-8 w-full min-w-0 rounded-md border border-input bg-background px-2.5 text-sm outline-none transition-colors focus:border-primary/60 sm:w-auto"
+                @change="onLibraryFilterChange"
+              >
+                <option value="">All Libraries</option>
+                <option v-for="library in libraries" :key="library.id" :value="library.id">{{ library.name }}</option>
+              </select>
 
               <div class="flex items-center rounded-md border border-input bg-background">
                 <button
@@ -588,116 +658,57 @@ watch(authorName, () => {
                 </button>
               </div>
             </div>
-
-            <div class="relative min-w-0">
-              <select
-                :value="libraryId ?? ''"
-                class="h-8 w-full appearance-none rounded-md border border-input bg-background px-2.5 pr-8 text-sm text-foreground outline-none transition-colors focus:border-primary/60"
-                @change="onLibraryFilterChange"
-              >
-                <option value="">All Libraries</option>
-                <option v-for="library in libraries" :key="library.id" :value="library.id">
-                  {{ library.name }}
-                </option>
-              </select>
-              <ChevronDown :size="14" class="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground/85" />
-            </div>
           </div>
 
-          <div class="hidden flex-wrap items-center gap-2 sm:flex">
-            <select
-              v-model="sort"
-              class="h-8 w-full min-w-0 rounded-md border border-input bg-background px-2.5 text-sm outline-none transition-colors focus:border-primary/60 sm:w-auto"
-            >
-              <option value="addedAt">Recently Added</option>
-              <option value="title">Title</option>
-              <option value="publishedYear">Published Year</option>
-            </select>
-
-            <select
-              v-model="order"
-              class="h-8 w-full min-w-0 rounded-md border border-input bg-background px-2.5 text-sm outline-none transition-colors focus:border-primary/60 sm:w-auto"
-            >
-              <option value="desc">Descending</option>
-              <option value="asc">Ascending</option>
-            </select>
-
-            <select
-              :value="libraryId ?? ''"
-              class="h-8 w-full min-w-0 rounded-md border border-input bg-background px-2.5 text-sm outline-none transition-colors focus:border-primary/60 sm:w-auto"
-              @change="onLibraryFilterChange"
-            >
-              <option value="">All Libraries</option>
-              <option v-for="library in libraries" :key="library.id" :value="library.id">{{ library.name }}</option>
-            </select>
-
-            <div class="flex items-center rounded-md border border-input bg-background">
-              <button
-                class="flex h-8 w-8 items-center justify-center rounded-l-md transition-colors"
-                :class="authorBooksViewMode === 'grid' ? 'text-primary bg-primary/10' : 'text-muted-foreground hover:text-foreground hover:bg-muted'"
-                @click="authorBooksViewMode = 'grid'"
-              >
-                <LayoutGrid :size="14" />
-              </button>
-              <button
-                class="flex h-8 w-8 items-center justify-center rounded-r-md transition-colors"
-                :class="authorBooksViewMode === 'list' ? 'text-primary bg-primary/10' : 'text-muted-foreground hover:text-foreground hover:bg-muted'"
-                @click="authorBooksViewMode = 'list'"
-              >
-                <List :size="14" />
-              </button>
-            </div>
+          <div v-if="booksError" class="mb-3 rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive">
+            {{ booksError }}
           </div>
-        </div>
 
-        <div v-if="booksError" class="mb-3 rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive">
-          {{ booksError }}
-        </div>
+          <div v-if="!loadingBooks && books.length === 0" class="flex flex-col items-center justify-center gap-2 py-16 text-center">
+            <p class="text-sm font-medium text-foreground">No books found for this author</p>
+            <p class="text-xs text-muted-foreground">Try changing sort/order or selecting another library.</p>
+          </div>
 
-        <div v-if="!loadingBooks && books.length === 0" class="flex flex-col items-center justify-center gap-2 py-16 text-center">
-          <p class="text-sm font-medium text-foreground">No books found for this author</p>
-          <p class="text-xs text-muted-foreground">Try changing sort/order or selecting another library.</p>
-        </div>
+          <VirtualBookGrid
+            v-if="authorBooksViewMode === 'grid' && books.length > 0"
+            :books="books"
+            :cover-size="authorBookCoverSize"
+            :grid-gap="authorBookGridGap"
+            @action="handleBookAction"
+            @update:book="handleBookUpdate"
+          />
 
-        <VirtualBookGrid
-          v-if="authorBooksViewMode === 'grid' && books.length > 0"
-          :books="books"
-          :cover-size="authorBookCoverSize"
-          :grid-gap="authorBookGridGap"
-          @action="handleBookAction"
-          @update:book="handleBookUpdate"
-        />
+          <div v-if="authorBooksViewMode === 'list' && books.length > 0" class="flex flex-col divide-y divide-border">
+            <BookListRow v-for="book in books" :key="book.id" :book="book" @action="handleBookAction(book, $event)" />
+          </div>
 
-        <div v-if="authorBooksViewMode === 'list' && books.length > 0" class="flex flex-col divide-y divide-border">
-          <BookListRow v-for="book in books" :key="book.id" :book="book" @action="handleBookAction(book, $event)" />
-        </div>
+          <div ref="sentinel" class="mt-4 flex h-8 items-center justify-center">
+            <span v-if="loadingBooks" class="text-xs text-muted-foreground">Loading...</span>
+            <span v-else-if="!hasMore && books.length > 0" class="text-xs text-muted-foreground">All {{ total.toLocaleString() }} books loaded</span>
+          </div>
+        </section>
+      </template>
+    </main>
 
-        <div ref="sentinel" class="mt-4 flex h-8 items-center justify-center">
-          <span v-if="loadingBooks" class="text-xs text-muted-foreground">Loading...</span>
-          <span v-else-if="!hasMore && books.length > 0" class="text-xs text-muted-foreground">All {{ total.toLocaleString() }} books loaded</span>
-        </div>
-      </section>
-    </template>
-  </main>
+    <AuthorConfirmDialog
+      :open="confirmDeleteOpen"
+      title="Delete author?"
+      description="This removes the author from the catalog and unlinks it from associated books. This action cannot be undone."
+      confirm-label="Delete"
+      :loading="deleting"
+      destructive
+      @confirm="runDelete"
+      @cancel="confirmDeleteOpen = false"
+    />
 
-  <AuthorConfirmDialog
-    :open="confirmDeleteOpen"
-    title="Delete author?"
-    description="This removes the author from the catalog and unlinks it from associated books. This action cannot be undone."
-    confirm-label="Delete"
-    :loading="deleting"
-    destructive
-    @confirm="runDelete"
-    @cancel="confirmDeleteOpen = false"
-  />
-
-  <AuthorConfirmDialog
-    :open="confirmMergeOpen"
-    :title="mergeDialogTitle"
-    :description="mergeDialogDescription"
-    confirm-label="Merge"
-    :loading="merging"
-    @confirm="runMerge"
-    @cancel="confirmMergeOpen = false"
-  />
+    <AuthorConfirmDialog
+      :open="confirmMergeOpen"
+      :title="mergeDialogTitle"
+      :description="mergeDialogDescription"
+      confirm-label="Merge"
+      :loading="merging"
+      @confirm="runMerge"
+      @cancel="confirmMergeOpen = false"
+    />
+  </div>
 </template>

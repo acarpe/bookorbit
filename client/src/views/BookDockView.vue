@@ -356,170 +356,172 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <main class="flex-1" @dragover="onDragOver" @dragenter="onDragEnter" @dragleave="onDragLeave" @drop="onDrop">
-    <div class="flex flex-col gap-4 py-4 sm:py-6 max-w-8xl w-full">
-      <div class="flex items-center gap-2.5">
-        <div class="flex items-center justify-center size-9 rounded-lg bg-primary/10">
-          <PackageOpen class="size-4.5 text-primary" />
+  <div>
+    <main class="flex-1" @dragover="onDragOver" @dragenter="onDragEnter" @dragleave="onDragLeave" @drop="onDrop">
+      <div class="flex flex-col gap-4 py-4 sm:py-6 max-w-8xl w-full">
+        <div class="flex items-center gap-2.5">
+          <div class="flex items-center justify-center size-9 rounded-lg bg-primary/10">
+            <PackageOpen class="size-4.5 text-primary" />
+          </div>
+          <h1 class="text-xl font-semibold text-foreground tracking-tight">Book Dock</h1>
+          <span
+            v-if="summary.total > 0"
+            class="ml-1 inline-flex items-center justify-center min-w-5 h-5 px-1.5 rounded-full bg-primary/15 text-primary text-xs font-semibold tabular-nums"
+          >
+            {{ summary.total }}
+          </span>
+          <Transition name="fade">
+            <span
+              v-if="newFilesDetected"
+              class="ml-2 inline-flex items-center gap-1.5 h-6 px-2.5 rounded-full bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 text-xs font-medium"
+            >
+              <span class="size-1.5 rounded-full bg-current animate-pulse" />
+              New files detected
+            </span>
+          </Transition>
+          <Transition name="fade">
+            <span
+              v-if="applyFetchedResult"
+              class="ml-2 inline-flex items-center gap-1.5 h-6 px-2.5 rounded-full bg-amber-500/15 text-amber-600 dark:text-amber-400 text-xs font-medium"
+            >
+              <CheckCircle2 class="size-3.5" />
+              {{ applyFetchedResultMessage(applyFetchedResult) }}
+            </span>
+          </Transition>
+          <Transition name="fade">
+            <span
+              v-if="retryQueued !== null"
+              class="ml-2 inline-flex items-center gap-1.5 h-6 px-2.5 rounded-full bg-primary/15 text-primary text-xs font-medium"
+            >
+              <CheckCircle2 class="size-3.5" />
+              {{ retryQueued === 0 ? 'No error files to retry' : `Retrying ${retryQueued} file${retryQueued !== 1 ? 's' : ''}` }}
+            </span>
+          </Transition>
+          <Transition name="fade">
+            <span
+              v-if="!socketConnected"
+              class="ml-2 inline-flex items-center gap-1.5 h-6 px-2.5 rounded-full bg-muted text-muted-foreground text-xs font-medium"
+            >
+              <span class="size-1.5 rounded-full bg-muted-foreground animate-pulse" />
+              Reconnecting
+            </span>
+          </Transition>
+          <Transition name="fade">
+            <span
+              v-if="rescanFailed"
+              class="ml-2 inline-flex items-center gap-1.5 h-6 px-2.5 rounded-full bg-red-500/15 text-red-600 dark:text-red-400 text-xs font-medium"
+            >
+              <AlertCircle class="size-3.5" />
+              Rescan failed
+            </span>
+          </Transition>
         </div>
-        <h1 class="text-xl font-semibold text-foreground tracking-tight">Book Dock</h1>
-        <span
-          v-if="summary.total > 0"
-          class="ml-1 inline-flex items-center justify-center min-w-5 h-5 px-1.5 rounded-full bg-primary/15 text-primary text-xs font-semibold tabular-nums"
-        >
-          {{ summary.total }}
-        </span>
-        <Transition name="fade">
-          <span
-            v-if="newFilesDetected"
-            class="ml-2 inline-flex items-center gap-1.5 h-6 px-2.5 rounded-full bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 text-xs font-medium"
-          >
-            <span class="size-1.5 rounded-full bg-current animate-pulse" />
-            New files detected
-          </span>
-        </Transition>
-        <Transition name="fade">
-          <span
-            v-if="applyFetchedResult"
-            class="ml-2 inline-flex items-center gap-1.5 h-6 px-2.5 rounded-full bg-amber-500/15 text-amber-600 dark:text-amber-400 text-xs font-medium"
-          >
-            <CheckCircle2 class="size-3.5" />
-            {{ applyFetchedResultMessage(applyFetchedResult) }}
-          </span>
-        </Transition>
-        <Transition name="fade">
-          <span
-            v-if="retryQueued !== null"
-            class="ml-2 inline-flex items-center gap-1.5 h-6 px-2.5 rounded-full bg-primary/15 text-primary text-xs font-medium"
-          >
-            <CheckCircle2 class="size-3.5" />
-            {{ retryQueued === 0 ? 'No error files to retry' : `Retrying ${retryQueued} file${retryQueued !== 1 ? 's' : ''}` }}
-          </span>
-        </Transition>
-        <Transition name="fade">
-          <span
-            v-if="!socketConnected"
-            class="ml-2 inline-flex items-center gap-1.5 h-6 px-2.5 rounded-full bg-muted text-muted-foreground text-xs font-medium"
-          >
-            <span class="size-1.5 rounded-full bg-muted-foreground animate-pulse" />
-            Reconnecting
-          </span>
-        </Transition>
-        <Transition name="fade">
-          <span
-            v-if="rescanFailed"
-            class="ml-2 inline-flex items-center gap-1.5 h-6 px-2.5 rounded-full bg-red-500/15 text-red-600 dark:text-red-400 text-xs font-medium"
-          >
-            <AlertCircle class="size-3.5" />
-            Rescan failed
-          </span>
-        </Transition>
-      </div>
 
-      <BookDockToolbar
-        :active-status="filters.status"
-        :selection-count="selectionCount"
-        :has-selection="hasSelection"
-        :fetched-count="fetchedCount"
-        :error-count="errorCount"
-        @status-filter="setStatus"
-        @search="setSearch"
-        @rescan="refresh"
-        @rescan-error="handleRescanError"
-        @retry-fetch="handleRetryFetch"
-        @bulk-discard="handleBulkDiscard"
-        @finalize="openFinalize"
-        @bulk-edit="openBulkEdit"
-        @set-destination="openSetDestination"
-        @refresh="refresh"
-        @apply-fetched="handleApplyFetched"
-      />
+        <BookDockToolbar
+          :active-status="filters.status"
+          :selection-count="selectionCount"
+          :has-selection="hasSelection"
+          :fetched-count="fetchedCount"
+          :error-count="errorCount"
+          @status-filter="setStatus"
+          @search="setSearch"
+          @rescan="refresh"
+          @rescan-error="handleRescanError"
+          @retry-fetch="handleRetryFetch"
+          @bulk-discard="handleBulkDiscard"
+          @finalize="openFinalize"
+          @bulk-edit="openBulkEdit"
+          @set-destination="openSetDestination"
+          @refresh="refresh"
+          @apply-fetched="handleApplyFetched"
+        />
 
-      <!-- Statistics bar -->
-      <div v-if="statistics && statistics.byFormat.length > 0" class="flex items-center gap-3 flex-wrap text-xs text-muted-foreground">
-        <span class="font-medium text-foreground">{{ formatBytes(statistics.totalSizeBytes) }} in Book Dock</span>
-        <span
-          v-for="f in statistics.byFormat"
-          :key="f.format"
-          class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-muted/50 tabular-nums"
-        >
-          <span class="uppercase font-medium text-foreground/70">{{ f.format }}</span>
-          {{ f.count }} &middot; {{ formatBytes(f.sizeBytes) }}
-        </span>
-      </div>
-
-      <!-- Drag-and-drop overlay -->
-      <Transition name="content">
-        <div v-if="dragOver" class="fixed inset-0 z-40 flex items-center justify-center bg-primary/5 backdrop-blur-sm pointer-events-none">
-          <div
-            class="flex flex-col items-center gap-4 rounded-2xl border-2 border-dashed border-primary/50 bg-card/90 px-12 py-10 shadow-xl max-w-sm w-full animate-scale-in"
+        <!-- Statistics bar -->
+        <div v-if="statistics && statistics.byFormat.length > 0" class="flex items-center gap-3 flex-wrap text-xs text-muted-foreground">
+          <span class="font-medium text-foreground">{{ formatBytes(statistics.totalSizeBytes) }} in Book Dock</span>
+          <span
+            v-for="f in statistics.byFormat"
+            :key="f.format"
+            class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-muted/50 tabular-nums"
           >
-            <div class="flex items-center justify-center size-16 rounded-2xl bg-primary/10 animate-pulse">
-              <PackageOpen class="size-8 text-primary" />
-            </div>
-            <div class="text-center">
-              <p class="text-sm font-medium text-foreground">Drop files into Book Dock</p>
-              <p class="text-xs text-muted-foreground mt-1">Supported: {{ SUPPORTED_FORMATS.join(', ') }}</p>
+            <span class="uppercase font-medium text-foreground/70">{{ f.format }}</span>
+            {{ f.count }} &middot; {{ formatBytes(f.sizeBytes) }}
+          </span>
+        </div>
+
+        <!-- Drag-and-drop overlay -->
+        <Transition name="content">
+          <div v-if="dragOver" class="fixed inset-0 z-40 flex items-center justify-center bg-primary/5 backdrop-blur-sm pointer-events-none">
+            <div
+              class="flex flex-col items-center gap-4 rounded-2xl border-2 border-dashed border-primary/50 bg-card/90 px-12 py-10 shadow-xl max-w-sm w-full animate-scale-in"
+            >
+              <div class="flex items-center justify-center size-16 rounded-2xl bg-primary/10 animate-pulse">
+                <PackageOpen class="size-8 text-primary" />
+              </div>
+              <div class="text-center">
+                <p class="text-sm font-medium text-foreground">Drop files into Book Dock</p>
+                <p class="text-xs text-muted-foreground mt-1">Supported: {{ SUPPORTED_FORMATS.join(', ') }}</p>
+              </div>
             </div>
           </div>
+        </Transition>
+
+        <BookDockFileList
+          :items="items"
+          :loading="loading"
+          :initialized="initialized"
+          :is-selected="isSelected"
+          :select-all="selectAll"
+          :name-preview-by-file-id="namePreviewByFileId"
+          :empty-message="emptyMessage"
+          @select="handleSelect"
+          @select-all="toggleSelectAll"
+          @open="openSheet"
+          @apply-fetched="handleInlineApplyFetched"
+        />
+
+        <div v-if="pageCount > 1" class="flex items-center justify-center gap-1">
+          <button
+            v-for="p in pageCount"
+            :key="p"
+            class="size-8 rounded-lg text-xs font-medium transition-all active:scale-95"
+            :class="filters.page === p ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:text-foreground'"
+            @click="setPage(p)"
+          >
+            {{ p }}
+          </button>
         </div>
-      </Transition>
-
-      <BookDockFileList
-        :items="items"
-        :loading="loading"
-        :initialized="initialized"
-        :is-selected="isSelected"
-        :select-all="selectAll"
-        :name-preview-by-file-id="namePreviewByFileId"
-        :empty-message="emptyMessage"
-        @select="handleSelect"
-        @select-all="toggleSelectAll"
-        @open="openSheet"
-        @apply-fetched="handleInlineApplyFetched"
-      />
-
-      <div v-if="pageCount > 1" class="flex items-center justify-center gap-1">
-        <button
-          v-for="p in pageCount"
-          :key="p"
-          class="size-8 rounded-lg text-xs font-medium transition-all active:scale-95"
-          :class="filters.page === p ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:text-foreground'"
-          @click="setPage(p)"
-        >
-          {{ p }}
-        </button>
       </div>
-    </div>
-  </main>
+    </main>
 
-  <Teleport to="body">
-    <BookDockFileSheet v-if="selectedFile" :file="selectedFile" @close="closeSheet" @discarded="onDiscarded" @updated="onFileUpdated" />
-  </Teleport>
+    <Teleport to="body">
+      <BookDockFileSheet v-if="selectedFile" :file="selectedFile" @close="closeSheet" @discarded="onDiscarded" @updated="onFileUpdated" />
+    </Teleport>
 
-  <BookDockFinalizeDialog
-    v-if="showFinalizeDialog"
-    :selection-payload="getSelectionPayload()"
-    :selection-count="selectionCount"
-    @close="showFinalizeDialog = false"
-    @finalized="onFinalized"
-  />
+    <BookDockFinalizeDialog
+      v-if="showFinalizeDialog"
+      :selection-payload="getSelectionPayload()"
+      :selection-count="selectionCount"
+      @close="showFinalizeDialog = false"
+      @finalized="onFinalized"
+    />
 
-  <BookDockBulkEditDialog
-    v-if="showBulkEditDialog"
-    :selection-payload="getSelectionPayload()"
-    :selection-count="selectionCount"
-    @close="showBulkEditDialog = false"
-    @edited="onBulkEdited"
-  />
+    <BookDockBulkEditDialog
+      v-if="showBulkEditDialog"
+      :selection-payload="getSelectionPayload()"
+      :selection-count="selectionCount"
+      @close="showBulkEditDialog = false"
+      @edited="onBulkEdited"
+    />
 
-  <BookDockSetDestinationDialog
-    v-if="showSetDestinationDialog"
-    :selection-payload="getSelectionPayload()"
-    :selection-count="selectionCount"
-    @close="showSetDestinationDialog = false"
-    @updated="onDestinationSet"
-  />
+    <BookDockSetDestinationDialog
+      v-if="showSetDestinationDialog"
+      :selection-payload="getSelectionPayload()"
+      :selection-count="selectionCount"
+      @close="showSetDestinationDialog = false"
+      @updated="onDestinationSet"
+    />
+  </div>
 </template>
 
 <style scoped>
