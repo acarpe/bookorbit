@@ -156,7 +156,7 @@ function resolveFieldsWritten(payload: BookWritePayload, options: FormatWriteOpt
   return fieldsWritten;
 }
 
-function canWriteField<K extends keyof BookWritePayload>(payload: BookWritePayload, options: FormatWriteOptions, key: K): boolean {
+function canWriteField<K extends AudioBookFileWriteField>(payload: BookWritePayload, options: FormatWriteOptions, key: K): boolean {
   return options.fieldMask.has(key) && Object.prototype.hasOwnProperty.call(payload, key);
 }
 

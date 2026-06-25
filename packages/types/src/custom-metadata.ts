@@ -1,0 +1,38 @@
+export const CUSTOM_METADATA_FIELD_TYPES = ["text", "url", "number", "date", "boolean"] as const;
+
+export type CustomMetadataFieldType = (typeof CUSTOM_METADATA_FIELD_TYPES)[number];
+
+export type CustomMetadataPrimitiveValue = string | number | boolean | null;
+
+export interface CustomMetadataFieldDefinition {
+  id: number;
+  key: string;
+  label: string;
+  type: CustomMetadataFieldType;
+  displayOrder: number;
+  archivedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+  enabledLibraryIds: number[];
+  usageCount: number;
+}
+
+export interface CustomMetadataLibraryEnablement {
+  fieldId: number;
+  libraryId: number;
+  displayOrder: number;
+}
+
+export interface CustomMetadataBookValue {
+  fieldId: number;
+  key: string;
+  label: string;
+  type: CustomMetadataFieldType;
+  displayOrder: number;
+  value: CustomMetadataPrimitiveValue;
+}
+
+export interface CustomMetadataBookValueInput {
+  fieldId: number;
+  value: CustomMetadataPrimitiveValue;
+}

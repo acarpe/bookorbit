@@ -8,6 +8,7 @@ import type {
   MetadataSeriesMembership,
   MetadataSource,
   ProviderIds,
+  CustomMetadataBookValueInput,
 } from '@bookorbit/types'
 import { getProviderLabel, toDisplayCoverUrl } from '../lib/metadata-fetch'
 
@@ -101,6 +102,7 @@ export interface MetadataPatch {
   lubimyczytacId?: string | null
   aladinId?: string | null
   comicMetadata?: ComicMetadataFields
+  customMetadata?: CustomMetadataBookValueInput[]
 }
 
 export const FIELD_DEFS: { key: DiffFieldKey; label: string }[] = [

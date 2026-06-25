@@ -41,6 +41,23 @@ function epub3OpfFull(parts: { metadata?: string; manifest?: string }): string {
 }
 
 describe('parseOpf', () => {
+  describe('custom metadata', () => {
+    it('parses BookOrbit custom metadata from named and property meta tags', () => {
+      const xml = epub3Opf(`
+        <meta property="bookorbit:custom:original_title">Le Comte de Monte-Cristo</meta>
+        <meta name="bookorbit:custom:novel_source" content="https://example.test/novel" />
+        <meta property="bookorbit:custom:bad-key">Ignored</meta>
+      `);
+
+      const r = parseOpf(xml);
+
+      expect(r.customMetadata).toEqual({
+        original_title: 'Le Comte de Monte-Cristo',
+        novel_source: 'https://example.test/novel',
+      });
+    });
+  });
+
   describe('title', () => {
     it('parses a single title', () => {
       const r = parseOpf(epub2Opf('<dc:title>Foundation</dc:title>'));

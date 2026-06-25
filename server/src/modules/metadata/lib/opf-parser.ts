@@ -26,6 +26,7 @@ export interface ParsedOpf {
   lubimyczytacId: string | null;
   aladinId: string | null;
   itunesId: string | null;
+  customMetadata: Record<string, string>;
   coverHref: string | null;
 }
 
@@ -351,6 +352,7 @@ export function parseOpf(xml: string): ParsedOpf {
   let pageCount = parseNumber(propertyMeta('bookorbit:page_count') ?? namedMeta('bookorbit:page_count'));
   pageCount ??= calibreUser.pageCount;
   const rating = parseNumber(propertyMeta('bookorbit:rating') ?? namedMeta('bookorbit:rating'));
+  const customMetadata = collectCustomMetadata(rawMetas);
 
   // ── Series (Calibre EPUB2, then EPUB3) ────────────────────────────────────
   let seriesName: string | null = namedMeta('calibre:series');
@@ -465,6 +467,25 @@ export function parseOpf(xml: string): ParsedOpf {
     lubimyczytacId,
     aladinId,
     itunesId,
+    customMetadata,
     coverHref,
   };
+}
+
+function collectCustomMetadata(rawMetas: unknown[]): Record<string, string> {
+  const custom: Record<string, string> = {};
+  const prefix = 'bookorbit:custom:';
+  for (const meta of rawMetas) {
+    if (typeof meta !== 'object' || meta === null) continue;
+    const node = meta as Record<string, unknown>;
+    const name = typeof node['@_name'] === 'string' ? node['@_name'] : '';
+    const property = typeof node['@_property'] === 'string' ? node['@_property'] : '';
+    const keySource = name.startsWith(prefix) ? name : property.startsWith(prefix) ? property : '';
+    if (!keySource) continue;
+    const key = keySource.slice(prefix.length);
+    if (!/^[a-z0-9][a-z0-9_]{0,99}$/.test(key)) continue;
+    const content = typeof node['@_content'] === 'string' ? node['@_content'].trim() : getText(meta);
+    if (content) custom[key] = content;
+  }
+  return custom;
 }

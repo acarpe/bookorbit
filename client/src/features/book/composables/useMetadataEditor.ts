@@ -1,6 +1,13 @@
 import { computed, reactive, ref } from 'vue'
 import { api } from '@/lib/api'
-import { FORMAT_TO_GROUP, type BookDetail, type BookMetadataLockField, type BookMetadataSaveResult } from '@bookorbit/types'
+import {
+  FORMAT_TO_GROUP,
+  type BookDetail,
+  type BookMetadataLockField,
+  type BookMetadataSaveResult,
+  type CustomMetadataBookValue,
+  type CustomMetadataBookValueInput,
+} from '@bookorbit/types'
 
 export type EditableSeriesMembership = {
   seriesName: string
@@ -81,6 +88,16 @@ function seriesMembershipsFromBook(book: BookDetail): EditableSeriesMembership[]
   return book.seriesName ? [{ seriesName: book.seriesName, seriesIndex: book.seriesIndex }] : []
 }
 
+function changedCustomMetadataPayload(
+  currentValues: readonly CustomMetadataBookValue[],
+  previousValues: readonly CustomMetadataBookValue[],
+): CustomMetadataBookValueInput[] {
+  const previousByFieldId = new Map(previousValues.map((field) => [field.fieldId, field.value]))
+  return currentValues
+    .filter((field) => JSON.stringify(field.value) !== JSON.stringify(previousByFieldId.get(field.fieldId)))
+    .map((field) => ({ fieldId: field.fieldId, value: field.value }))
+}
+
 export function useMetadataEditor() {
   const saving = ref(false)
   const error = ref<string | null>(null)
@@ -128,6 +145,7 @@ export function useMetadataEditor() {
     comicCharacters: [] as string[],
     comicTeams: [] as string[],
     comicLocations: [] as string[],
+    customMetadata: [] as CustomMetadataBookValue[],
   })
 
   const snapshot = ref(JSON.stringify(form))
@@ -179,6 +197,7 @@ export function useMetadataEditor() {
     form.comicCharacters = cm?.characters ?? []
     form.comicTeams = cm?.teams ?? []
     form.comicLocations = cm?.locations ?? []
+    form.customMetadata = (book.customMetadata ?? []).map((field) => ({ ...field }))
     includeAudioMetadata.value = book.audioMetadata != null || book.files.some((f) => f.format != null && FORMAT_TO_GROUP[f.format] === 'audio')
     snapshot.value = JSON.stringify(form)
     error.value = null
@@ -227,6 +246,11 @@ export function useMetadataEditor() {
       if (Object.keys(audioMetadata).length > 0) {
         payload.audioMetadata = audioMetadata
       }
+    }
+
+    const customMetadata = changedCustomMetadataPayload(form.customMetadata, previous.customMetadata)
+    if (customMetadata.length > 0) {
+      payload.customMetadata = customMetadata
     }
     return payload
   }

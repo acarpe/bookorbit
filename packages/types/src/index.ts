@@ -5,6 +5,7 @@ export * from "./display-preferences";
 export * from "./permissions";
 export * from "./content-filter";
 export * from "./metadata-preferences";
+export * from "./custom-metadata";
 export * from "./metadata-lock";
 export * from "./dashboard";
 export * from "./book";

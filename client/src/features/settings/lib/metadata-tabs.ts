@@ -1,4 +1,4 @@
-export const METADATA_TABS = ['providers', 'field-rules', 'score', 'auto-fetch', 'authors', 'genre-blocklist'] as const
+export const METADATA_TABS = ['providers', 'field-rules', 'custom-fields', 'score', 'auto-fetch', 'authors', 'genre-blocklist'] as const
 
 export type MetadataTab = (typeof METADATA_TABS)[number]
 
@@ -18,6 +18,11 @@ export const METADATA_TAB_INFO: Record<MetadataTab, MetadataTabInfo> = {
     navLabel: 'Field Rules',
     titleLabel: 'Field-Level Rules',
     subtitle: 'Control which provider supplies each metadata field and how values are merged across your libraries.',
+  },
+  'custom-fields': {
+    navLabel: 'Custom Fields',
+    titleLabel: 'Custom Metadata',
+    subtitle: 'Define custom metadata fields and choose which libraries use them.',
   },
   'genre-blocklist': {
     navLabel: 'Genre Blocklist',

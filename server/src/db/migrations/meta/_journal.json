@@ -169,6 +169,13 @@
       "when": 1782258157534,
       "tag": "0023_add_hardcover_sync_controls",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1782366176669,
+      "tag": "0024_custom_metadata",
+      "breakpoints": true
     }
   ]
 }

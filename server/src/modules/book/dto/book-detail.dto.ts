@@ -3,6 +3,7 @@ import type {
   BookFileWriteStatus,
   BookSeriesMembership,
   BookMetadataLockField,
+  CustomMetadataBookValue,
   ComicMetadataFields,
   NarratorRef,
   ProviderIds,
@@ -61,6 +62,7 @@ export class BookDetailDto {
   audioMetadata: AudioMetadataDto | null;
   formatPriority: string[];
   comicMetadata: ComicMetadataFields | null;
+  customMetadata: CustomMetadataBookValue[];
   lockedFields: BookMetadataLockField[];
   collections: { id: number; name: string }[];
   fileWriteStatus: BookFileWriteStatus;

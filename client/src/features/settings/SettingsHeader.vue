@@ -30,7 +30,7 @@ const sections = computed<Section[]>(() => {
   result.push({ label: 'Display', routeName: 'settings-appearance' })
   result.push({ label: 'Reader', routeName: 'settings-reader-general' })
 
-  if (su || perms.includes('manage_metadata_config')) {
+  if (su || perms.includes('manage_metadata_config') || perms.includes('manage_libraries')) {
     result.push({ label: 'Metadata', routeName: 'settings-admin-metadata' })
   }
 

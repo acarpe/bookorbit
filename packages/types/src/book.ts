@@ -3,6 +3,7 @@ import type { BookMetadataLockField } from "./metadata-lock";
 import type { AudiobookChapter, NarratorRef } from "./audiobook";
 import type { ComicMetadataFields } from "./metadata-fetch";
 import type { BookFileWriteField, WriteResult } from "./file-write";
+import type { CustomMetadataBookValue } from "./custom-metadata";
 
 export const BOOK_FORMATS = ["epub", "pdf", "mobi", "azw3", "cbz", "cbr", "cb7", "fb2", "m4b", "mp3", "m4a", "opus", "ogg", "flac"] as const;
 export type BookFormat = (typeof BOOK_FORMATS)[number];
@@ -142,6 +143,7 @@ export type BookDetail = {
   audioMetadata: AudioMetadata | null;
   formatPriority: string[];
   comicMetadata: ComicMetadataFields | null;
+  customMetadata: CustomMetadataBookValue[];
   lockedFields: BookMetadataLockField[];
   collections: { id: number; name: string }[];
   fileWriteStatus?: BookFileWriteStatus;

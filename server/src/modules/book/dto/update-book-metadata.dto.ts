@@ -1,5 +1,6 @@
 import { IsArray, IsBoolean, IsInt, IsNumber, IsOptional, IsString, Max, MaxLength, Min, ValidateNested } from 'class-validator';
 import { Transform, Type } from 'class-transformer';
+import { CustomMetadataValueDto } from '../../custom-metadata/dto/custom-metadata-value.dto';
 
 export class AudiobookChapterDto {
   @IsString() title!: string;
@@ -65,4 +66,5 @@ export class UpdateBookMetadataDto {
   @IsOptional() @IsString() @MaxLength(512) lubimyczytacId?: string | null;
   @IsOptional() @IsString() @MaxLength(20) aladinId?: string | null;
   @IsOptional() @ValidateNested() @Type(() => ComicMetadataDto) comicMetadata?: ComicMetadataDto;
+  @IsOptional() @IsArray() @ValidateNested({ each: true }) @Type(() => CustomMetadataValueDto) customMetadata?: CustomMetadataValueDto[];
 }

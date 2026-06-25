@@ -210,4 +210,31 @@ describe('epub-opf-builder', () => {
     );
     expect(result.fieldsWritten).toHaveLength(10);
   });
+
+  it('writes stable custom metadata tags and reports written custom fields', () => {
+    const opf = `
+      <package version="3.0" unique-identifier="uid">
+        <metadata>
+          <dc:identifier id="uid">urn:uuid:abc</dc:identifier>
+          <meta property="bookorbit:custom:old_field">Old</meta>
+        </metadata>
+      </package>
+    `;
+
+    const result = build(opf, {
+      customMetadata: [
+        { fieldId: 1, key: 'original_title', label: 'Original Title', type: 'text', displayOrder: 0, value: 'Le Comte de Monte-Cristo' },
+        { fieldId: 2, key: 'translated', label: 'Translated', type: 'boolean', displayOrder: 1, value: false },
+        { fieldId: 3, key: 'empty_field', label: 'Empty Field', type: 'text', displayOrder: 2, value: null },
+      ],
+    });
+
+    expect(result.newOpfXml).toContain('property="bookorbit:custom:original_title"');
+    expect(result.newOpfXml).toContain('Le Comte de Monte-Cristo');
+    expect(result.newOpfXml).toContain('property="bookorbit:custom:translated"');
+    expect(result.newOpfXml).toContain('>false<');
+    expect(result.newOpfXml).not.toContain('old_field');
+    expect(result.newOpfXml).not.toContain('empty_field');
+    expect(result.fieldsWritten).toEqual(['customMetadata:original_title', 'customMetadata:translated']);
+  });
 });

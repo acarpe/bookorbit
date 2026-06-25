@@ -49,6 +49,7 @@ function makeBook(overrides = {}) {
     audioMetadata: null,
     formatPriority: [],
     comicMetadata: null,
+    customMetadata: [],
     lockedFields: [],
     collections: [],
     ...overrides,

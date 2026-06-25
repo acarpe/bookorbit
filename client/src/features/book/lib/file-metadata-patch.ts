@@ -43,6 +43,9 @@ export function buildFileMetadataPatch(meta: FileMetadata): MetadataPatch {
   if (meta.comicMetadata !== undefined) {
     patch.comicMetadata = meta.comicMetadata
   }
+  if (meta.customMetadata !== undefined) {
+    patch.customMetadata = meta.customMetadata
+  }
 
   return patch
 }

@@ -2,7 +2,7 @@
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { Check, ChevronDown, FileCheck, HardDriveDownload, HardDriveUpload, Loader2, Lock, LockOpen, RefreshCw, Sparkles, Star, X } from '@lucide/vue'
 import { toast } from 'vue-sonner'
-import type { BookDetail, BookMetadataLockField, MetadataProviderInfo, WriteResult } from '@bookorbit/types'
+import type { BookDetail, BookMetadataLockField, CustomMetadataPrimitiveValue, MetadataProviderInfo, WriteResult } from '@bookorbit/types'
 import { BOOK_FILE_WRITE_FIELD_LABELS, FORMAT_TO_GROUP } from '@bookorbit/types'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
@@ -175,6 +175,38 @@ function setIntField(field: 'publishedYear' | 'pageCount' | 'durationSeconds', e
   }
   const n = parseInt(val, 10)
   form[field] = isNaN(n) ? null : n
+}
+
+function isTextLikeCustomField(type: string): boolean {
+  return type === 'text' || type === 'url'
+}
+
+function setCustomMetadataValue(fieldId: number, value: CustomMetadataPrimitiveValue) {
+  const field = form.customMetadata.find((item) => item.fieldId === fieldId)
+  if (field) field.value = value
+}
+
+function setCustomNumberField(fieldId: number, e: Event) {
+  const val = (e.target as HTMLInputElement).value
+  if (val === '') {
+    setCustomMetadataValue(fieldId, null)
+    return
+  }
+  const n = Number(val)
+  setCustomMetadataValue(fieldId, Number.isFinite(n) ? n : null)
+}
+
+function setCustomTextField(fieldId: number, e: Event) {
+  setCustomMetadataValue(fieldId, (e.target as HTMLInputElement).value)
+}
+
+function setCustomDateField(fieldId: number, e: Event) {
+  const val = (e.target as HTMLInputElement).value
+  setCustomMetadataValue(fieldId, val || null)
+}
+
+function setCustomBooleanField(fieldId: number, e: Event) {
+  setCustomMetadataValue(fieldId, (e.target as HTMLInputElement).checked)
 }
 
 watch(
@@ -371,6 +403,18 @@ function applyAudioPatch(formPatch: MetadataPatch, skippedFields: BookMetadataLo
   return updated
 }
 
+function applyCustomMetadataPatch(formPatch: MetadataPatch): number {
+  if (!formPatch.customMetadata) return 0
+  let updated = 0
+  for (const value of formPatch.customMetadata) {
+    const field = form.customMetadata.find((item) => item.fieldId === value.fieldId)
+    if (!field) continue
+    field.value = value.value
+    updated++
+  }
+  return updated
+}
+
 function applyPatchToForm(formPatch: MetadataPatch, coverUrl: string | undefined): { skippedFields: BookMetadataLockField[]; updatedCount: number } {
   const skippedFields: BookMetadataLockField[] = []
   let updatedCount = 0
@@ -382,6 +426,7 @@ function applyPatchToForm(formPatch: MetadataPatch, coverUrl: string | undefined
   }
   updatedCount += applyComicPatch(formPatch, skippedFields)
   updatedCount += applyAudioPatch(formPatch, skippedFields)
+  updatedCount += applyCustomMetadataPatch(formPatch)
 
   if (coverUrl) {
     if (isLocked('cover')) {
@@ -1255,6 +1300,47 @@ function handleCoverChanged(source: 'extracted' | 'custom' | null) {
           >
             <ChipInput v-model="form.comicLocations" :search-fn="searchComicMetadata" :disabled="isLocked('comicLocations')" control-class="pr-12" />
           </MetadataFieldLabel>
+        </div>
+      </div>
+
+      <div v-if="form.customMetadata.length > 0" class="rounded-lg border border-border overflow-hidden">
+        <div class="px-3 py-2 bg-muted/40">
+          <span class="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Custom Metadata</span>
+        </div>
+        <div class="grid grid-cols-1 gap-3 p-3 sm:grid-cols-2">
+          <label v-for="field in form.customMetadata" :key="field.fieldId" class="space-y-1">
+            <span class="text-xs font-medium text-muted-foreground">{{ field.label }}</span>
+            <input
+              v-if="isTextLikeCustomField(field.type)"
+              :value="typeof field.value === 'string' ? field.value : ''"
+              :type="field.type === 'url' ? 'url' : 'text'"
+              class="w-full h-8 rounded-lg border border-input bg-background px-3 text-sm outline-none focus:ring-1 focus:ring-ring transition-shadow"
+              @input="setCustomTextField(field.fieldId, $event)"
+            />
+            <input
+              v-else-if="field.type === 'number'"
+              :value="typeof field.value === 'number' ? field.value : ''"
+              type="number"
+              class="w-full h-8 rounded-lg border border-input bg-background px-3 text-sm outline-none focus:ring-1 focus:ring-ring transition-shadow"
+              @input="setCustomNumberField(field.fieldId, $event)"
+            />
+            <input
+              v-else-if="field.type === 'date'"
+              :value="typeof field.value === 'string' ? field.value : ''"
+              type="date"
+              class="w-full h-8 rounded-lg border border-input bg-background px-3 text-sm outline-none focus:ring-1 focus:ring-ring transition-shadow"
+              @input="setCustomDateField(field.fieldId, $event)"
+            />
+            <div v-else class="flex h-8 items-center rounded-lg border border-input bg-background px-3">
+              <input
+                type="checkbox"
+                class="h-4 w-4 rounded border-input accent-primary"
+                :checked="field.value === true"
+                :aria-label="field.label"
+                @change="setCustomBooleanField(field.fieldId, $event)"
+              />
+            </div>
+          </label>
         </div>
       </div>
 

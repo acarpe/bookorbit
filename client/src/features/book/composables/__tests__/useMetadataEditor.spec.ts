@@ -52,6 +52,7 @@ function makeBook(overrides: Partial<BookDetail> = {}): BookDetail {
     audioMetadata: null,
     formatPriority: [],
     comicMetadata: null,
+    customMetadata: [],
     lockedFields: [],
     collections: [],
     ...overrides,
@@ -127,6 +128,29 @@ describe('useMetadataEditor', () => {
     const payload = JSON.parse(String(req.body)) as Record<string, unknown>
     expect(payload).toEqual({
       metadata: { publisher: 'Updated Publisher' },
+      lockedFields: [],
+    })
+  })
+
+  it('sends only changed custom metadata values in the metadata payload', async () => {
+    const book = makeBook({
+      customMetadata: [
+        { fieldId: 7, key: 'original_title', label: 'Original Title', type: 'text', displayOrder: 0, value: null },
+        { fieldId: 8, key: 'translated', label: 'Translated', type: 'boolean', displayOrder: 1, value: false },
+      ],
+    })
+    apiMock.mockResolvedValue({ ok: true, json: async () => book })
+
+    const { form, load, save } = useMetadataEditor()
+    load(book)
+    form.customMetadata[0]!.value = 'Le Comte de Monte-Cristo'
+    await save(book.id, [])
+
+    const [, req] = apiMock.mock.calls[0] as [string, RequestInit]
+    expect(JSON.parse(String(req.body))).toEqual({
+      metadata: {
+        customMetadata: [{ fieldId: 7, value: 'Le Comte de Monte-Cristo' }],
+      },
       lockedFields: [],
     })
   })

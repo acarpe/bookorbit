@@ -1,5 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { and, asc, desc, eq, ne } from 'drizzle-orm';
+import { and, asc, desc, eq, isNull, ne } from 'drizzle-orm';
 import { NodePgDatabase } from 'drizzle-orm/node-postgres';
 
 import type { WriteResult, WriteLogEntry } from '@bookorbit/types';
@@ -9,6 +9,7 @@ import {
   authors,
   bookAuthors,
   bookFiles,
+  bookCustomMetadataValues,
   bookGenres,
   bookMetadata,
   bookNarrators,
@@ -20,6 +21,8 @@ import {
   narrators,
   tags,
   bookTags,
+  customMetadataFields,
+  customMetadataLibraryFields,
 } from '../../db/schema';
 
 type Db = NodePgDatabase<typeof schema>;
@@ -121,7 +124,7 @@ export class FileWriteRepository {
     const [meta] = await this.db.select().from(bookMetadata).where(eq(bookMetadata.bookId, bookId)).limit(1);
     if (!meta) return null;
 
-    const [authorRows, narratorRows, genreRows, tagRows, comicRows] = await Promise.all([
+    const [authorRows, narratorRows, genreRows, tagRows, comicRows, customRows] = await Promise.all([
       this.db
         .select({ name: authors.name, sortName: authors.sortName })
         .from(bookAuthors)
@@ -163,6 +166,27 @@ export class FileWriteRepository {
         .from(comicMetadata)
         .where(eq(comicMetadata.bookId, bookId))
         .limit(1),
+      this.db
+        .select({
+          fieldId: customMetadataFields.id,
+          key: customMetadataFields.key,
+          label: customMetadataFields.label,
+          type: customMetadataFields.type,
+          displayOrder: customMetadataLibraryFields.displayOrder,
+          valueText: bookCustomMetadataValues.valueText,
+          valueNumber: bookCustomMetadataValues.valueNumber,
+          valueDate: bookCustomMetadataValues.valueDate,
+          valueBoolean: bookCustomMetadataValues.valueBoolean,
+        })
+        .from(bookCustomMetadataValues)
+        .innerJoin(customMetadataFields, eq(customMetadataFields.id, bookCustomMetadataValues.fieldId))
+        .innerJoin(books, eq(books.id, bookCustomMetadataValues.bookId))
+        .innerJoin(
+          customMetadataLibraryFields,
+          and(eq(customMetadataLibraryFields.fieldId, customMetadataFields.id), eq(customMetadataLibraryFields.libraryId, books.libraryId)),
+        )
+        .where(and(eq(bookCustomMetadataValues.bookId, bookId), isNull(customMetadataFields.archivedAt)))
+        .orderBy(asc(customMetadataLibraryFields.displayOrder), asc(customMetadataFields.label)),
     ]);
     const comic = comicRows[0] ?? null;
 
@@ -205,6 +229,16 @@ export class FileWriteRepository {
       comicTeams: comic?.teams ?? [],
       comicLocations: comic?.locations ?? [],
       comicStoryArcs: comic?.storyArcs ?? [],
+      customMetadata: customRows
+        .map((row) => ({
+          fieldId: row.fieldId,
+          key: row.key,
+          label: row.label,
+          type: row.type,
+          displayOrder: row.displayOrder,
+          value: row.valueText ?? row.valueNumber ?? row.valueDate ?? row.valueBoolean ?? null,
+        }))
+        .filter((row) => row.value !== null),
     };
   }
 

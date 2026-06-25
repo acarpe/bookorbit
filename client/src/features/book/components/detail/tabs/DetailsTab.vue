@@ -26,7 +26,7 @@ import { getProviderColor } from '@/lib/provider-colors'
 import { useCoverVersions } from '@/features/book/composables/useCoverVersions'
 import { COVER_ASPECT_RATIO_KEY, DEFAULT_COVER_ASPECT_RATIO } from '@/features/book/lib/cover-aspect-ratio'
 import { FORMAT_TO_GROUP, READER_OPENABLE_FORMATS } from '@bookorbit/types'
-import type { BookDetail, BookKoboState, ReadStatus, UserBookStatus } from '@bookorbit/types'
+import type { BookDetail, BookKoboState, CustomMetadataBookValue, ReadStatus, UserBookStatus } from '@bookorbit/types'
 import { STATUS_OPTIONS, STATUS_ICONS, STATUS_COLORS, useBookStatus } from '@/features/book/composables/useBookStatus'
 import BookDownloadButton from '@/features/book/components/BookDownloadButton.vue'
 import DiscoverRow from '@/features/book/components/detail/DiscoverRow.vue'
@@ -117,6 +117,7 @@ const genreMeasureContainer = ref<HTMLElement | null>(null)
 const genreHiddenCount = ref(0)
 const visibleGenreCount = ref(0)
 const safeDescription = useSafeHtml(() => props.book.description)
+const filledCustomMetadata = computed(() => (props.book.customMetadata ?? []).filter((field) => field.value !== null && field.value !== ''))
 const displayedGenres = computed(() => {
   if (genresExpanded.value || genreHiddenCount.value === 0) return props.book.genres
   const count = visibleGenreCount.value > 0 ? visibleGenreCount.value : props.book.genres.length
@@ -218,6 +219,12 @@ function scheduleGenreOverflowMeasure() {
       measureGenreOverflow()
     })
   })
+}
+
+function formatCustomMetadataValue(field: CustomMetadataBookValue): string {
+  if (field.value === null) return ''
+  if (field.type === 'boolean') return field.value ? 'Yes' : 'No'
+  return String(field.value)
 }
 
 watch(
@@ -1792,6 +1799,27 @@ watch(
           </TooltipTrigger>
           <TooltipContent>{{ koboAnomaly.tooltip }}</TooltipContent>
         </Tooltip>
+      </div>
+
+      <div v-if="filledCustomMetadata.length > 0" class="mt-6 pt-5 border-t border-border">
+        <p class="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground mb-3">Custom Metadata</p>
+        <dl class="grid gap-3 sm:grid-cols-2">
+          <div v-for="field in filledCustomMetadata" :key="field.fieldId" class="min-w-0">
+            <dt class="text-[10px] uppercase tracking-wider font-medium text-muted-foreground">{{ field.label }}</dt>
+            <dd class="mt-1 text-sm text-foreground break-words">
+              <a
+                v-if="field.type === 'url' && typeof field.value === 'string'"
+                :href="field.value"
+                target="_blank"
+                rel="noopener noreferrer"
+                class="text-primary hover:underline"
+              >
+                {{ field.value }}
+              </a>
+              <span v-else>{{ formatCustomMetadataValue(field) }}</span>
+            </dd>
+          </div>
+        </dl>
       </div>
 
       <!-- Synopsis -->

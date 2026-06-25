@@ -75,6 +75,7 @@ import { BookQueryBuilder } from './book-query-builder.service';
 import { collapsedJumpBucketExpr, flatJumpBucketExpr } from './jump-bucket-expr';
 import { BookRepository } from './book.repository';
 import { ComicMetadataRepository } from '../metadata/comic-metadata.repository';
+import { CustomMetadataService } from '../custom-metadata/custom-metadata.service';
 import { BookDetailDto } from './dto/book-detail.dto';
 import type { BulkMetadataField } from './dto/bulk-set-metadata.dto';
 import type { BulkEditFieldsDto } from './dto/bulk-edit-metadata.dto';
@@ -231,6 +232,7 @@ export class BookService {
     private readonly userBookStatusService: UserBookStatusService,
     private readonly narratorService: NarratorService,
     private readonly comicMetadataService: ComicMetadataRepository,
+    private readonly customMetadataService: CustomMetadataService,
     private readonly bookMetadataLockService: BookMetadataLockService,
     @Optional() private readonly embedder: BookEmbedderService,
     @Optional() private readonly fileWriteService: FileWriteService,
@@ -679,7 +681,7 @@ export class BookService {
     return [...resolved];
   }
 
-  private resolveCanonicalExportKeys(options: MetadataExportResolvedOptions): string[] {
+  private resolveCanonicalExportKeys(options: MetadataExportResolvedOptions, customKeys: string[] = []): string[] {
     const keys = [
       'bookId',
       'libraryId',
@@ -714,6 +716,7 @@ export class BookService {
       'readStartedAt',
       'readFinishedAt',
       'readUpdatedAt',
+      ...customKeys,
     ];
     if (!options.includePersonalData) {
       // Keep schema stable by retaining personal-data fields but emitting null values.
@@ -801,10 +804,11 @@ export class BookService {
       format: dto.format,
     };
     const bookIds = rows.map((row) => row.id);
-    const [libraryRows, libraries, filePathRows] = await Promise.all([
+    const [libraryRows, libraries, filePathRows, customValuesByBookId] = await Promise.all([
       this.bookRepo.findLibraryIdsByBookIds(bookIds),
       this.libraryService.findAll(user),
       options.includeFilePaths ? this.bookRepo.findAllFilesByBookIds(bookIds) : Promise.resolve([]),
+      this.customMetadataService.getExportValues(bookIds),
     ]);
 
     const libraryIdByBookId = new Map(libraryRows.map((row) => [row.id, row.libraryId]));
@@ -829,6 +833,7 @@ export class BookService {
       const readProgress = options.includePersonalData ? (row.readingProgress ?? null) : null;
       const filePaths = options.includeFilePaths ? (filePathsByBookId.get(row.id) ?? []) : [];
       const folderPath = options.includeFilePaths && filePaths.length > 0 ? dirname(filePaths[0]!) : null;
+      const customValues = customValuesByBookId.get(row.id) ?? {};
 
       return {
         bookId: row.id,
@@ -872,11 +877,15 @@ export class BookService {
           role: file.role,
           sizeBytes: file.sizeBytes,
         })),
+        ...customValues,
       } as Record<string, unknown>;
     });
 
+    const customExportKeys = [...new Set(records.flatMap((record) => Object.keys(record).filter((key) => key.startsWith('custom.'))))].sort();
     const exportKeys =
-      options.columnsMode === 'visible' ? this.resolveVisibleExportKeys(options.visibleColumns, options) : this.resolveCanonicalExportKeys(options);
+      options.columnsMode === 'visible'
+        ? this.resolveVisibleExportKeys(options.visibleColumns, options)
+        : this.resolveCanonicalExportKeys(options, customExportKeys);
     const projected = records.map((record) => this.projectExportRow(record, exportKeys));
     const contextMeta: MetadataExportContextMeta = {
       exportedAt: new Date().toISOString(),
@@ -1365,7 +1374,7 @@ export class BookService {
         postSaveMode: options.postSaveMode ?? 'schedule',
       });
       this.logger.log(
-        `[${event}] [end] bookId=${id} durationMs=${Date.now() - startedAt} scalarFields=${scalarFieldCount} authorsUpdated=${dto.authors !== undefined} narratorsUpdated=${dto.audioMetadata?.narrators !== undefined} genresUpdated=${dto.genres !== undefined} tagsUpdated=${dto.tags !== undefined} audioMetadataUpdated=${dto.audioMetadata !== undefined} comicMetadataUpdated=${dto.comicMetadata !== undefined} - metadata update completed`,
+        `[${event}] [end] bookId=${id} durationMs=${Date.now() - startedAt} scalarFields=${scalarFieldCount} authorsUpdated=${dto.authors !== undefined} narratorsUpdated=${dto.audioMetadata?.narrators !== undefined} genresUpdated=${dto.genres !== undefined} tagsUpdated=${dto.tags !== undefined} audioMetadataUpdated=${dto.audioMetadata !== undefined} comicMetadataUpdated=${dto.comicMetadata !== undefined} customMetadataUpdated=${dto.customMetadata !== undefined} - metadata update completed`,
       );
       return { book: detail, write, libraryAutoWriteEnabled };
     } catch (err) {
@@ -1406,7 +1415,7 @@ export class BookService {
         },
       );
       this.logger.log(
-        `[${event}] [end] bookId=${id} durationMs=${Date.now() - startedAt} scalarFields=${scalarFieldCount} lockFields=${normalizedLockedFields?.length ?? 0} - metadata and lock update completed`,
+        `[${event}] [end] bookId=${id} durationMs=${Date.now() - startedAt} scalarFields=${scalarFieldCount} customMetadataUpdated=${metadata.customMetadata !== undefined} lockFields=${normalizedLockedFields?.length ?? 0} - metadata and lock update completed`,
       );
       return { book: detail, write, libraryAutoWriteEnabled };
     } catch (err) {
@@ -1466,6 +1475,8 @@ export class BookService {
 
     const scalarFieldCount = Object.keys(scalarFields).length;
     const hasMetadataUpdate = Object.keys(dto).length > 0;
+    const customMetadataLibraryId = dto.customMetadata !== undefined ? await this.bookRepo.findLibraryIdByBookId(id) : null;
+    if (dto.customMetadata !== undefined && customMetadataLibraryId === null) throw new NotFoundException(`Book ${id} not found`);
     let replacedAuthorIds: number[] = [];
     let normalizedLockedFields: BookMetadataLockField[] | undefined;
     let write: WriteResult | null = null;
@@ -1511,6 +1522,10 @@ export class BookService {
         await this.metadataService.replaceTags(id, dto.tags, { executor: tx });
       }
       this.throwIfMetadataUpdateFailpoint('afterTagsReplace');
+
+      if (dto.customMetadata !== undefined) {
+        await this.customMetadataService.updateBookValues(id, customMetadataLibraryId!, dto.customMetadata, tx);
+      }
 
       if (options.lockedFields !== undefined) {
         normalizedLockedFields = await this.bookMetadataLockService.replaceLockedFields(id, options.lockedFields, tx);
@@ -2650,6 +2665,7 @@ export class BookService {
 
     const { book, authorRows, genreRows, tagRows, fileRows, narratorRows, seriesMembershipRows } = result;
     const meta = book.book_metadata;
+    const customMetadata = await this.customMetadataService.getBookValues(id, book.books.libraryId);
     const hasAudioFiles = fileRows.some((f) => f.format && isAudioFormat(f.format));
     const resolvedChapters = this.resolveChapters(meta?.chapters as AudiobookChapter[] | null | undefined, fileRows);
     const supplementalFields = buildBookDetailSupplementalFields({
@@ -2719,6 +2735,7 @@ export class BookService {
       lastWrittenAt: meta?.lastWrittenAt ?? null,
       metadataScore: meta?.metadataScore ?? null,
       formatPriority: (book.libraries?.formatPriority as string[] | null) ?? [],
+      customMetadata,
       fileWriteStatus: this.fileWriteService?.resolveBookFileWriteStatus(book.libraries, fileRows, book.books.primaryFileId) ?? {
         enabled: false,
         reason: 'library_disabled',
@@ -2789,6 +2806,7 @@ export class BookService {
       case 'epub': {
         const parsed = await extractEpubMetadata(absolutePath);
         if (!parsed) return {};
+        const customMetadata = await this.customMetadataService.parseFileValuesForBook(id, parsed.customMetadata);
         return {
           title: parsed.title,
           subtitle: parsed.subtitle,
@@ -2811,6 +2829,7 @@ export class BookService {
           ranobedbId: parsed.ranobedbId,
           lubimyczytacId: parsed.lubimyczytacId,
           aladinId: parsed.aladinId,
+          customMetadata: customMetadata.length > 0 ? customMetadata : undefined,
           authors: parsed.authors.length > 0 ? parsed.authors.map((a) => a.name) : undefined,
           genres: parsed.genres.length > 0 ? parsed.genres : undefined,
         };

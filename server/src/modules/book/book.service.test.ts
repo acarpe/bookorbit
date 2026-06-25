@@ -199,6 +199,12 @@ function makeService(overrides: { bookMetadataLockService?: unknown } = {}) {
     upsert: vi.fn().mockResolvedValue(undefined),
     findByBookId: vi.fn().mockResolvedValue(null),
   };
+  const customMetadataService = {
+    getBookValues: vi.fn().mockResolvedValue([]),
+    getExportValues: vi.fn().mockResolvedValue(new Map()),
+    parseFileValuesForBook: vi.fn().mockResolvedValue([]),
+    updateBookValues: vi.fn().mockResolvedValue(undefined),
+  };
   const bookMetadataLockService = {
     normalizeLockedFields: vi.fn().mockImplementation((fields: string[] | null | undefined) => fields ?? []),
     isFieldLocked: vi.fn().mockResolvedValue(false),
@@ -244,6 +250,7 @@ function makeService(overrides: { bookMetadataLockService?: unknown } = {}) {
     userBookStatusService as never,
     narratorService as never,
     comicMetadataService as never,
+    customMetadataService as never,
     (overrides.bookMetadataLockService ?? bookMetadataLockService) as never,
     embedder as never,
     fileWriteService as never,
@@ -268,6 +275,7 @@ function makeService(overrides: { bookMetadataLockService?: unknown } = {}) {
     achievementEvents,
     narratorService,
     comicMetadataService,
+    customMetadataService,
     bookMetadataLockService,
   };
 }
@@ -4059,6 +4067,7 @@ describe('BookService', () => {
         userBookStatusService,
         narratorService,
         comicMetadataService,
+        customMetadataService,
         bookMetadataLockService,
         embedder,
         fileRenameService,
@@ -4079,6 +4088,7 @@ describe('BookService', () => {
         userBookStatusService as never,
         narratorService as never,
         comicMetadataService as never,
+        customMetadataService as never,
         bookMetadataLockService as never,
         embedder as never,
         null as never,
@@ -4105,6 +4115,7 @@ describe('BookService', () => {
         userBookStatusService,
         narratorService,
         comicMetadataService,
+        customMetadataService,
         bookMetadataLockService,
         embedder,
         fileWriteService,
@@ -4125,6 +4136,7 @@ describe('BookService', () => {
         userBookStatusService as never,
         narratorService as never,
         comicMetadataService as never,
+        customMetadataService as never,
         bookMetadataLockService as never,
         embedder as never,
         fileWriteService as never,

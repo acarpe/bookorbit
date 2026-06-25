@@ -1,6 +1,6 @@
 import { ref } from 'vue'
 import { api } from '@/lib/api'
-import type { ComicMetadataFields } from '@bookorbit/types'
+import type { ComicMetadataFields, CustomMetadataBookValueInput } from '@bookorbit/types'
 
 export interface FileMetadata {
   title?: string | null
@@ -31,6 +31,7 @@ export interface FileMetadata {
   narrators?: string[]
   durationSeconds?: number | null
   comicMetadata?: ComicMetadataFields
+  customMetadata?: CustomMetadataBookValueInput[]
 }
 
 export function useFileMetadata() {
