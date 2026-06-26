@@ -19,6 +19,10 @@ export class BookReadService {
     return this.bookRepo.findPrimaryFilesByBookIds(bookIds);
   }
 
+  findPrimaryReaderFilesByBookIds(bookIds: number[]) {
+    return this.bookRepo.findPrimaryReaderFilesByBookIds(bookIds);
+  }
+
   findCards(opts: { where: SQL | undefined; orderBy: SQL[]; limit: number; offset: number; userId: number }) {
     return this.bookRepo.findCards(opts);
   }
@@ -41,6 +45,14 @@ export class BookReadService {
 
   findById(id: number) {
     return this.bookRepo.findById(id);
+  }
+
+  findProgressByBook(userId: number, bookId: number) {
+    return this.bookRepo.findProgressByBook(userId, bookId);
+  }
+
+  findProgressByBooks(userId: number, bookIds: number[]) {
+    return this.bookRepo.findProgressByBooks(userId, bookIds);
   }
 
   checkBookPassesContentFilters(bookId: number, contentFilters: import('@bookorbit/types').ContentFilterRules) {
