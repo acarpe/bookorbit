@@ -87,7 +87,7 @@ describe('Foliate navigation', () => {
     await expect(view.goTo('chapter-1')).resolves.toEqual({ index: 2 })
 
     expect(goToCalls).toEqual([{ index: 1 }, { index: 2 }])
-    expect(view.renderer.getContents()).toEqual([{ index: 2, text: 'chapter 2' }])
+    expect(view.renderer!.getContents!()).toEqual([{ index: 2, text: 'chapter 2' }])
   })
 
   it('keeps the requested target when the rendered contents match', async () => {
@@ -107,7 +107,7 @@ describe('Foliate navigation', () => {
 
     await expect(view.goTo('chapter-1')).resolves.toEqual({ index: 1 })
 
-    expect(view.renderer.getContents()).toEqual([{ index: 1 }])
+    expect(view.renderer!.getContents!()).toEqual([{ index: 1 }])
   })
 
   it('rejects paginator navigation when a section load does not produce a source', async () => {
