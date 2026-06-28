@@ -845,12 +845,16 @@ export class View extends HTMLElement {
     await this.renderer.next(distance)
   }
 
+  #isRTL() {
+    return this.book?.dir === 'rtl' || this.renderer?.getAttribute?.('dir') === 'rtl'
+  }
+
   goLeft() {
-    return this.book.dir === 'rtl' ? this.next() : this.prev()
+    return this.#isRTL() ? this.next() : this.prev()
   }
 
   goRight() {
-    return this.book.dir === 'rtl' ? this.prev() : this.next()
+    return this.#isRTL() ? this.prev() : this.next()
   }
 
   async *#searchSection(matcher, query, index) {
