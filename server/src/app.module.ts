@@ -64,6 +64,7 @@ import { ReleaseNotesModule } from './modules/release-notes/release-notes.module
 import { AchievementModule } from './modules/achievement/achievement.module';
 import { HardcoverModule } from './modules/hardcover/hardcover.module';
 import { CustomMetadataModule } from './modules/custom-metadata/custom-metadata.module';
+import { CustomIconModule } from './modules/custom-icon/custom-icon.module';
 
 @Module({
   imports: [
@@ -107,6 +108,7 @@ import { CustomMetadataModule } from './modules/custom-metadata/custom-metadata.
     MetadataFetchModule,
     MetadataPreferencesModule,
     CustomMetadataModule,
+    CustomIconModule,
     RecommendationModule,
     KoboModule,
     OpdsModule,

@@ -1,6 +1,6 @@
 {
-  "id": "139350a5-21b2-4334-b46b-6884119c7964",
-  "prevId": "1ad09390-1ed7-4667-b97c-e93645001b9b",
+  "id": "ccef7cee-8cbf-43bf-ac80-e3a40ef26cc4",
+  "prevId": "139350a5-21b2-4334-b46b-6884119c7964",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -1514,6 +1514,100 @@
         "custom_metadata_library_fields_display_order_nonnegative_chk": {
           "name": "custom_metadata_library_fields_display_order_nonnegative_chk",
           "value": "\"custom_metadata_library_fields\".\"display_order\" >= 0"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.custom_icons": {
+      "name": "custom_icons",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "serial",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "slug": {
+          "name": "slug",
+          "type": "varchar(80)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "name": {
+          "name": "name",
+          "type": "varchar(120)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "original_file_name": {
+          "name": "original_file_name",
+          "type": "varchar(255)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "stored_file_name": {
+          "name": "stored_file_name",
+          "type": "varchar(255)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "file_size": {
+          "name": "file_size",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "file_hash": {
+          "name": "file_hash",
+          "type": "varchar(64)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "custom_icons_slug_uidx": {
+          "name": "custom_icons_slug_uidx",
+          "columns": [
+            {
+              "expression": "slug",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "custom_icons_slug_chk": {
+          "name": "custom_icons_slug_chk",
+          "value": "\"custom_icons\".\"slug\" ~ '^[a-z0-9][a-z0-9-]*[a-z0-9]$' or \"custom_icons\".\"slug\" ~ '^[a-z0-9]$'"
+        },
+        "custom_icons_file_size_positive_chk": {
+          "name": "custom_icons_file_size_positive_chk",
+          "value": "\"custom_icons\".\"file_size\" > 0"
         }
       },
       "isRLSEnabled": false
@@ -3500,7 +3594,7 @@
         },
         "icon": {
           "name": "icon",
-          "type": "varchar(64)",
+          "type": "varchar(100)",
           "primaryKey": false,
           "notNull": false
         },
