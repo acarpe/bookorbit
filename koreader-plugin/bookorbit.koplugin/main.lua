@@ -67,6 +67,7 @@ BookOrbit.default_settings = {
     username = nil,
     userkey = nil,
     auto_sync = false,
+    skip_sync_when_offline = false,
     annotation_sync = true,
     pages_before_update = 10,
     sync_forward = SYNC_STRATEGY.PROMPT,
@@ -273,10 +274,16 @@ end
 function BookOrbit:onReaderReady()
     if self.settings.auto_sync then
         UIManager:nextTick(function()
+            if self.settings.skip_sync_when_offline and not NetworkMgr:isOnline() then
+                return
+            end
             self:getProgress(true, false)
         end)
         if self.settings.annotation_sync then
             UIManager:scheduleIn(2, function()
+                if self.settings.skip_sync_when_offline and not NetworkMgr:isOnline() then
+                    return
+                end
                 self:exchangeAnnotationsForOpenBook()
             end)
         end
@@ -471,6 +478,15 @@ function BookOrbit:addToMainMenu(menu_items)
                 help_text = _([[Also applies highlights, notes and deletions made in BookOrbit to this device: on book open, after the manual book sync, and during the full sweep for closed books. Turning this off keeps uploads only.]]),
                 callback = function()
                     self.settings.annotation_sync = not self.settings.annotation_sync
+                end,
+            },
+            {
+                text = _("Skip auto-sync when offline"),
+                checked_func = function() return self.settings.skip_sync_when_offline end,
+                enabled_func = function() return self.settings.auto_sync end,
+                help_text = _([[When enabled, automatic sync on book open is skipped if the device is not already online. Prevents the e-reader from stalling while trying to connect to Wi-Fi.]]),
+                callback = function()
+                    self.settings.skip_sync_when_offline = not self.settings.skip_sync_when_offline
                 end,
                 separator = true,
             },
