@@ -15,14 +15,15 @@ import BookTableActionsCell from './BookTableActionsCell.vue'
 import BookTableProgressCell from './BookTableProgressCell.vue'
 import BookTableMetadataScoreCell from './BookTableMetadataScoreCell.vue'
 import BookTableLockableCell from './BookTableLockableCell.vue'
-import type { CellType, ColumnId } from '@/features/book/composables/tableColumnSchema'
+import BookTableBooleanCell from './BookTableBooleanCell.vue'
+import type { CellType } from '@/features/book/composables/tableColumnSchema'
 
 type NavigationDirection = 'next' | 'prev' | 'rowUp' | 'rowDown'
 type BookActionType = 'quick-view' | 'add-to-collection' | 'delete'
 
 const props = defineProps<{
   book: BookCard
-  colId: ColumnId
+  colId: string
   cellType: CellType
   hasLockField: boolean
   isLocked: boolean
@@ -60,6 +61,10 @@ function asString(v: unknown): string | null {
 
 function asNumber(v: unknown): number | null {
   return v as number | null
+}
+
+function asBoolean(v: unknown): boolean | null {
+  return v as boolean | null
 }
 
 function asStringArray(v: unknown): string[] {
@@ -167,6 +172,8 @@ const isComic = computed(() => primaryFile.value?.format != null && FORMAT_TO_GR
   <BookTableFormatCell v-else-if="cellType === 'format'" :files="book.files" />
   <BookTableReadButtonCell v-else-if="cellType === 'read'" :book="book" />
   <BookTableDateCell v-else-if="cellType === 'date'" :value="asString(value)" />
+
+  <BookTableBooleanCell v-else-if="cellType === 'customBoolean'" :value="asBoolean(value)" :is-read-only="isReadOnly" @save="emit('save', $event)" />
 
   <BookTableActionsCell
     v-else-if="cellType === 'actions' && !selectionMode"

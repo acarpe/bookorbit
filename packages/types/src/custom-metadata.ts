@@ -17,6 +17,16 @@ export interface CustomMetadataFieldDefinition {
   usageCount: number;
 }
 
+/** Lean summary used for table column building. Omits admin-only attributes (usageCount, timestamps). */
+export interface CustomMetadataFieldSummary {
+  id: number;
+  label: string;
+  type: CustomMetadataFieldType;
+  displayOrder: number;
+  archivedAt: string | null;
+  enabledLibraryIds: number[];
+}
+
 export interface CustomMetadataLibraryEnablement {
   fieldId: number;
   libraryId: number;

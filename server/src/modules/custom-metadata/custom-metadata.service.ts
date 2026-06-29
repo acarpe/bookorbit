@@ -1,5 +1,11 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
-import type { CustomMetadataBookValue, CustomMetadataFieldDefinition, CustomMetadataFieldType, CustomMetadataPrimitiveValue } from '@bookorbit/types';
+import type {
+  CustomMetadataBookValue,
+  CustomMetadataFieldDefinition,
+  CustomMetadataFieldSummary,
+  CustomMetadataFieldType,
+  CustomMetadataPrimitiveValue,
+} from '@bookorbit/types';
 
 import type { CustomMetadataField } from '../../db/schema';
 import { CreateCustomMetadataFieldDto } from './dto/create-custom-metadata-field.dto';
@@ -32,6 +38,24 @@ export class CustomMetadataService {
     }
     const usageByFieldId = new Map(usageCounts.map((row) => [row.fieldId, row.count]));
     return fields.map((field) => this.toDefinition(field, enabledByFieldId.get(field.id) ?? [], usageByFieldId.get(field.id) ?? 0));
+  }
+
+  async listFieldSummaries(): Promise<CustomMetadataFieldSummary[]> {
+    const [fields, enablements] = await Promise.all([this.repository.listFields(false), this.repository.listEnablements()]);
+    const enabledByFieldId = new Map<number, number[]>();
+    for (const enablement of enablements) {
+      const current = enabledByFieldId.get(enablement.fieldId) ?? [];
+      current.push(enablement.libraryId);
+      enabledByFieldId.set(enablement.fieldId, current);
+    }
+    return fields.map((field) => ({
+      id: field.id,
+      label: field.label,
+      type: field.type,
+      displayOrder: field.displayOrder,
+      archivedAt: field.archivedAt?.toISOString() ?? null,
+      enabledLibraryIds: enabledByFieldId.get(field.id) ?? [],
+    }));
   }
 
   async createField(dto: CreateCustomMetadataFieldDto): Promise<CustomMetadataFieldDefinition> {
@@ -125,6 +149,20 @@ export class CustomMetadataService {
         value: stored ? valueFromColumns(stored) : null,
       };
     });
+  }
+
+  async getCardValues(bookIds: number[]): Promise<Array<CustomMetadataBookValue & { bookId: number }>> {
+    if (bookIds.length === 0) return [];
+    const rows = await this.repository.findCardValuesForBooks(bookIds);
+    return rows.map((row) => ({
+      bookId: row.bookId,
+      fieldId: row.fieldId,
+      key: row.key,
+      label: row.label,
+      type: row.type as CustomMetadataBookValue['type'],
+      displayOrder: row.displayOrder,
+      value: valueFromColumns(row),
+    }));
   }
 
   async getExportValues(bookIds: number[]): Promise<Map<number, Record<string, CustomMetadataPrimitiveValue>>> {

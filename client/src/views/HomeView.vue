@@ -929,6 +929,7 @@ defineOptions({ name: 'HomeView' })
             :loading="loading"
             :total="total"
             view-type="library"
+            :library-id="libraryId ?? undefined"
             :selection-mode="selectionMode"
             :is-selected="isSelected"
             :selected-count="selectedCount"

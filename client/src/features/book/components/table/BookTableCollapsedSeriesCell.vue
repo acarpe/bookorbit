@@ -3,12 +3,11 @@ import { computed } from 'vue'
 import { ChevronRight, LibraryBig } from '@lucide/vue'
 import { FORMAT_TO_GROUP, type BookCard } from '@bookorbit/types'
 import BookCoverSurface from '../BookCoverSurface.vue'
-import type { ColumnId } from '@/features/book/composables/useTableColumns'
 import { useCoverVersions } from '@/features/book/composables/useCoverVersions'
 
 const props = defineProps<{
   book: BookCard
-  colId: ColumnId
+  colId: string
 }>()
 
 const collapsed = computed(() => props.book.collapsedSeries!)

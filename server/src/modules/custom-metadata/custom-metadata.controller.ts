@@ -25,6 +25,11 @@ import { CustomMetadataService } from './custom-metadata.service';
 export class CustomMetadataController {
   constructor(private readonly service: CustomMetadataService) {}
 
+  @Get('fields/active')
+  listActiveFields() {
+    return this.service.listFieldSummaries();
+  }
+
   @Get('fields')
   @RequirePermission(Permission.ManageLibraries)
   listFields(@Query('includeArchived', new DefaultValuePipe(false), ParseBoolPipe) includeArchived: boolean) {

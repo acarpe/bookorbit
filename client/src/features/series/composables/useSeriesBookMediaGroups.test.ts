@@ -30,6 +30,7 @@ function makeBook(format: string | null | undefined, overrides: Partial<BookCard
     pageCount: null,
     isbn13: null,
     narrators: [],
+    customMetadata: [],
     ...overrides,
   }
 }

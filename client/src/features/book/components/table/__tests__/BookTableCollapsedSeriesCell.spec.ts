@@ -39,6 +39,7 @@ function makeBook(format: string | null): BookCard {
     pageCount: null,
     isbn13: null,
     narrators: [],
+    customMetadata: [],
     collapsedSeries: {
       bookCount: 3,
       readCount: 1,

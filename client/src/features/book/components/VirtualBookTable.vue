@@ -3,14 +3,7 @@ import { ref, computed, watch, nextTick, onMounted, onUnmounted, onActivated, on
 import { breakpointsTailwind, useBreakpoints } from '@vueuse/core'
 import { useVirtualizer } from '@tanstack/vue-virtual'
 import { AlertTriangle, ArrowDown, ArrowUp, BookOpen, CheckCircle2, ChevronUp, Loader2, RotateCcw, X } from '@lucide/vue'
-import {
-  useTableColumns,
-  COLUMN_DEFS,
-  COLUMN_DEF_MAP,
-  LOCK_ROW_COLUMN_DEF,
-  type ColumnId,
-  type ColumnDef,
-} from '@/features/book/composables/useTableColumns'
+import { useTableColumns, COLUMN_DEFS, COLUMN_DEF_MAP, LOCK_ROW_COLUMN_DEF, type ColumnDef } from '@/features/book/composables/useTableColumns'
 import { useTableCellEditor } from '@/features/book/composables/useTableCellEditor'
 import { useTableLocks } from '@/features/book/composables/useTableLocks'
 import { useTablePresets } from '@/features/book/composables/useTablePresets'
@@ -46,12 +39,14 @@ import { isBookPlaceholder, type BookSlot } from '@/features/book/composables/us
 import { useNarratorSearch } from '@/features/book/composables/useNarratorSearch'
 import { SORT_FIELD_LABELS } from '@/features/book/lib/filter-labels'
 import { useDisplaySettings } from '@/composables/useDisplaySettings'
+import { useActiveCustomFields } from '@/features/book/composables/useActiveCustomFields'
 
 const props = withDefaults(
   defineProps<{
     books: BookSlot[]
     sort: SortSpec[]
     viewType: TableViewType
+    libraryId?: number
     selectionMode?: boolean
     isSelected?: (id: number) => boolean
     hasMore?: boolean
@@ -96,8 +91,29 @@ const isReadOnly = computed(() => !md.value)
 const { tableDensity, tableZebraStriping } = useDisplaySettings()
 const router = useRouter()
 
-const { layout, visibleColumns, allColumns, toggleColumn, setColumnOrder, setColumnWidth, setLayout, pinColumn, unpinColumn, resetLayout } =
-  useTableColumns(props.viewType)
+const { fields: allCustomFields } = useActiveCustomFields()
+
+// In a library view, only show fields enabled for that specific library.
+// In collection/smart scope views (no single library), show all active fields.
+const customFields = computed(() => {
+  const lid = props.libraryId
+  if (lid == null) return allCustomFields.value
+  return allCustomFields.value.filter((f) => f.enabledLibraryIds.includes(lid))
+})
+
+const {
+  layout,
+  visibleColumns,
+  allColumns,
+  toggleColumn,
+  setColumnOrder,
+  setColumnWidth,
+  setLayout,
+  pinColumn,
+  unpinColumn,
+  resetLayout,
+  combinedColumnMap,
+} = useTableColumns(props.viewType, customFields)
 const editor = useTableCellEditor()
 const locks = useTableLocks()
 const tablePresets = useTablePresets(
@@ -124,6 +140,7 @@ const { getQuickFilterOptions, buildQuickFilterRule } = useTableQuickFilters(pro
 const { getCellValue, isCellLocked, isCellReadOnly, isMandatoryFieldEmpty, isBookFileMissing, getPinnedCellBackground } = useTableCellHelpers(
   locks,
   () => isReadOnly.value,
+  () => combinedColumnMap.value,
 )
 const { coverDialogBook, handleCoverClick, handleCoverDialogUpdateBook } = useTableCoverDialog(
   () => props.selectionMode ?? false,
@@ -131,7 +148,7 @@ const { coverDialogBook, handleCoverClick, handleCoverDialogUpdateBook } = useTa
   () => loadedBooks.value,
 )
 
-function getChipsSearchFn(colId: ColumnId): (q: string) => Promise<string[]> {
+function getChipsSearchFn(colId: string): (q: string) => Promise<string[]> {
   if (colId === 'authors') return searchAuthors
   if (colId === 'genres') return searchGenres
   if (colId === 'tags') return searchTags
@@ -139,12 +156,12 @@ function getChipsSearchFn(colId: ColumnId): (q: string) => Promise<string[]> {
   return () => Promise.resolve([])
 }
 
-function getChipsLinkFn(colId: ColumnId): ((chip: string) => string | null) | undefined {
+function getChipsLinkFn(colId: string): ((chip: string) => string | null) | undefined {
   if (colId === 'authors') return (name) => `/authors?q=${encodeURIComponent(name)}`
   return undefined
 }
 
-function getChipsActionFn(colId: ColumnId): ((chip: string) => void) | undefined {
+function getChipsActionFn(colId: string): ((chip: string) => void) | undefined {
   if (props.viewType !== 'library') return undefined
   if (colId === 'genres') {
     return (name) => emit('quick-filter', { type: 'rule', field: 'genre', operator: 'includesAny', value: [name] })
@@ -155,7 +172,7 @@ function getChipsActionFn(colId: ColumnId): ((chip: string) => void) | undefined
   return undefined
 }
 
-function getTextCellOpenLink(book: BookCard, colId: ColumnId): string | null {
+function getTextCellOpenLink(book: BookCard, colId: string): string | null {
   if (colId === 'title') return `/book/${book.id}`
   if (colId === 'seriesName' && book.seriesId != null) return `/series/${book.seriesId}`
   return null
@@ -167,13 +184,13 @@ const rowPaddingClass = computed(() => {
   return 'py-1.5'
 })
 
-function getTextCellOpenLinkLabel(colId: ColumnId): string | null {
+function getTextCellOpenLinkLabel(colId: string): string | null {
   if (colId === 'title') return 'Open book details'
   if (colId === 'seriesName') return 'Open series'
   return null
 }
 
-function getTextSearchFn(colId: ColumnId): ((q: string) => Promise<string[]>) | undefined {
+function getTextSearchFn(colId: string): ((q: string) => Promise<string[]>) | undefined {
   if (colId === 'publisher') return searchPublisher
   if (colId === 'seriesName') return searchSeriesName
   if (colId === 'language') return searchLanguage
@@ -194,7 +211,7 @@ function isRowRefreshing(bookId: number): boolean {
   return getRowFeedback(bookId)?.state === 'refreshing' || isRefreshing(bookId)
 }
 
-function isCellChanged(bookId: number, colId: ColumnId): boolean {
+function isCellChanged(bookId: number, colId: string): boolean {
   return refreshFeedback.isCellChanged(bookId, colId)
 }
 
@@ -245,7 +262,7 @@ const pinnedLeftOffsets = computed(() => {
   }
   return offsets
 })
-const statusAnchorColumnId = computed<ColumnId | null>(() => {
+const statusAnchorColumnId = computed<string | null>(() => {
   const visibleIds = displayColumns.value.map((column) => column.id)
   if (visibleIds.includes('title')) return 'title'
   if (visibleIds.includes('authors')) return 'authors'
@@ -440,6 +457,7 @@ const { focusedRowIndex, focusedColIndex, isFocusedCell, handleTableKeydown } = 
   onActivate: handleActivate,
   onSelect: (id, event) => emit('select', id, event),
   onCopyRow: () => {},
+  columnMapGetter: () => combinedColumnMap.value,
 })
 
 const shortcutOverlayOpen = ref(false)
@@ -476,7 +494,7 @@ function shouldPreserveTargetFocus(target: EventTarget | null): boolean {
   )
 }
 
-function focusTableCell(rowIndex: number, colIndex: number, event?: MouseEvent, bookId?: number, colId?: ColumnId) {
+function focusTableCell(rowIndex: number, colIndex: number, event?: MouseEvent, bookId?: number, colId?: string) {
   focusedRowIndex.value = rowIndex
   focusedColIndex.value = colIndex
   if (bookId != null && colId && editor.isActive(bookId, colId)) return
@@ -521,9 +539,9 @@ watch(
 )
 
 // Editable column IDs in display order (for Tab navigation)
-const editableColumnIds = computed<ColumnId[]>(() => visibleColumns.value.filter((c) => c.isEditable).map((c) => c.id))
+const editableColumnIds = computed<string[]>(() => visibleColumns.value.filter((c) => c.isEditable).map((c) => c.id))
 
-function handleActivate(book: BookCard, colId: ColumnId) {
+function handleActivate(book: BookCard, colId: string) {
   if (isBookPlaceholder(book as BookSlot)) return
   if (isReadOnly.value || props.selectionMode) return
   const col = displayColumns.value.find((c) => c.id === colId)
@@ -531,18 +549,24 @@ function handleActivate(book: BookCard, colId: ColumnId) {
   editor.activateCell(book.id, colId, getCellValue(book, colId))
 }
 
-function handleSave(book: BookCard, colId: ColumnId, newValue: unknown) {
-  editor.saveCell(book.id, colId, newValue, (patch) => {
-    const updated = mergeBookPatchWithLatest(loadedBooks.value, book, patch)
-    emit('update:book', updated)
-  })
+function handleSave(book: BookCard, colId: string, newValue: unknown) {
+  editor.saveCell(
+    book.id,
+    colId,
+    newValue,
+    (patch) => {
+      const updated = mergeBookPatchWithLatest(loadedBooks.value, book, patch)
+      emit('update:book', updated)
+    },
+    book,
+  )
 }
 
-function handleCancel(bookId: number, colId: ColumnId) {
+function handleCancel(bookId: number, colId: string) {
   editor.cancelCellIfActive(bookId, colId)
 }
 
-function handleNavigate(book: BookCard, colId: ColumnId, direction: 'next' | 'prev' | 'rowUp' | 'rowDown') {
+function handleNavigate(book: BookCard, colId: string, direction: 'next' | 'prev' | 'rowUp' | 'rowDown') {
   if (direction === 'rowUp' || direction === 'rowDown') {
     editor.navigateRow(direction === 'rowDown' ? 'down' : 'up', loadedBooks.value, book.id, colId)
     return
@@ -566,7 +590,7 @@ function emitLockStateUpdate(book: BookCard, nextFields: BookCard['lockedFields'
   emit('update:book', updated)
 }
 
-async function handleToggleCellLock(book: BookCard, colId: ColumnId) {
+async function handleToggleCellLock(book: BookCard, colId: string) {
   const lockField = COLUMN_DEF_MAP.get(colId)?.lockField
   if (!lockField) return
   const beforeFields = [...locks.getFields(book.id)]

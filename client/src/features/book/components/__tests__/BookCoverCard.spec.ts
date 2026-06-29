@@ -109,6 +109,7 @@ const missingBook: BookCard = {
   pageCount: null,
   isbn13: null,
   narrators: [],
+  customMetadata: [],
 }
 
 const presentBook: BookCard = {
@@ -137,6 +138,7 @@ const presentBook: BookCard = {
   pageCount: null,
   isbn13: null,
   narrators: [],
+  customMetadata: [],
 }
 
 const presentBookWithCover: BookCard = {

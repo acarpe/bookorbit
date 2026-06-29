@@ -74,6 +74,7 @@ export type BookCard = {
   hardcoverEditionId?: string | null;
   narrators: string[];
   tags: string[];
+  customMetadata: CustomMetadataBookValue[];
   collapsedSeries?: import("./series-collapse").CollapsedSeriesInfo;
 };
 

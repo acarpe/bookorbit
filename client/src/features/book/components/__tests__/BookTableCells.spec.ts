@@ -243,6 +243,7 @@ describe('BookTableReadButtonCell', () => {
       pageCount: null,
       isbn13: null,
       narrators: [],
+      customMetadata: [],
       tags: [],
     }
   }

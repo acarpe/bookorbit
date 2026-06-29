@@ -75,6 +75,7 @@ function makeBook(overrides?: Partial<BookCard>): BookCard {
     pageCount: null,
     isbn13: null,
     narrators: [],
+    customMetadata: [],
     ...overrides,
     collapsedSeries: {
       ...collapsedSeries,

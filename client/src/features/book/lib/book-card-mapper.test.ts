@@ -11,6 +11,7 @@ function makeBook(overrides: Partial<BookCard> = {}): BookCard {
     genres: [],
     files: [],
     narrators: [],
+    customMetadata: [],
     seriesName: null,
     seriesIndex: null,
     seriesMemberships: [],

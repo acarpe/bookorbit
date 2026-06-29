@@ -1024,6 +1024,7 @@ export class BookService {
           offset: page * size,
           userId,
         });
+      // Collapsed rows render BookTableCollapsedSeriesCell which does not display custom metadata.
       const result = {
         items: assembleCollapsedBookCards(
           rows,
@@ -1058,8 +1059,21 @@ export class BookService {
         offset: page * size,
         userId,
       });
+    const bookIds = rows.map((r) => r.id);
+    const customMetadataRows = await this.customMetadataService.getCardValues(bookIds);
     const result = {
-      items: assembleBookCards(rows, authorRows, fileRows, genreRows, progressRows, statusRows, narratorRows, tagRows, seriesMembershipRows),
+      items: assembleBookCards(
+        rows,
+        authorRows,
+        fileRows,
+        genreRows,
+        progressRows,
+        statusRows,
+        narratorRows,
+        tagRows,
+        seriesMembershipRows,
+        customMetadataRows,
+      ),
       total,
       page,
       size,

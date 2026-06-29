@@ -1,6 +1,6 @@
 import { basename } from 'path';
 
-import type { BookCard, BookMetadataLockField, CollapsedSeriesInfo, UserBookStatus } from '@bookorbit/types';
+import type { BookCard, BookMetadataLockField, CollapsedSeriesInfo, CustomMetadataBookValue, UserBookStatus } from '@bookorbit/types';
 import { BOOK_METADATA_LOCK_FIELDS } from '@bookorbit/types';
 
 const LOCK_FIELD_SET = new Set<string>(BOOK_METADATA_LOCK_FIELDS);
@@ -59,6 +59,15 @@ type StatusRow = {
   finishedAt: Date | null;
   updatedAt: Date;
 };
+type CustomMetadataRow = {
+  bookId: number;
+  fieldId: number;
+  key: string;
+  label: string;
+  type: string;
+  displayOrder: number;
+  value: string | number | boolean | null;
+};
 
 function serializeDateByBookId(values: Record<number, Date | null> | null | undefined): Record<number, string | null> {
   const result: Record<number, string | null> = {};
@@ -78,6 +87,7 @@ export function assembleBookCards(
   narratorRows: NarratorRow[] = [],
   tagRows: NameRow[] = [],
   seriesMembershipRows: SeriesMembershipRow[] = [],
+  customMetadataRows: CustomMetadataRow[] = [],
 ): BookCard[] {
   const authorsByBook = new Map<number, string[]>();
   for (const row of authorRows) {
@@ -137,6 +147,20 @@ export function assembleBookCards(
     seriesMembershipsByBook.set(row.bookId, list);
   }
 
+  const customMetadataByBook = new Map<number, CustomMetadataBookValue[]>();
+  for (const row of customMetadataRows) {
+    const list = customMetadataByBook.get(row.bookId) ?? [];
+    list.push({
+      fieldId: row.fieldId,
+      key: row.key,
+      label: row.label,
+      type: row.type as CustomMetadataBookValue['type'],
+      displayOrder: row.displayOrder,
+      value: row.value,
+    });
+    customMetadataByBook.set(row.bookId, list);
+  }
+
   return rows.map((row) => {
     const rawFiles = filesByBook.get(row.id) ?? [];
     const primaryFile =
@@ -191,6 +215,7 @@ export function assembleBookCards(
       hardcoverEditionId: row.hardcoverEditionId ?? null,
       narrators: narratorsByBook.get(row.id) ?? [],
       tags: tagsByBook.get(row.id) ?? [],
+      customMetadata: customMetadataByBook.get(row.id) ?? [],
     };
   });
 }
@@ -205,8 +230,20 @@ export function assembleCollapsedBookCards(
   narratorRows: NarratorRow[] = [],
   tagRows: NameRow[] = [],
   seriesMembershipRows: SeriesMembershipRow[] = [],
+  customMetadataRows: CustomMetadataRow[] = [],
 ): BookCard[] {
-  const base = assembleBookCards(rows, authorRows, fileRows, genreRows, progressRows, statusRows, narratorRows, tagRows, seriesMembershipRows);
+  const base = assembleBookCards(
+    rows,
+    authorRows,
+    fileRows,
+    genreRows,
+    progressRows,
+    statusRows,
+    narratorRows,
+    tagRows,
+    seriesMembershipRows,
+    customMetadataRows,
+  );
 
   for (let i = 0; i < base.length; i++) {
     const row = rows[i];

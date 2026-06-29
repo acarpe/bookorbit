@@ -126,6 +126,35 @@ export class CustomMetadataRepository {
       .orderBy(asc(customMetadataFields.displayOrder), asc(customMetadataFields.label), asc(customMetadataFields.id));
   }
 
+  findCardValuesForBooks(bookIds: number[]) {
+    if (bookIds.length === 0) return Promise.resolve([]);
+    // Drive from books so every enabled field gets a row, even if no value is stored yet.
+    // This lets the frontend distinguish "enabled, no value" (entry with value=null) from
+    // "not enabled for this library" (no entry at all).
+    return this.db
+      .select({
+        bookId: books.id,
+        fieldId: customMetadataFields.id,
+        key: customMetadataFields.key,
+        label: customMetadataFields.label,
+        type: customMetadataFields.type,
+        displayOrder: customMetadataLibraryFields.displayOrder,
+        valueText: bookCustomMetadataValues.valueText,
+        valueNumber: bookCustomMetadataValues.valueNumber,
+        valueDate: bookCustomMetadataValues.valueDate,
+        valueBoolean: bookCustomMetadataValues.valueBoolean,
+      })
+      .from(books)
+      .innerJoin(customMetadataLibraryFields, eq(customMetadataLibraryFields.libraryId, books.libraryId))
+      .innerJoin(customMetadataFields, and(eq(customMetadataFields.id, customMetadataLibraryFields.fieldId), isNull(customMetadataFields.archivedAt)))
+      .leftJoin(
+        bookCustomMetadataValues,
+        and(eq(bookCustomMetadataValues.bookId, books.id), eq(bookCustomMetadataValues.fieldId, customMetadataFields.id)),
+      )
+      .where(inArray(books.id, bookIds))
+      .orderBy(asc(customMetadataLibraryFields.displayOrder), asc(customMetadataFields.label), asc(customMetadataFields.id));
+  }
+
   async findBookLibraryId(bookId: number) {
     const [row] = await this.db.select({ libraryId: books.libraryId }).from(books).where(eq(books.id, bookId)).limit(1);
     return row?.libraryId ?? null;

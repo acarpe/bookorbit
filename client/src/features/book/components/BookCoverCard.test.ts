@@ -158,6 +158,7 @@ function makeBook(overrides: Partial<BookCard> = {}): BookCard {
     pageCount: 412,
     isbn13: '9780441013593',
     narrators: [],
+    customMetadata: [],
     tags: [],
     ...overrides,
   }

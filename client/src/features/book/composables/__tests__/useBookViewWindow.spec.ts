@@ -38,6 +38,7 @@ function makeBook(id: number): BookCard {
     pageCount: null,
     isbn13: null,
     narrators: [],
+    customMetadata: [],
   } as BookCard
 }
 

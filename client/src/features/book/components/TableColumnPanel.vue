@@ -3,7 +3,7 @@ import { ref } from 'vue'
 import { Copy, Download, RotateCcw, Star, Upload, X } from '@lucide/vue'
 import type { TableDensity } from '@/composables/useDisplaySettings'
 import type { SavedView } from '@/features/book/composables/useSavedViews'
-import type { ColumnDef, ColumnId } from '@/features/book/composables/useTableColumns'
+import type { ColumnDef } from '@/features/book/composables/useTableColumns'
 import type { TablePreset } from '@/features/book/composables/useTablePresets'
 
 const props = withDefaults(
@@ -20,7 +20,7 @@ const props = withDefaults(
 )
 
 const emit = defineEmits<{
-  'toggle-column': [id: ColumnId]
+  'toggle-column': [id: string]
   'reorder-columns': [cols: (ColumnDef & { visible: boolean })[]]
   'apply-preset': [preset: TablePreset]
   'save-preset': [name: string]

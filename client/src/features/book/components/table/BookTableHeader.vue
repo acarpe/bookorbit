@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ArrowDown, ArrowUp, ArrowUpDown, GripVertical, Loader2 } from '@lucide/vue'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import type { ColumnDef, ColumnId } from '@/features/book/composables/tableColumnSchema'
+import type { ColumnDef } from '@/features/book/composables/tableColumnSchema'
 import type { SortSpec } from '@bookorbit/types'
 
 const props = defineProps<{
@@ -14,8 +14,8 @@ const props = defineProps<{
   someBooksSelected: boolean
   isReadOnly: boolean
   pinnedLeftOffsets: Map<string, number>
-  dragSourceColId: ColumnId | null
-  dropTargetColId: ColumnId | null
+  dragSourceColId: string | null
+  dropTargetColId: string | null
   dropSide: 'before' | 'after' | null
   sortable: boolean
 }>()
@@ -24,13 +24,13 @@ const emit = defineEmits<{
   selectAll: [event: Event]
   columnSort: [sortField: string | null, event: MouseEvent]
   headerContextMenu: [event: MouseEvent, col: ColumnDef]
-  colDragStart: [event: DragEvent, colId: ColumnId]
+  colDragStart: [event: DragEvent, colId: string]
   colDragOver: [event: DragEvent, col: ColumnDef]
-  colDragLeave: [colId: ColumnId]
-  colDrop: [event: DragEvent, colId: ColumnId]
+  colDragLeave: [colId: string]
+  colDrop: [event: DragEvent, colId: string]
   colDragEnd: []
-  resizeStart: [event: MouseEvent, colId: ColumnId, currentWidth: number]
-  autoFitColumn: [colId: ColumnId]
+  resizeStart: [event: MouseEvent, colId: string, currentWidth: number]
+  autoFitColumn: [colId: string]
 }>()
 
 function getSortDir(sortField: string): 'asc' | 'desc' | null {

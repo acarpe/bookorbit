@@ -37,6 +37,7 @@ function makeBook(id: number, overrides: Partial<BookCard> = {}): BookCard {
     pageCount: null,
     isbn13: null,
     narrators: [],
+    customMetadata: [],
     ...overrides,
   } as BookCard
 }

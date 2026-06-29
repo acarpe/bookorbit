@@ -203,6 +203,7 @@ function makeService(overrides: { bookMetadataLockService?: unknown } = {}) {
   };
   const customMetadataService = {
     getBookValues: vi.fn().mockResolvedValue([]),
+    getCardValues: vi.fn().mockResolvedValue([]),
     getExportValues: vi.fn().mockResolvedValue(new Map()),
     parseFileValuesForBook: vi.fn().mockResolvedValue([]),
     updateBookValues: vi.fn().mockResolvedValue(undefined),
