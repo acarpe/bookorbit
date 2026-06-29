@@ -54,6 +54,7 @@ const {
   loadProviders,
   search,
   toggleProvider,
+  selectFieldRuleProviders,
   clearProviderFilter,
 } = useMetadataSearch()
 
@@ -91,6 +92,10 @@ function handleClearProviderFilter() {
   clearProviderFilter()
 }
 
+function handleSelectFieldRules() {
+  selectFieldRuleProviders()
+}
+
 function handleSelect(candidate: MetadataCandidate) {
   selectedCandidate.value = candidate
   view.value = 'diff'
@@ -113,7 +118,7 @@ function handleApply(patch: { formPatch: MetadataPatch; coverUrl?: string }) {
       <div class="hidden sm:block flex-1 bg-black/50 backdrop-blur-sm" @click="handleClose" />
 
       <!-- Drawer panel -->
-      <div class="relative flex flex-col w-full sm:w-3/4 sm:max-w-4xl h-full bg-background sm:border-l border-border shadow-2xl overflow-hidden">
+      <div class="relative flex flex-col w-full sm:w-3/4 sm:max-w-5xl h-full bg-background sm:border-l border-border shadow-2xl overflow-hidden">
         <!-- Gradient accent strip -->
         <div class="h-px w-full bg-linear-to-r from-transparent via-primary to-transparent shrink-0 opacity-60" />
 
@@ -159,6 +164,7 @@ function handleApply(patch: { formPatch: MetadataPatch; coverUrl?: string }) {
             @search="handleSearch"
             @toggle-provider="handleToggleProvider"
             @clear-filter="handleClearProviderFilter"
+            @select-field-rules="handleSelectFieldRules"
             @select="handleSelect"
           />
 

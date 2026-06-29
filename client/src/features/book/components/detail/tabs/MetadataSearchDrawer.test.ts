@@ -8,6 +8,7 @@ const metadataSearchMocks = vi.hoisted(() => ({
   loadProviders: vi.fn<(bookId?: number) => void>(),
   search: vi.fn<(params: { title?: string; author?: string; isbn?: string; bookId?: number; isAudiobook?: boolean }) => void>(),
   toggleProvider: vi.fn<(provider: string) => void>(),
+  selectFieldRuleProviders: vi.fn<() => void>(),
   clearProviderFilter: vi.fn<() => void>(),
 }))
 
@@ -31,6 +32,7 @@ vi.mock('../../../composables/useMetadataSearch', async () => {
       loadProviders: metadataSearchMocks.loadProviders,
       search: metadataSearchMocks.search,
       toggleProvider: metadataSearchMocks.toggleProvider,
+      selectFieldRuleProviders: metadataSearchMocks.selectFieldRuleProviders,
       clearProviderFilter: metadataSearchMocks.clearProviderFilter,
     }),
   }
@@ -38,7 +40,7 @@ vi.mock('../../../composables/useMetadataSearch', async () => {
 
 const MetadataSearchPanelStub = defineComponent({
   name: 'MetadataSearchPanel',
-  emits: ['search', 'toggleProvider', 'clearFilter'],
+  emits: ['search', 'toggleProvider', 'clearFilter', 'selectFieldRules'],
   setup(_, { emit }) {
     return () =>
       h('div', { 'data-testid': 'metadata-search-panel' }, [
