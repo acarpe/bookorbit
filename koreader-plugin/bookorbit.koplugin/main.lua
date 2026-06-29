@@ -38,7 +38,7 @@ local BookOrbitMenuPin = require("bookorbit_menu_pin")
 local BookOrbitSweep = require("bookorbit_sweep")
 local BookOrbitUpdater = require("bookorbit_updater")
 
-local PLUGIN_VERSION = "1.0.0"
+local PLUGIN_VERSION = "1.0.1"
 
 local SYNC_STRATEGY = {
     PROMPT = 1,
