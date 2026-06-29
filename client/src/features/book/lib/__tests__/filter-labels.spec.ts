@@ -23,6 +23,12 @@ describe('series status labels', () => {
   })
 })
 
+describe('community rating labels', () => {
+  it('exposes a Community Rating field label', () => {
+    expect(FIELD_LABELS.communityRating).toBe('Community Rating')
+  })
+})
+
 describe('ruleToParts', () => {
   it('renders a locked rule with no value', () => {
     const rule: Rule = { type: 'rule', field: 'lockStatus', operator: 'isLocked' }
@@ -57,5 +63,15 @@ describe('ruleToParts', () => {
   it('renders an empty value when a valued operator has no value', () => {
     const rule: Rule = { type: 'rule', field: 'title', operator: 'eq' }
     expect(ruleToParts(rule)).toEqual({ field: 'Title', operator: 'is', value: '' })
+  })
+
+  it('renders provider context for community rating rules', () => {
+    const rule: Rule = { type: 'rule', field: 'communityRating', provider: 'amazon', operator: 'gte', value: 4.5 }
+    expect(ruleToParts(rule)).toEqual({ field: 'Community Rating (Amazon)', operator: 'at least', value: '4.5' })
+  })
+
+  it('renders any-provider context for community rating rules', () => {
+    const rule: Rule = { type: 'rule', field: 'communityRating', provider: 'any', operator: 'gte', value: 4.5 }
+    expect(ruleToParts(rule)).toEqual({ field: 'Community Rating (Any provider)', operator: 'at least', value: '4.5' })
   })
 })

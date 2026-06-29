@@ -1,8 +1,11 @@
+import type { CommunityRatingProviderKey } from "./metadata-fetch";
+
 /**
  * Semantic filter field names used in rules.
  *
  * Most fields map directly to a DB column. The exceptions:
  * - `fileAvailability` - derived from `books.status` ('present' | 'missing')
+ * - `communityRating` - from `book_community_ratings.rating` (optionally provider-specific)
  * - `readProgress` - aggregated from `reading_progress.percentage` (per-user, per-book-file)
  * - `readStatus` - stored in `user_book_status.status` (per-user)
  * - `startedAt` - from `user_book_status.started_at` (per-user)
@@ -36,6 +39,7 @@ export type RuleField =
   | "finishedAt"
   | "fileAvailability"
   | "rating"
+  | "communityRating"
   | "readProgress"
   | "readStatus"
   | "description"
@@ -93,6 +97,7 @@ export const FIELD_OPERATORS: Record<RuleField, RuleOperator[]> = {
   finishedAt: ["before", "after", "between", "withinLast", "isEmpty", "isNotEmpty"],
   fileAvailability: ["isMissing", "isPresent"],
   rating: ["eq", "gt", "gte", "lt", "lte", "isEmpty", "isNotEmpty"],
+  communityRating: ["eq", "notEq", "gt", "gte", "lt", "lte", "between", "isEmpty", "isNotEmpty"],
   readProgress: ["isUnread", "isInProgress", "isFinished"],
   readStatus: ["includesAny", "excludesAll", "isEmpty", "isNotEmpty"],
   description: ["isEmpty", "isNotEmpty"],
@@ -135,13 +140,27 @@ export const RULE_OPERATORS: RuleOperator[] = [
   "isUpNext",
 ];
 
-export type Rule = {
+export type CommunityRatingProvider = CommunityRatingProviderKey | "any";
+export type RuleValue = string | number | string[] | number[];
+
+export type StandardRule = {
   type: "rule";
-  field: RuleField;
+  field: Exclude<RuleField, "communityRating">;
   operator: RuleOperator;
-  value?: string | number | string[] | number[];
+  value?: RuleValue;
   valueTo?: string | number;
 };
+
+export type CommunityRatingRule = {
+  type: "rule";
+  field: "communityRating";
+  operator: RuleOperator;
+  provider?: CommunityRatingProvider;
+  value?: RuleValue;
+  valueTo?: string | number;
+};
+
+export type Rule = StandardRule | CommunityRatingRule;
 
 export type GroupRule = {
   type: "group";

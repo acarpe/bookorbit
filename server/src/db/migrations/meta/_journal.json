@@ -232,6 +232,13 @@
       "when": 1782592228459,
       "tag": "0032_custom-icons",
       "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "7",
+      "when": 1782775423934,
+      "tag": "0033_community-rating-filter-indexes",
+      "breakpoints": true
     }
   ]
 }

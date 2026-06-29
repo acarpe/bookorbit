@@ -1,9 +1,20 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
 import { Plus, Trash2, X } from '@lucide/vue'
-import { FIELD_OPERATORS, RULE_FIELDS, type GroupRule, type Rule, type RuleField, type RuleOperator } from '@bookorbit/types'
+import {
+  COMMUNITY_RATING_PROVIDER_KEYS,
+  FIELD_OPERATORS,
+  RULE_FIELDS,
+  type CommunityRatingProvider,
+  type GroupRule,
+  type Rule,
+  type RuleField,
+  type RuleOperator,
+} from '@bookorbit/types'
 import { READ_STATUSES } from '@bookorbit/types'
 import { FIELD_LABELS, OPERATOR_LABELS } from '@/features/book/lib/filter-labels'
+import { providerIconPathSafe } from '@/features/book/lib/provider-icons'
+import { PROVIDER_SHORT_LABELS } from '@/lib/provider-colors'
 import { useLibraries } from '@/features/library/composables/useLibraries'
 import FilterChipTypeahead from './FilterChipTypeahead.vue'
 import FilterFormatPicker from './FilterFormatPicker.vue'
@@ -20,7 +31,7 @@ const emit = defineEmits<{
 }>()
 
 const MAX_DEPTH = 5
-const NUMERIC_FIELDS: RuleField[] = ['seriesIndex', 'publishedYear', 'pageCount', 'rating', 'metadataScore']
+const NUMERIC_FIELDS: RuleField[] = ['seriesIndex', 'publishedYear', 'pageCount', 'rating', 'communityRating', 'metadataScore']
 const DATE_FIELDS: RuleField[] = ['addedAt', 'startedAt', 'finishedAt']
 const NO_VALUE_OPERATORS: RuleOperator[] = [
   'isEmpty',
@@ -58,6 +69,14 @@ const READ_STATUS_LABELS: Record<string, string> = {
   abandoned: 'Abandoned',
 }
 
+const COMMUNITY_RATING_PROVIDER_OPTIONS: { value: CommunityRatingProvider; label: string }[] = [
+  { value: 'any', label: 'Any provider' },
+  ...COMMUNITY_RATING_PROVIDER_KEYS.map((provider) => ({
+    value: provider,
+    label: PROVIDER_SHORT_LABELS[provider] ?? provider,
+  })),
+]
+
 const ENDPOINT_BY_FIELD: Partial<Record<RuleField, string>> = {
   author: '/api/v1/metadata/authors',
   genre: '/api/v1/metadata/genres',
@@ -80,6 +99,7 @@ type WithinLastUnit = 'days' | 'weeks' | 'months'
 interface EditableRule {
   field: RuleField
   operator: RuleOperator
+  provider: CommunityRatingProvider
   value: string
   valueChips: string[]
   valueTo: string
@@ -94,7 +114,11 @@ function nextId() {
 }
 
 function makeEmptyRule(): LocalNode {
-  return { id: nextId(), kind: 'rule', rule: { field: 'title', operator: 'contains', value: '', valueChips: [], valueTo: '', valueUnit: 'days' } }
+  return {
+    id: nextId(),
+    kind: 'rule',
+    rule: { field: 'title', operator: 'contains', provider: 'any', value: '', valueChips: [], valueTo: '', valueUnit: 'days' },
+  }
 }
 
 function toEditableRule(r: Rule): EditableRule {
@@ -102,6 +126,7 @@ function toEditableRule(r: Rule): EditableRule {
   return {
     field: r.field,
     operator: r.operator,
+    provider: r.field === 'communityRating' ? (r.provider ?? 'any') : 'any',
     value: usesChips ? '' : String(r.value ?? ''),
     valueChips: usesChips ? (r.value as string[]) : [],
     valueTo: String(r.valueTo ?? ''),
@@ -164,7 +189,7 @@ function emitUpdate() {
     .filter((n) => (n.kind === 'group' && n.group.rules.length > 0) || (n.kind === 'rule' && isRuleComplete(n.rule)))
     .map((n) => {
       if (n.kind === 'group') return n.group
-      return {
+      const rule = {
         type: 'rule' as const,
         field: n.rule.field,
         operator: n.rule.operator,
@@ -176,6 +201,7 @@ function emitUpdate() {
               : n.rule.valueTo
             : undefined,
       }
+      return n.rule.field === 'communityRating' ? ({ ...rule, provider: n.rule.provider } as Rule) : (rule as Rule)
     })
   const isSubGroup = (props.depth ?? 0) > 0
   if (!isSubGroup && rules.length === 0 && !props.preserveIncompleteRoot) {
@@ -221,6 +247,7 @@ function onFieldChange(index: number) {
   node.rule.valueChips = []
   node.rule.valueTo = ''
   node.rule.valueUnit = 'days'
+  node.rule.provider = 'any'
   emitUpdate()
 }
 
@@ -307,6 +334,26 @@ function valueInputType(field: RuleField, operator: RuleOperator): string {
   return 'text'
 }
 
+function numericInputMin(field: RuleField): string | undefined {
+  if (field === 'communityRating') return '0'
+  return undefined
+}
+
+function numericInputMax(field: RuleField): string | undefined {
+  if (field === 'communityRating') return '5'
+  if (field === 'metadataScore') return '100'
+  return undefined
+}
+
+function numericInputStep(field: RuleField): string | undefined {
+  if (field === 'communityRating') return '0.1'
+  return undefined
+}
+
+function providerIconUrl(provider: CommunityRatingProvider): string | null {
+  return provider === 'any' ? null : providerIconPathSafe(provider)
+}
+
 function showValueToInput(operator: RuleOperator): boolean {
   return BETWEEN_OPERATORS.includes(operator)
 }
@@ -354,6 +401,28 @@ function showValueToInput(operator: RuleOperator): boolean {
         >
           <option v-for="op in FIELD_OPERATORS[node.rule.field]" :key="op" :value="op">{{ OPERATOR_LABELS[op] }}</option>
         </select>
+
+        <div
+          v-if="node.rule.field === 'communityRating'"
+          class="h-9 flex items-center gap-2 rounded-md border border-input bg-background px-2 shrink-0"
+        >
+          <img
+            v-if="providerIconUrl(node.rule.provider)"
+            :src="providerIconUrl(node.rule.provider) ?? ''"
+            alt=""
+            class="size-4 rounded-sm object-contain"
+          />
+          <select
+            v-model="node.rule.provider"
+            class="h-7 bg-transparent text-foreground text-sm outline-none"
+            aria-label="Community rating provider"
+            @change="emitUpdate"
+          >
+            <option v-for="provider in COMMUNITY_RATING_PROVIDER_OPTIONS" :key="provider.value" :value="provider.value">
+              {{ provider.label }}
+            </option>
+          </select>
+        </div>
 
         <!-- Chip typeahead: author/genre/tag/collection always; publisher/series/language when using multi-value operators -->
         <FilterChipTypeahead
@@ -475,7 +544,8 @@ function showValueToInput(operator: RuleOperator): boolean {
             @input="emitUpdate"
             type="number"
             min="0"
-            max="100"
+            :max="numericInputMax(node.rule.field)"
+            :step="numericInputStep(node.rule.field)"
             placeholder="0-100"
             class="h-9 rounded-md border border-input bg-background text-foreground text-sm px-2 focus:outline-none focus:ring-2 focus:ring-primary w-24"
           />
@@ -486,7 +556,8 @@ function showValueToInput(operator: RuleOperator): boolean {
               @input="emitUpdate"
               type="number"
               min="0"
-              max="100"
+              :max="numericInputMax(node.rule.field)"
+              :step="numericInputStep(node.rule.field)"
               placeholder="100"
               class="h-9 rounded-md border border-input bg-background text-foreground text-sm px-2 focus:outline-none focus:ring-2 focus:ring-primary w-24"
             />
@@ -498,6 +569,9 @@ function showValueToInput(operator: RuleOperator): boolean {
             v-model="node.rule.value"
             @input="emitUpdate"
             :type="valueInputType(node.rule.field, node.rule.operator)"
+            :min="numericInputMin(node.rule.field)"
+            :max="numericInputMax(node.rule.field)"
+            :step="numericInputStep(node.rule.field)"
             placeholder="value"
             class="h-9 rounded-md border border-input bg-background text-foreground text-sm px-2 focus:outline-none focus:ring-2 focus:ring-primary min-w-32 flex-1"
           />
@@ -507,6 +581,9 @@ function showValueToInput(operator: RuleOperator): boolean {
               v-model="node.rule.valueTo"
               @input="emitUpdate"
               :type="valueInputType(node.rule.field, node.rule.operator)"
+              :min="numericInputMin(node.rule.field)"
+              :max="numericInputMax(node.rule.field)"
+              :step="numericInputStep(node.rule.field)"
               placeholder="max"
               class="h-9 rounded-md border border-input bg-background text-foreground text-sm px-2 focus:outline-none focus:ring-2 focus:ring-primary w-24"
             />

@@ -2,7 +2,7 @@ import { BadRequestException, Inject, Injectable } from '@nestjs/common';
 import { AnyColumn, SQL, and, eq, gt, gte, ilike, inArray, isNotNull, isNull, lt, lte, ne, not, or, sql } from 'drizzle-orm';
 import { NodePgDatabase } from 'drizzle-orm/node-postgres';
 
-import type { ContentFilterRules, GroupRule, ReadStatus, Rule, SortSpec } from '@bookorbit/types';
+import type { CommunityRatingProvider, ContentFilterRules, GroupRule, ReadStatus, Rule, SortSpec } from '@bookorbit/types';
 import { DB } from '../../db';
 import { isDateKey, resolveTimeZone, toDateKeyInTimeZone } from '../../common/utils/timezone.utils';
 import { buildContentFilterClauses } from '../../common/utils/content-filter-sql.utils';
@@ -14,6 +14,7 @@ import {
   bookAuthors,
   bookFiles,
   bookGenres,
+  bookCommunityRatings,
   bookMetadata,
   bookNarrators,
   bookSeries,
@@ -146,6 +147,8 @@ export class BookQueryBuilder {
       case 'rating':
         if (userId === undefined) throw new BadRequestException('rating filter requires an authenticated user');
         return this.ratingRuleToSql(operator, value as number | undefined, valueTo as number | undefined, userId);
+      case 'communityRating':
+        return this.communityRatingRuleToSql(operator, value as number | undefined, valueTo as number | undefined, rule.provider);
       case 'author':
         return this.authorRuleToSql(operator, value as string[]);
       case 'genre':
@@ -385,6 +388,56 @@ export class BookQueryBuilder {
         return sql`${ratingExpr} is not null`;
       default:
         throw new BadRequestException(`Invalid operator '${operator}' for numeric field`);
+    }
+  }
+
+  private communityRatingRuleToSql(
+    operator: string,
+    value: number | undefined,
+    valueTo: number | undefined,
+    provider: CommunityRatingProvider | undefined,
+  ): SQL {
+    const selectedProvider = provider && provider !== 'any' ? provider : undefined;
+    const existsCommunityRating = (whereClause?: SQL) => {
+      const predicates: SQL[] = [eq(bookCommunityRatings.bookId, books.id)];
+      if (selectedProvider) predicates.push(eq(bookCommunityRatings.provider, selectedProvider));
+      if (whereClause) predicates.push(whereClause);
+      const sq = this.db
+        .select({ one: sql`1` })
+        .from(bookCommunityRatings)
+        .where(and(...predicates)!);
+      return sql`exists (${sq})`;
+    };
+
+    switch (operator) {
+      case 'eq':
+        this.assertNumber(value, operator, 'value');
+        return existsCommunityRating(eq(bookCommunityRatings.rating, value!));
+      case 'notEq':
+        this.assertNumber(value, operator, 'value');
+        return existsCommunityRating(ne(bookCommunityRatings.rating, value!));
+      case 'gt':
+        this.assertNumber(value, operator, 'value');
+        return existsCommunityRating(gt(bookCommunityRatings.rating, value!));
+      case 'gte':
+        this.assertNumber(value, operator, 'value');
+        return existsCommunityRating(gte(bookCommunityRatings.rating, value!));
+      case 'lt':
+        this.assertNumber(value, operator, 'value');
+        return existsCommunityRating(lt(bookCommunityRatings.rating, value!));
+      case 'lte':
+        this.assertNumber(value, operator, 'value');
+        return existsCommunityRating(lte(bookCommunityRatings.rating, value!));
+      case 'between':
+        this.assertNumber(value, operator, 'value');
+        this.assertNumber(valueTo, operator, 'valueTo');
+        return existsCommunityRating(and(gte(bookCommunityRatings.rating, value!), lte(bookCommunityRatings.rating, valueTo!))!);
+      case 'isEmpty':
+        return not(existsCommunityRating());
+      case 'isNotEmpty':
+        return existsCommunityRating();
+      default:
+        throw new BadRequestException(`Invalid operator '${operator}' for communityRating field`);
     }
   }
 

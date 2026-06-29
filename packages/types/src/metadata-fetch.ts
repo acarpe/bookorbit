@@ -16,6 +16,19 @@ export const MetadataProviderKey = {
   ALADIN: "aladin",
 } as const;
 
+export const COMMUNITY_RATING_PROVIDER_KEYS = [
+  MetadataProviderKey.HARDCOVER,
+  MetadataProviderKey.GOODREADS,
+  MetadataProviderKey.GOOGLE,
+  MetadataProviderKey.OPEN_LIBRARY,
+  MetadataProviderKey.ITUNES,
+  MetadataProviderKey.RANOBEDB,
+  MetadataProviderKey.AMAZON,
+  MetadataProviderKey.AUDIBLE,
+] as const;
+
+export type CommunityRatingProviderKey = (typeof COMMUNITY_RATING_PROVIDER_KEYS)[number];
+
 export interface ComicMetadataFields {
   issueNumber?: string;
   volumeName?: string;

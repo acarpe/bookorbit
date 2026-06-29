@@ -93,7 +93,7 @@ const USER_CTX = { accessibleLibraryIds: [1] as number[], userId: 10 };
  * new operator is added to RuleOperator but not handled here.
  */
 function buildValueFor(operator: RuleOperator, field: RuleField): { value?: unknown; valueTo?: unknown } {
-  const numericFields: RuleField[] = ['publishedYear', 'seriesIndex', 'pageCount', 'rating', 'metadataScore'];
+  const numericFields: RuleField[] = ['publishedYear', 'seriesIndex', 'pageCount', 'rating', 'communityRating', 'metadataScore'];
   const isNumericField = numericFields.includes(field);
 
   switch (operator) {
@@ -396,6 +396,99 @@ describe('BookQueryBuilder', () => {
     }) as any;
 
     expect(where.clauses[1].clauses[0]).toMatchObject({ type: 'sql', text: '1 = 0' });
+  });
+});
+
+describe('communityRating filter field', () => {
+  it('matches any provider rating with the requested numeric predicate', () => {
+    const { builder } = makeBuilder();
+
+    const where = builder.buildWhere(
+      wrapRule({ type: 'rule', field: 'communityRating', operator: 'gte', value: 4.5, provider: 'any' }) as never,
+      USER_CTX,
+    ) as any;
+
+    const ruleSql = getRuleSql(where) as any;
+    expect(ruleSql).toMatchObject({ type: 'sql' });
+    expect(ruleSql.values[0].whereClause).toMatchObject({ type: 'and' });
+    expect(ruleSql.values[0].whereClause.clauses).toHaveLength(2);
+    expect(ruleSql.values[0].whereClause.clauses[1]).toMatchObject({ type: 'gte', right: 4.5 });
+  });
+
+  it('defaults omitted provider to any provider for backwards-compatible saved filters', () => {
+    const { builder } = makeBuilder();
+
+    const where = builder.buildWhere(wrapRule({ type: 'rule', field: 'communityRating', operator: 'gte', value: 4.5 }) as never, USER_CTX) as any;
+
+    const ruleSql = getRuleSql(where) as any;
+    expect(ruleSql).toMatchObject({ type: 'sql' });
+    expect(ruleSql.values[0].whereClause.clauses).toHaveLength(2);
+    expect(ruleSql.values[0].whereClause.clauses[1]).toMatchObject({ type: 'gte', right: 4.5 });
+  });
+
+  it('matches a specific provider rating with provider and rating predicates in the same exists subquery', () => {
+    const { builder } = makeBuilder();
+
+    const where = builder.buildWhere(
+      wrapRule({ type: 'rule', field: 'communityRating', operator: 'gt', value: 4, provider: 'amazon' }) as never,
+      USER_CTX,
+    ) as any;
+
+    const ruleSql = getRuleSql(where) as any;
+    expect(ruleSql).toMatchObject({ type: 'sql' });
+    expect(ruleSql.values[0].whereClause).toMatchObject({ type: 'and' });
+    expect(ruleSql.values[0].whereClause.clauses).toHaveLength(3);
+    expect(ruleSql.values[0].whereClause.clauses[1]).toMatchObject({ type: 'eq', right: 'amazon' });
+    expect(ruleSql.values[0].whereClause.clauses[2]).toMatchObject({ type: 'gt', right: 4 });
+  });
+
+  it('supports independent provider predicates through normal AND groups', () => {
+    const { builder } = makeBuilder();
+
+    const where = builder.buildWhere(
+      {
+        type: 'group',
+        join: 'AND',
+        rules: [
+          { type: 'rule', field: 'communityRating', operator: 'gt', value: 4, provider: 'amazon' },
+          { type: 'rule', field: 'communityRating', operator: 'lt', value: 3, provider: 'goodreads' },
+        ],
+      } as never,
+      USER_CTX,
+    ) as any;
+
+    const filterGroup = where.clauses[1];
+    expect(filterGroup).toMatchObject({ type: 'and' });
+    expect(filterGroup.clauses).toHaveLength(2);
+    expect(filterGroup.clauses[0].values[0].whereClause.clauses[1]).toMatchObject({ type: 'eq', right: 'amazon' });
+    expect(filterGroup.clauses[1].values[0].whereClause.clauses[1]).toMatchObject({ type: 'eq', right: 'goodreads' });
+  });
+
+  it('treats provider-specific isEmpty as no row for that provider', () => {
+    const { builder } = makeBuilder();
+
+    const where = builder.buildWhere(
+      wrapRule({ type: 'rule', field: 'communityRating', operator: 'isEmpty', provider: 'goodreads' }) as never,
+      USER_CTX,
+    ) as any;
+
+    const ruleSql = getRuleSql(where) as any;
+    expect(ruleSql).toMatchObject({ type: 'not' });
+    expect(ruleSql.value.values[0].whereClause.clauses[1]).toMatchObject({ type: 'eq', right: 'goodreads' });
+  });
+
+  it('requires an actual row for negative comparisons instead of matching missing ratings', () => {
+    const { builder } = makeBuilder();
+
+    const where = builder.buildWhere(
+      wrapRule({ type: 'rule', field: 'communityRating', operator: 'notEq', value: 4, provider: 'hardcover' }) as never,
+      USER_CTX,
+    ) as any;
+
+    const ruleSql = getRuleSql(where) as any;
+    expect(ruleSql).toMatchObject({ type: 'sql' });
+    expect(ruleSql.values[0].whereClause.clauses[1]).toMatchObject({ type: 'eq', right: 'hardcover' });
+    expect(ruleSql.values[0].whereClause.clauses[2]).toMatchObject({ type: 'ne', right: 4 });
   });
 });
 
@@ -817,6 +910,13 @@ describe('tagRuleToSql', () => {
     const where = builder.buildWhere(wrapRule({ type: 'rule', field: 'tag', operator: 'isNotEmpty' }) as never, USER_CTX) as any;
     expect(getRuleSql(where)).toMatchObject({ type: 'sql' });
   });
+
+  it('throws for unsupported operators', () => {
+    const { builder } = makeBuilder();
+    expect(() => builder.buildWhere(wrapRule({ type: 'rule', field: 'tag', operator: 'contains', value: 'favourite' }) as never, USER_CTX)).toThrow(
+      BadRequestException,
+    );
+  });
 });
 
 describe('collectionRuleToSql', () => {
@@ -855,6 +955,13 @@ describe('collectionRuleToSql', () => {
     const where = builder.buildWhere(wrapRule({ type: 'rule', field: 'collection', operator: 'isNotEmpty' }) as never, USER_CTX) as any;
     expect(getRuleSql(where)).toMatchObject({ type: 'sql' });
   });
+
+  it('throws for unsupported operators', () => {
+    const { builder } = makeBuilder();
+    expect(() =>
+      builder.buildWhere(wrapRule({ type: 'rule', field: 'collection', operator: 'contains', value: 'Reading' }) as never, USER_CTX),
+    ).toThrow(BadRequestException);
+  });
 });
 
 describe('libraryRuleToSql', () => {
@@ -883,6 +990,13 @@ describe('libraryRuleToSql', () => {
     const where = builder.buildWhere(wrapRule({ type: 'rule', field: 'library', operator: 'includesAny', value: [] }) as never, USER_CTX) as any;
 
     expect(getRuleSql(where)).toMatchObject({ type: 'sql', text: '1 = 0' });
+  });
+
+  it('throws for unsupported operators', () => {
+    const { builder } = makeBuilder();
+    expect(() => builder.buildWhere(wrapRule({ type: 'rule', field: 'library', operator: 'contains', value: 'Main' }) as never, USER_CTX)).toThrow(
+      BadRequestException,
+    );
   });
 });
 
@@ -1101,6 +1215,13 @@ describe('isbnRuleToSql', () => {
   it('eq with missing value throws BadRequestException', () => {
     const { builder } = makeBuilder();
     expect(() => builder.buildWhere(wrapRule({ type: 'rule', field: 'isbn', operator: 'eq' }) as never, BASE_CTX)).toThrow(BadRequestException);
+  });
+
+  it('throws for unsupported operators', () => {
+    const { builder } = makeBuilder();
+    expect(() =>
+      builder.buildWhere(wrapRule({ type: 'rule', field: 'isbn', operator: 'contains', value: '9780141187761' }) as never, BASE_CTX),
+    ).toThrow(BadRequestException);
   });
 });
 
@@ -1348,6 +1469,39 @@ describe('BookQueryBuilder.buildCollapseOrderBy', () => {
 
   it('generates rating sort', () => {
     expect(BookQueryBuilder.buildCollapseOrderBy([{ field: 'rating', dir: 'desc' }], 1)).toBe('rating DESC NULLS LAST, r.id ASC');
+  });
+
+  it('generates publisher sort', () => {
+    expect(BookQueryBuilder.buildCollapseOrderBy([{ field: 'publisher', dir: 'asc' }], 1)).toBe('publisher ASC NULLS LAST, r.id ASC');
+  });
+
+  it('generates pageCount sort', () => {
+    expect(BookQueryBuilder.buildCollapseOrderBy([{ field: 'pageCount', dir: 'desc' }], 1)).toBe('page_count DESC NULLS LAST, r.id ASC');
+  });
+
+  it('generates updatedAt sort', () => {
+    expect(BookQueryBuilder.buildCollapseOrderBy([{ field: 'updatedAt', dir: 'asc' }], 1)).toBe('updated_at ASC NULLS LAST, r.id ASC');
+  });
+
+  it('generates fileSize sort using the primary file', () => {
+    expect(BookQueryBuilder.buildCollapseOrderBy([{ field: 'fileSize', dir: 'desc' }], 1)).toBe(
+      '(SELECT bf.size_bytes FROM book_files bf WHERE bf.id = r.primary_file_id) DESC NULLS LAST, r.id ASC',
+    );
+  });
+
+  it('generates deterministic random sort scoped to the user and day', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-06-29T00:00:00.000Z'));
+
+    try {
+      const scopedSeed = Math.floor(Date.now() / 86_400_000) + 7;
+      const result = BookQueryBuilder.buildCollapseOrderBy([{ field: 'random', dir: 'asc' }], 7);
+
+      expect(result).toContain(`md5(r.id::text || ':' || ${scopedSeed}::text) ASC`);
+      expect(result.endsWith('r.id ASC')).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('joins multiple sort parts with comma', () => {

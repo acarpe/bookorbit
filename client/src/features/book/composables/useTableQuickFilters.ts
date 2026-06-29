@@ -1,6 +1,8 @@
 import type { Rule, RuleField, TableViewType } from '@bookorbit/types'
 
-const TEXT_FIELD_MAP: Partial<Record<string, RuleField>> = {
+type QuickFilterField = Exclude<RuleField, 'communityRating'>
+
+const TEXT_FIELD_MAP: Partial<Record<string, QuickFilterField>> = {
   title: 'title',
   seriesName: 'series',
   publisher: 'publisher',
@@ -9,7 +11,7 @@ const TEXT_FIELD_MAP: Partial<Record<string, RuleField>> = {
   subtitle: 'description',
 }
 
-const VALUE_FIELD_MAP: Partial<Record<string, RuleField>> = {
+const VALUE_FIELD_MAP: Partial<Record<string, QuickFilterField>> = {
   authors: 'author',
   genres: 'genre',
   tags: 'tag',

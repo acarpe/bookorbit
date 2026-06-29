@@ -134,4 +134,55 @@ describe('BookFilterBuilder', () => {
 
     expect(wrapper.find('input').exists()).toBe(false)
   })
+
+  it('emits community rating rules with provider context', async () => {
+    const wrapper = mount(BookFilterBuilder, {
+      props: {
+        modelValue: { type: 'group', join: 'AND', rules: [{ type: 'rule', field: 'title', operator: 'contains', value: 'Dune' }] },
+      },
+    })
+
+    const [fieldSelect] = wrapper.findAll('select')
+    await fieldSelect!.setValue('communityRating')
+
+    const operatorSelect = wrapper.findAll('select')[1]
+    await operatorSelect!.setValue('gte')
+
+    await wrapper.get('select[aria-label="Community rating provider"]').setValue('amazon')
+    await wrapper.get('input[type="number"]').setValue('4.5')
+
+    expect(lastUpdate(wrapper)).toEqual({
+      type: 'group',
+      join: 'AND',
+      rules: [{ type: 'rule', field: 'communityRating', operator: 'gte', value: 4.5, valueTo: undefined, provider: 'amazon' }],
+    })
+  })
+
+  it('hydrates the saved community rating provider', () => {
+    const wrapper = mount(BookFilterBuilder, {
+      props: {
+        modelValue: {
+          type: 'group',
+          join: 'AND',
+          rules: [{ type: 'rule', field: 'communityRating', operator: 'lt', value: 3, provider: 'goodreads' }],
+        },
+      },
+    })
+
+    expect((wrapper.get('select[aria-label="Community rating provider"]').element as HTMLSelectElement).value).toBe('goodreads')
+  })
+
+  it('hydrates missing community rating provider as any provider', () => {
+    const wrapper = mount(BookFilterBuilder, {
+      props: {
+        modelValue: {
+          type: 'group',
+          join: 'AND',
+          rules: [{ type: 'rule', field: 'communityRating', operator: 'gte', value: 4.5 }],
+        },
+      },
+    })
+
+    expect((wrapper.get('select[aria-label="Community rating provider"]').element as HTMLSelectElement).value).toBe('any')
+  })
 })

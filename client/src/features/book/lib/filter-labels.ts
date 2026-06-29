@@ -1,4 +1,5 @@
 import type { Rule, RuleField, RuleOperator, SortField } from '@bookorbit/types'
+import { PROVIDER_SHORT_LABELS } from '@/lib/provider-colors'
 
 export const SORT_FIELD_LABELS: Record<SortField, string> = {
   author: 'Author',
@@ -42,6 +43,7 @@ export const FIELD_LABELS: Record<RuleField, string> = {
   finishedAt: 'Date Finished',
   fileAvailability: 'File Availability',
   rating: 'Rating',
+  communityRating: 'Community Rating',
   readProgress: 'Reading Progress',
   readStatus: 'Read Status',
   description: 'Description',
@@ -95,8 +97,18 @@ const NO_VALUE_OPS: RuleOperator[] = [
   'isUpNext',
 ]
 
+function communityRatingProviderLabel(rule: Rule): string {
+  if (rule.field !== 'communityRating') return ''
+  const provider = rule.provider ?? 'any'
+  if (provider === 'any') return 'Any provider'
+  return PROVIDER_SHORT_LABELS[provider] ?? provider
+}
+
 export function ruleToParts(rule: Rule): { field: string; operator: string; value: string | null } {
-  const field = FIELD_LABELS[rule.field] ?? rule.field
+  const field =
+    rule.field === 'communityRating'
+      ? `${FIELD_LABELS[rule.field] ?? rule.field} (${communityRatingProviderLabel(rule)})`
+      : (FIELD_LABELS[rule.field] ?? rule.field)
   const operator = OPERATOR_LABELS[rule.operator] ?? rule.operator
   if (NO_VALUE_OPS.includes(rule.operator)) return { field, operator, value: null }
   if (rule.operator === 'withinLast') return { field, operator, value: `${rule.value} days` }
