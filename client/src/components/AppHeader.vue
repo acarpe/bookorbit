@@ -82,6 +82,9 @@ const canChangePassword = computed(
   () => !isDemoRestrictedAccount.value && user.value?.provisioningMethod !== 'oidc' && user.value?.provisioningMethod !== 'shared',
 )
 const canAccessNotifications = computed(() => hasPermission('notification_access') && !isDemoRestrictedAccount.value)
+const GLOBAL_SEARCH_ROW_HEIGHT = 84
+const GLOBAL_SEARCH_OVERSCAN = 4
+const GLOBAL_SEARCH_VIEWPORT_HEIGHT = 320
 
 function navigateToBookDock() {
   router.push({ name: 'book-dock' })
@@ -117,13 +120,19 @@ const searchFocused = ref(false)
 const mobileSearchOpen = ref(false)
 const desktopSearchInput = ref<HTMLInputElement | null>(null)
 const mobileSearchInput = ref<HTMLInputElement | null>(null)
+const searchDropdownRef = ref<HTMLElement | null>(null)
+const searchDropdownScrollTop = ref(0)
 const selectedIndex = ref(-1)
 
 const globalSearchQuery = ref('')
 const {
   results: globalResults,
+  total: globalSearchTotal,
   loading: globalSearchLoading,
+  loadingMore: globalSearchLoadingMore,
   settled: globalSearchSettled,
+  hasMore: globalSearchHasMore,
+  loadMore: loadMoreGlobalSearch,
   clear: clearGlobalSearch,
 } = useGlobalSearch(globalSearchQuery)
 
@@ -134,6 +143,34 @@ const showDropdown = computed(
     (globalResults.value.length > 0 || globalSearchLoading.value || globalSearchSettled.value),
 )
 
+const globalSearchLoadMoreLabel = computed(() =>
+  globalSearchLoadingMore.value ? 'Loading more...' : `Load more (${globalResults.value.length}/${globalSearchTotal.value})`,
+)
+const globalSearchAllLoadedLabel = computed(() => {
+  const count = globalSearchTotal.value
+  return count === 1 ? 'All 1 match shown' : `All ${count.toLocaleString()} matches shown`
+})
+const globalSearchVirtualHeightStyle = computed(() => ({
+  height: `${globalResults.value.length * GLOBAL_SEARCH_ROW_HEIGHT}px`,
+}))
+const globalSearchVirtualRows = computed(() => {
+  const start = Math.max(0, Math.floor(searchDropdownScrollTop.value / GLOBAL_SEARCH_ROW_HEIGHT) - GLOBAL_SEARCH_OVERSCAN)
+  const visibleCount = Math.ceil(GLOBAL_SEARCH_VIEWPORT_HEIGHT / GLOBAL_SEARCH_ROW_HEIGHT) + GLOBAL_SEARCH_OVERSCAN * 2
+  const end = Math.min(globalResults.value.length, start + visibleCount)
+
+  return globalResults.value.slice(start, end).map((result, offset) => {
+    const index = start + offset
+    return {
+      result,
+      index,
+      style: {
+        height: `${GLOBAL_SEARCH_ROW_HEIGHT}px`,
+        transform: `translateY(${index * GLOBAL_SEARCH_ROW_HEIGHT}px)`,
+      },
+    }
+  })
+})
+
 function onSearchBlur() {
   searchFocused.value = false
   selectedIndex.value = -1
@@ -141,6 +178,10 @@ function onSearchBlur() {
 
 watch(globalSearchQuery, () => {
   selectedIndex.value = -1
+  searchDropdownScrollTop.value = 0
+  void nextTick(() => {
+    if (searchDropdownRef.value) searchDropdownRef.value.scrollTop = 0
+  })
 })
 
 watch(showDropdown, (open) => {
@@ -149,6 +190,21 @@ watch(showDropdown, (open) => {
 
 watch(mobileSearchOpen, (open) => {
   if (open) nextTick(() => mobileSearchInput.value?.focus())
+})
+
+watch(selectedIndex, (index) => {
+  if (index < 0) return
+  const el = searchDropdownRef.value
+  if (!el) return
+
+  const top = index * GLOBAL_SEARCH_ROW_HEIGHT
+  const bottom = top + GLOBAL_SEARCH_ROW_HEIGHT
+  if (top < el.scrollTop) {
+    el.scrollTop = top
+  } else if (bottom > el.scrollTop + el.clientHeight) {
+    el.scrollTop = bottom - el.clientHeight
+  }
+  searchDropdownScrollTop.value = el.scrollTop
 })
 
 function clearSearch() {
@@ -180,6 +236,12 @@ function handleSearchKeydown(e: KeyboardEvent) {
     clearSearch()
     return
   }
+  if (e.key === 'Enter') {
+    e.preventDefault()
+    const result = selectedIndex.value >= 0 ? globalResults.value[selectedIndex.value] : undefined
+    if (result) navigateToResult(result)
+    return
+  }
   if (!showDropdown.value) return
   if (e.key === 'ArrowDown') {
     e.preventDefault()
@@ -187,10 +249,17 @@ function handleSearchKeydown(e: KeyboardEvent) {
   } else if (e.key === 'ArrowUp') {
     e.preventDefault()
     selectedIndex.value = Math.max(selectedIndex.value - 1, -1)
-  } else if (e.key === 'Enter' && selectedIndex.value >= 0) {
-    const result = globalResults.value[selectedIndex.value]
-    if (result) navigateToResult(result)
   }
+}
+
+function handleSearchDropdownScroll(event: Event) {
+  const el = event.currentTarget as HTMLElement | null
+  if (!el) return
+  searchDropdownScrollTop.value = el.scrollTop
+  if (!globalSearchHasMore.value || globalSearchLoading.value || globalSearchLoadingMore.value) return
+
+  const remaining = el.scrollHeight - el.scrollTop - el.clientHeight
+  if (remaining <= 96) void loadMoreGlobalSearch()
 }
 
 function handleGlobalKeydown(e: KeyboardEvent) {
@@ -254,6 +323,15 @@ function sortFormats(formats: string[]): string[] {
   })
 }
 
+function resultFormats(result: GlobalSearchResult): string[] {
+  const formats = new Set<string>()
+  for (const file of result.files) {
+    const fmt = file.format?.toLowerCase()
+    if (fmt) formats.add(fmt)
+  }
+  return sortFormats([...formats])
+}
+
 function formatBadgeStyle(fmt: string) {
   const color = getFormatColor(fmt)
   return {
@@ -290,7 +368,10 @@ function formatBadgeStyle(fmt: string) {
         <Transition name="search-drop">
           <div
             v-if="showDropdown"
+            ref="searchDropdownRef"
+            data-testid="global-search-dropdown"
             @mousedown.prevent
+            @scroll.passive="handleSearchDropdownScroll"
             class="absolute top-full left-0 right-0 mt-1 bg-background border border-border rounded-md shadow-lg z-50 overflow-hidden max-h-72 overflow-y-auto"
           >
             <div v-if="globalSearchLoading && globalResults.length === 0" class="p-3 text-xs text-muted-foreground text-center">Searching...</div>
@@ -300,49 +381,47 @@ function formatBadgeStyle(fmt: string) {
             >
               No results
             </div>
-            <button
-              v-for="(result, index) in globalResults"
-              :key="result.id"
-              @click="navigateToResult(result)"
-              :class="[
-                'w-full flex items-center gap-3 px-3 py-2.5 transition-colors text-left border-b border-border/40 last:border-b-0',
-                selectedIndex === index ? 'bg-accent' : 'hover:bg-accent/60',
-              ]"
-            >
-              <BookCoverImage
-                :book-id="result.id"
-                type="thumbnail"
-                :version="result.updatedAt"
-                class="h-16 w-12 object-cover rounded shrink-0 bg-muted"
-                :alt="result.title ?? ''"
-              />
-              <div class="flex-1 min-w-0">
-                <p class="text-sm font-medium text-foreground truncate">
-                  <template v-for="seg in highlightSegments(result.title, globalSearchQuery)" :key="seg.text + seg.match">
-                    <span v-if="seg.match" class="bg-primary/20 text-foreground font-semibold rounded-sm px-0.5">{{ seg.text }}</span>
-                    <span v-else>{{ seg.text }}</span>
-                  </template>
-                </p>
-                <p v-if="result.authors.length" class="text-xs text-muted-foreground truncate mt-0.5">
-                  <template v-for="seg in highlightSegments(result.authors.join(', '), globalSearchQuery)" :key="seg.text + seg.match">
-                    <span v-if="seg.match" class="bg-primary/20 text-foreground font-semibold rounded-sm px-0.5">{{ seg.text }}</span>
-                    <span v-else>{{ seg.text }}</span>
-                  </template>
-                </p>
-                <p v-if="result.seriesName" class="text-xs text-muted-foreground/85 truncate mt-0.5 italic">
-                  <template v-for="seg in highlightSegments(result.seriesName, globalSearchQuery)" :key="seg.text + seg.match">
-                    <span v-if="seg.match" class="bg-primary/20 text-foreground font-semibold rounded-sm px-0.5 not-italic">{{ seg.text }}</span>
-                    <span v-else>{{ seg.text }}</span>
-                  </template>
-                </p>
-              </div>
-              <div class="flex flex-col items-end gap-1 shrink-0">
-                <span class="text-[10px] font-medium text-primary/70 bg-primary/8 px-1.5 py-0.5 rounded border border-primary/15 max-w-20 truncate">
-                  {{ result.libraryName }}
-                </span>
-                <div v-if="result.formats.length" class="flex gap-1">
+            <div v-if="globalResults.length > 0" class="relative" :style="globalSearchVirtualHeightStyle">
+              <button
+                v-for="row in globalSearchVirtualRows"
+                :key="row.result.id"
+                :style="row.style"
+                @click="navigateToResult(row.result)"
+                :class="[
+                  'absolute left-0 right-0 flex items-center gap-3 border-b border-border/40 px-3 py-2.5 text-left transition-colors',
+                  selectedIndex === row.index ? 'bg-accent' : 'hover:bg-accent/60',
+                ]"
+              >
+                <BookCoverImage
+                  :book-id="row.result.id"
+                  type="thumbnail"
+                  :version="row.result.updatedAt"
+                  class="h-16 w-12 object-cover rounded shrink-0 bg-muted"
+                  :alt="row.result.title ?? ''"
+                />
+                <div class="flex-1 min-w-0">
+                  <p class="text-sm font-medium text-foreground truncate">
+                    <template v-for="seg in highlightSegments(row.result.title, globalSearchQuery)" :key="seg.text + seg.match">
+                      <span v-if="seg.match" class="bg-primary/20 text-foreground font-semibold rounded-sm px-0.5">{{ seg.text }}</span>
+                      <span v-else>{{ seg.text }}</span>
+                    </template>
+                  </p>
+                  <p v-if="row.result.authors.length" class="text-xs text-muted-foreground truncate mt-0.5">
+                    <template v-for="seg in highlightSegments(row.result.authors.join(', '), globalSearchQuery)" :key="seg.text + seg.match">
+                      <span v-if="seg.match" class="bg-primary/20 text-foreground font-semibold rounded-sm px-0.5">{{ seg.text }}</span>
+                      <span v-else>{{ seg.text }}</span>
+                    </template>
+                  </p>
+                  <p v-if="row.result.seriesName" class="text-xs text-muted-foreground/85 truncate mt-0.5 italic">
+                    <template v-for="seg in highlightSegments(row.result.seriesName, globalSearchQuery)" :key="seg.text + seg.match">
+                      <span v-if="seg.match" class="bg-primary/20 text-foreground font-semibold rounded-sm px-0.5 not-italic">{{ seg.text }}</span>
+                      <span v-else>{{ seg.text }}</span>
+                    </template>
+                  </p>
+                </div>
+                <div v-if="resultFormats(row.result).length" class="flex shrink-0 gap-1">
                   <span
-                    v-for="fmt in sortFormats(result.formats)"
+                    v-for="fmt in resultFormats(row.result)"
                     :key="fmt"
                     :class="['text-[9px] font-semibold px-1 py-0.5 rounded border uppercase']"
                     :style="formatBadgeStyle(fmt)"
@@ -350,8 +429,20 @@ function formatBadgeStyle(fmt: string) {
                     {{ fmt }}
                   </span>
                 </div>
-              </div>
-            </button>
+              </button>
+            </div>
+            <div v-if="globalResults.length > 0" class="border-t border-border/60 px-3 py-2 text-center text-xs text-muted-foreground">
+              <button
+                v-if="globalSearchHasMore"
+                type="button"
+                class="font-medium text-primary transition-colors hover:text-primary/80 disabled:cursor-not-allowed disabled:opacity-60"
+                :disabled="globalSearchLoadingMore"
+                @click="loadMoreGlobalSearch"
+              >
+                {{ globalSearchLoadMoreLabel }}
+              </button>
+              <span v-else>{{ globalSearchAllLoadedLabel }}</span>
+            </div>
           </div>
         </Transition>
       </div>
@@ -400,7 +491,10 @@ function formatBadgeStyle(fmt: string) {
         <Transition name="search-drop">
           <div
             v-if="showDropdown"
+            ref="searchDropdownRef"
+            data-testid="global-search-dropdown"
             @mousedown.prevent
+            @scroll.passive="handleSearchDropdownScroll"
             class="absolute top-full left-0 right-0 mt-1 bg-background border border-border rounded-md shadow-lg z-50 overflow-hidden max-h-80 overflow-y-auto"
           >
             <div v-if="globalSearchLoading && globalResults.length === 0" class="p-3 text-xs text-muted-foreground text-center">Searching...</div>
@@ -410,49 +504,47 @@ function formatBadgeStyle(fmt: string) {
             >
               No results
             </div>
-            <button
-              v-for="(result, index) in globalResults"
-              :key="result.id"
-              @click="navigateToResult(result)"
-              :class="[
-                'w-full flex items-center gap-3 px-3 py-2.5 transition-colors text-left border-b border-border/40 last:border-b-0',
-                selectedIndex === index ? 'bg-accent' : 'hover:bg-accent/60',
-              ]"
-            >
-              <BookCoverImage
-                :book-id="result.id"
-                type="thumbnail"
-                :version="result.updatedAt"
-                class="h-16 w-12 object-cover rounded shrink-0 bg-muted"
-                :alt="result.title ?? ''"
-              />
-              <div class="flex-1 min-w-0">
-                <p class="text-sm font-medium text-foreground truncate">
-                  <template v-for="seg in highlightSegments(result.title, globalSearchQuery)" :key="seg.text + seg.match">
-                    <span v-if="seg.match" class="bg-primary/20 text-foreground font-semibold rounded-sm px-0.5">{{ seg.text }}</span>
-                    <span v-else>{{ seg.text }}</span>
-                  </template>
-                </p>
-                <p v-if="result.authors.length" class="text-xs text-muted-foreground truncate mt-0.5">
-                  <template v-for="seg in highlightSegments(result.authors.join(', '), globalSearchQuery)" :key="seg.text + seg.match">
-                    <span v-if="seg.match" class="bg-primary/20 text-foreground font-semibold rounded-sm px-0.5">{{ seg.text }}</span>
-                    <span v-else>{{ seg.text }}</span>
-                  </template>
-                </p>
-                <p v-if="result.seriesName" class="text-xs text-muted-foreground/85 truncate mt-0.5 italic">
-                  <template v-for="seg in highlightSegments(result.seriesName, globalSearchQuery)" :key="seg.text + seg.match">
-                    <span v-if="seg.match" class="bg-primary/20 text-foreground font-semibold rounded-sm px-0.5 not-italic">{{ seg.text }}</span>
-                    <span v-else>{{ seg.text }}</span>
-                  </template>
-                </p>
-              </div>
-              <div class="flex flex-col items-end gap-1 shrink-0">
-                <span class="text-[10px] font-medium text-primary/70 bg-primary/8 px-1.5 py-0.5 rounded border border-primary/15 max-w-20 truncate">
-                  {{ result.libraryName }}
-                </span>
-                <div v-if="result.formats.length" class="flex gap-1">
+            <div v-if="globalResults.length > 0" class="relative" :style="globalSearchVirtualHeightStyle">
+              <button
+                v-for="row in globalSearchVirtualRows"
+                :key="row.result.id"
+                :style="row.style"
+                @click="navigateToResult(row.result)"
+                :class="[
+                  'absolute left-0 right-0 flex items-center gap-3 border-b border-border/40 px-3 py-2.5 text-left transition-colors',
+                  selectedIndex === row.index ? 'bg-accent' : 'hover:bg-accent/60',
+                ]"
+              >
+                <BookCoverImage
+                  :book-id="row.result.id"
+                  type="thumbnail"
+                  :version="row.result.updatedAt"
+                  class="h-16 w-12 object-cover rounded shrink-0 bg-muted"
+                  :alt="row.result.title ?? ''"
+                />
+                <div class="flex-1 min-w-0">
+                  <p class="text-sm font-medium text-foreground truncate">
+                    <template v-for="seg in highlightSegments(row.result.title, globalSearchQuery)" :key="seg.text + seg.match">
+                      <span v-if="seg.match" class="bg-primary/20 text-foreground font-semibold rounded-sm px-0.5">{{ seg.text }}</span>
+                      <span v-else>{{ seg.text }}</span>
+                    </template>
+                  </p>
+                  <p v-if="row.result.authors.length" class="text-xs text-muted-foreground truncate mt-0.5">
+                    <template v-for="seg in highlightSegments(row.result.authors.join(', '), globalSearchQuery)" :key="seg.text + seg.match">
+                      <span v-if="seg.match" class="bg-primary/20 text-foreground font-semibold rounded-sm px-0.5">{{ seg.text }}</span>
+                      <span v-else>{{ seg.text }}</span>
+                    </template>
+                  </p>
+                  <p v-if="row.result.seriesName" class="text-xs text-muted-foreground/85 truncate mt-0.5 italic">
+                    <template v-for="seg in highlightSegments(row.result.seriesName, globalSearchQuery)" :key="seg.text + seg.match">
+                      <span v-if="seg.match" class="bg-primary/20 text-foreground font-semibold rounded-sm px-0.5 not-italic">{{ seg.text }}</span>
+                      <span v-else>{{ seg.text }}</span>
+                    </template>
+                  </p>
+                </div>
+                <div v-if="resultFormats(row.result).length" class="flex shrink-0 gap-1">
                   <span
-                    v-for="fmt in sortFormats(result.formats)"
+                    v-for="fmt in resultFormats(row.result)"
                     :key="fmt"
                     :class="['text-[9px] font-semibold px-1 py-0.5 rounded border uppercase']"
                     :style="formatBadgeStyle(fmt)"
@@ -460,8 +552,20 @@ function formatBadgeStyle(fmt: string) {
                     {{ fmt }}
                   </span>
                 </div>
-              </div>
-            </button>
+              </button>
+            </div>
+            <div v-if="globalResults.length > 0" class="border-t border-border/60 px-3 py-2 text-center text-xs text-muted-foreground">
+              <button
+                v-if="globalSearchHasMore"
+                type="button"
+                class="font-medium text-primary transition-colors hover:text-primary/80 disabled:cursor-not-allowed disabled:opacity-60"
+                :disabled="globalSearchLoadingMore"
+                @click="loadMoreGlobalSearch"
+              >
+                {{ globalSearchLoadMoreLabel }}
+              </button>
+              <span v-else>{{ globalSearchAllLoadedLabel }}</span>
+            </div>
           </div>
         </Transition>
       </div>
