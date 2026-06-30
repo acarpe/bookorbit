@@ -16,6 +16,11 @@ function makeErrorResponse() {
   return { ok: false } as Response
 }
 
+function postedProgressBody(callIndex = 0): Record<string, unknown> {
+  const [, opts] = mockApi.mock.calls[callIndex]!
+  return JSON.parse((opts as RequestInit).body as string) as Record<string, unknown>
+}
+
 describe('formatTimeRemaining', () => {
   it('returns empty string for negative values', () => {
     expect(formatTimeRemaining(-1)).toBe('')
@@ -178,6 +183,58 @@ describe('useReaderProgress', () => {
       expect(cfi.value).toBe('epubcfi(/6/4)')
       expect(fraction.value).toBe(0.5)
       expect(percentage.value).toBe(50)
+    })
+
+    it('clamps out-of-range relocate progress values', () => {
+      const elapsedMinutes = ref(0)
+      const { onRelocate, fraction, percentage, koboContentSourceProgressPercent } = useReaderProgress(1, 42, elapsedMinutes)
+
+      onRelocate({
+        cfi: 'epubcfi(/6/4)',
+        fraction: 1.5,
+        contentSourceProgressPercent: 125,
+      } as never)
+
+      expect(fraction.value).toBe(1)
+      expect(percentage.value).toBe(100)
+      expect(koboContentSourceProgressPercent.value).toBe(100)
+    })
+
+    it('preserves last valid progress when relocate fraction is non-finite', () => {
+      const elapsedMinutes = ref(0)
+      const { onRelocate, cfi, fraction, percentage, koboContentSourceProgressPercent } = useReaderProgress(1, 42, elapsedMinutes)
+
+      onRelocate({
+        cfi: 'epubcfi(/6/4)',
+        fraction: 0.42,
+        contentSourceProgressPercent: 40,
+      } as never)
+      onRelocate({
+        cfi: 'epubcfi(/6/10)',
+        fraction: Number.NaN,
+        contentSourceProgressPercent: Number.NaN,
+      } as never)
+
+      expect(cfi.value).toBe('epubcfi(/6/10)')
+      expect(fraction.value).toBe(0.42)
+      expect(percentage.value).toBe(42)
+      expect(koboContentSourceProgressPercent.value).toBeNull()
+    })
+
+    it('does not schedule save when relocate has no usable location', () => {
+      mockApi.mockResolvedValue(makeOkResponse({}))
+      const elapsedMinutes = ref(0)
+      const { onRelocate } = useReaderProgress(1, 42, elapsedMinutes)
+
+      onRelocate({
+        cfi: null,
+        fraction: Number.NaN,
+        koboLocationValue: null,
+        koreaderProgress: null,
+      } as never)
+
+      vi.advanceTimersByTime(2500)
+      expect(mockApi).not.toHaveBeenCalled()
     })
 
     it('sets koboLocationSource and koboLocationValue from detail', () => {
@@ -423,8 +480,7 @@ describe('useReaderProgress', () => {
       vi.clearAllTimers()
       await save()
 
-      const [, opts] = mockApi.mock.calls[0]!
-      const body = JSON.parse((opts as RequestInit).body as string)
+      const body = postedProgressBody()
       expect(body.cfi).toBe('epubcfi(/6/2)')
       expect(body.percentage).toBe(25)
       expect(body.koboLocationSource).toBe('KoboSpan')
@@ -432,6 +488,50 @@ describe('useReaderProgress', () => {
       expect(body.koboLocationType).toBe('KoboSpan')
       expect(body.koboContentSourceProgressPercent).toBe(0.25)
       expect(body.koreaderProgress).toBe('/body/p[1]')
+    })
+
+    it('serializes finite progress after invalid relocate values', async () => {
+      mockApi.mockResolvedValue(makeOkResponse({}))
+      const elapsedMinutes = ref(0)
+      const { onRelocate, save } = useReaderProgress(1, 42, elapsedMinutes)
+
+      onRelocate({
+        cfi: 'epubcfi(/6/4)',
+        fraction: 0.42,
+        contentSourceProgressPercent: 40,
+      } as never)
+      onRelocate({
+        cfi: 'epubcfi(/6/10)',
+        fraction: Number.POSITIVE_INFINITY,
+        contentSourceProgressPercent: Number.NEGATIVE_INFINITY,
+      } as never)
+
+      vi.clearAllTimers()
+      await save()
+
+      const body = postedProgressBody()
+      expect(body.cfi).toBe('epubcfi(/6/10)')
+      expect(body.percentage).toBe(42)
+      expect(Number.isFinite(body.percentage)).toBe(true)
+      expect(body.koboContentSourceProgressPercent).toBeNull()
+    })
+
+    it('falls back to the last valid percentage when exposed state is non-finite', async () => {
+      mockApi.mockResolvedValue(makeOkResponse({}))
+      const elapsedMinutes = ref(0)
+      const { percentage, save } = useReaderProgress(1, 42, elapsedMinutes)
+
+      percentage.value = 55
+      await save()
+      mockApi.mockClear()
+
+      percentage.value = Number.NaN
+      await save()
+
+      const body = postedProgressBody()
+      expect(body.percentage).toBe(55)
+      expect(Number.isFinite(body.percentage)).toBe(true)
+      expect(percentage.value).toBe(55)
     })
   })
 

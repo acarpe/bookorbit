@@ -8,6 +8,33 @@ export interface ReaderProgressOptions {
   trackingEnabled?: MaybeRef<boolean>
 }
 
+function clamp(value: number, min: number, max: number): number {
+  return Math.min(max, Math.max(min, value))
+}
+
+function finiteNumber(value: unknown): number | null {
+  return typeof value === 'number' && Number.isFinite(value) ? value : null
+}
+
+function normalizeFraction(value: unknown): number | null {
+  const parsed = finiteNumber(value)
+  return parsed === null ? null : clamp(parsed, 0, 1)
+}
+
+function normalizePercentage(value: unknown): number | null {
+  const parsed = finiteNumber(value)
+  return parsed === null ? null : clamp(parsed, 0, 100)
+}
+
+function normalizeNullablePercentage(value: unknown): number | null {
+  return normalizePercentage(value)
+}
+
+function normalizePageNumber(value: unknown): number | null {
+  const parsed = finiteNumber(value)
+  return parsed === null || parsed < 0 ? null : parsed
+}
+
 export function formatTimeRemaining(minutes: number): string {
   if (!Number.isFinite(minutes) || minutes < 0) return ''
   if (minutes < 1) return '< 1 min'
@@ -49,10 +76,18 @@ export function useReaderProgress(
   const trackingEnabled = options.trackingEnabled ?? true
 
   let saveTimer: ReturnType<typeof setTimeout> | null = null
+  let lastValidPercentage = 0
 
   onUnmounted(() => {
     if (saveTimer) clearTimeout(saveTimer)
   })
+
+  function updatePercentage(value: unknown, fallback = lastValidPercentage): number {
+    const normalized = normalizePercentage(value) ?? fallback
+    percentage.value = normalized
+    lastValidPercentage = normalized
+    return normalized
+  }
 
   async function load() {
     if (!unref(trackingEnabled)) return
@@ -60,24 +95,29 @@ export function useReaderProgress(
     if (!res.ok) return
     const data = await res.json()
     cfi.value = data.cfi ?? null
-    pageNumber.value = data.pageNumber ?? null
-    percentage.value = data.percentage ?? 0
+    pageNumber.value = normalizePageNumber(data.pageNumber)
+    updatePercentage(data.percentage, 0)
     koboLocationSource.value = data.koboLocationSource ?? null
     koboLocationType.value = data.koboLocationType ?? null
     koboLocationValue.value = data.koboLocationValue ?? null
-    koboContentSourceProgressPercent.value = data.koboContentSourceProgressPercent ?? null
+    koboContentSourceProgressPercent.value = normalizeNullablePercentage(data.koboContentSourceProgressPercent)
     koreaderProgress.value = data.koreaderProgress ?? null
   }
 
   function onRelocate(detail: RelocateDetail) {
     cfi.value = detail?.cfi ?? null
-    fraction.value = detail?.fraction ?? 0
-    percentage.value = fraction.value * 100
+    const relocatedFraction = normalizeFraction(detail?.fraction)
+    if (relocatedFraction !== null) {
+      fraction.value = relocatedFraction
+      updatePercentage(relocatedFraction * 100)
+    }
     koboLocationSource.value = detail?.source ?? null
     koboLocationValue.value = detail?.koboLocationValue ?? null
     koboLocationType.value = koboLocationValue.value ? (detail?.koboLocationType ?? 'KoboSpan') : null
-    koboContentSourceProgressPercent.value = detail?.contentSourceProgressPercent ?? null
+    koboContentSourceProgressPercent.value = normalizeNullablePercentage(detail?.contentSourceProgressPercent)
     koreaderProgress.value = detail?.koreaderProgress ?? null
+    const hasSaveableLocation =
+      relocatedFraction !== null || cfi.value !== null || koboLocationValue.value !== null || koreaderProgress.value !== null
     chapterTitle.value = detail?.tocItem?.label ?? ''
     sectionIndex.value = detail?.section?.current ?? detail?.index ?? 0
     totalSections.value = detail?.section?.total ?? detail?.total ?? 0
@@ -90,23 +130,24 @@ export function useReaderProgress(
     timeTotal.value = detail?.time?.total ?? 0
 
     if (saveTimer) clearTimeout(saveTimer)
-    if (!unref(trackingEnabled)) return
+    if (!unref(trackingEnabled) || !hasSaveableLocation) return
     saveTimer = setTimeout(() => save(), 2000)
   }
 
   async function save() {
     if (!unref(trackingEnabled)) return
+    const safePercentage = updatePercentage(percentage.value)
     await api(`/api/v1/books/files/${fileId}/progress`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         cfi: cfi.value,
-        pageNumber: pageNumber.value,
-        percentage: percentage.value,
+        pageNumber: normalizePageNumber(pageNumber.value),
+        percentage: safePercentage,
         koboLocationSource: koboLocationSource.value,
         koboLocationType: koboLocationType.value,
         koboLocationValue: koboLocationValue.value,
-        koboContentSourceProgressPercent: koboContentSourceProgressPercent.value,
+        koboContentSourceProgressPercent: normalizeNullablePercentage(koboContentSourceProgressPercent.value),
         koreaderProgress: koreaderProgress.value,
       }),
     })
