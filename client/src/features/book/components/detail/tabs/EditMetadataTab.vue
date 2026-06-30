@@ -18,6 +18,7 @@ import ChipInput from '@/components/ui/ChipInput.vue'
 import CoverEditorPanel from './CoverEditorPanel.vue'
 import MetadataSearchDrawer from './MetadataSearchDrawer.vue'
 import MetadataFieldLabel from './MetadataFieldLabel.vue'
+import RichDescriptionEditor from './RichDescriptionEditor.vue'
 import SeriesMembershipEditor from './SeriesMembershipEditor.vue'
 import WriteAndRenameResultPanel from '../WriteAndRenameResultPanel.vue'
 import type { MetadataPatch } from '../../../composables/useMetadataDiff'
@@ -1422,12 +1423,7 @@ function handleCoverChanged(source: 'extracted' | 'custom' | null) {
         multiline
         @toggle="handleLockToggle"
       >
-        <textarea
-          v-model="form.description"
-          rows="6"
-          class="w-full resize-y rounded-lg border border-input bg-background px-3 py-2 pr-12 text-sm outline-none focus:ring-1 focus:ring-ring transition-shadow disabled:opacity-50 disabled:cursor-not-allowed"
-          :disabled="isLocked('description')"
-        />
+        <RichDescriptionEditor v-model="form.description" :disabled="isLocked('description')" />
       </MetadataFieldLabel>
 
       <!-- Mobile: sticky Save/Cancel bar -->
