@@ -1127,6 +1127,45 @@ describe('BookService', () => {
       );
     });
 
+    it('refreshMetadata persists Hardcover edition id returned by pipeline', async () => {
+      const { service, bookRepo, pipeline } = makeService();
+      const user = makeUser();
+      bookRepo.findById.mockResolvedValue({
+        book: {
+          books: { id: 1, libraryId: 7 },
+          book_metadata: { title: 'Old', isbn13: '9780756404741', isbn10: null, hardcoverEditionId: null },
+        },
+        authorRows: [{ id: 1, name: 'Patrick Rothfuss', sortName: null }],
+        genreRows: [],
+        communityRatingRows: [],
+      });
+      pipeline.runWithSources.mockResolvedValue({
+        resolved: { hardcoverEditionId: '8941973' },
+        sources: {},
+        providerIds: {
+          [MetadataProviderKey.HARDCOVER]: 'the-name-of-the-wind',
+        },
+      });
+
+      const updateSpy = vi.spyOn(service, 'updateMetadata').mockResolvedValue({
+        book: { id: 1 },
+        write: null,
+        libraryAutoWriteEnabled: false,
+      } as never);
+
+      await service.refreshMetadata(1, false, user);
+
+      expect(updateSpy).toHaveBeenCalledWith(
+        1,
+        {
+          hardcoverEditionId: '8941973',
+          hardcoverId: 'the-name-of-the-wind',
+        },
+        user,
+        { postSaveMode: 'schedule' },
+      );
+    });
+
     it('refreshMetadata persists provider-specific community rating rows', async () => {
       const { service, bookRepo, pipeline } = makeService();
       const user = makeUser();
@@ -1318,7 +1357,7 @@ describe('BookService', () => {
         genreRows: [],
       });
       pipeline.runWithSources.mockResolvedValue({
-        resolved: { title: 'Resolved', authors: ['A'], coverUrl: 'https://img/c.jpg' },
+        resolved: { title: 'Resolved', authors: ['A'], coverUrl: 'https://img/c.jpg', hardcoverEditionId: '8941973' },
         sources: {},
         providerIds: {
           [MetadataProviderKey.GOOGLE]: 'g-id',
@@ -1327,7 +1366,7 @@ describe('BookService', () => {
       bookMetadataLockService.filterResolvedMetadata.mockResolvedValue({
         resolved: { authors: ['A'] },
         providerIds: {},
-        skippedFields: ['title', 'cover', 'googleBooksId'],
+        skippedFields: ['title', 'cover', 'googleBooksId', 'hardcoverEditionId'],
       });
 
       const updateSpy = vi.spyOn(service, 'updateMetadata').mockResolvedValue({
@@ -1896,6 +1935,25 @@ describe('BookService', () => {
       expect(result).toEqual({ processed: 1, failed: 0 });
       expect(refreshSpy).toHaveBeenCalledTimes(1);
       expect(onProgress).toHaveBeenCalledTimes(1);
+    });
+
+    it('bulkRefreshMetadata delegates each item to non-preview refreshMetadata', async () => {
+      const { service, bookRepo } = makeService();
+      const user = makeUser();
+      const refreshSpy = vi.spyOn(service, 'refreshMetadata').mockResolvedValue({ id: 1 } as never);
+      const onProgress = vi.fn();
+
+      bookRepo.findLibraryIdsByBookIds.mockResolvedValue([
+        { id: 1, libraryId: 7 },
+        { id: 2, libraryId: 7 },
+      ]);
+
+      const result = await service.bulkRefreshMetadata([1, 2], user, onProgress);
+
+      expect(result).toEqual({ processed: 2, failed: 0 });
+      expect(refreshSpy).toHaveBeenCalledWith(1, false, user);
+      expect(refreshSpy).toHaveBeenCalledWith(2, false, user);
+      expect(onProgress).toHaveBeenCalledTimes(2);
     });
 
     it('deleteBooks verifies access, removes book files, and removes cover directories without failing on rm errors', async () => {
