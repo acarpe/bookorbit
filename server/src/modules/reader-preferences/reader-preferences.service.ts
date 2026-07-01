@@ -25,6 +25,7 @@ const EPUB_SETTINGS_SCHEMA = z
     flow: z.enum(['paginated', 'scrolled']),
     overrideBookFormatting: z.boolean(),
     footerDisplayMode: z.union([z.literal(0), z.literal(1), z.literal(2)]),
+    fixedLayoutSpread: z.enum(['auto', 'none']),
   })
   .strict();
 

@@ -71,6 +71,17 @@ describe('useReaderSettings - load() with valid localStorage epub delta', () => 
 
     expect(s.effective.value).toMatchObject({ ...READER_GROUP_DEFAULTS.epub, fontSize: 24 })
   })
+
+  it('filters invalid EPUB spread settings from localStorage deltas', async () => {
+    const raw = { fontSize: 20, fixedLayoutSpread: 'two-page' }
+    localStorage.setItem(`reader:book:${BOOK_FILE_ID}`, JSON.stringify(raw))
+
+    const s = useReaderSettings(BOOK_FILE_ID, 'epub')
+    await s.load()
+
+    expect(s.bookDelta.value).toEqual({ fontSize: 20 })
+    expect(localStorage.getItem(`reader:book:${BOOK_FILE_ID}`)).toBe(JSON.stringify({ fontSize: 20 }))
+  })
 })
 
 describe('useReaderSettings - load() with invalid localStorage value', () => {
@@ -327,6 +338,18 @@ describe('useReaderDefaultSettings - load() with localStorage', () => {
     await s.load()
 
     expect(s.effective.value).toMatchObject({ fontSize: 20 })
+  })
+
+  it('fills fixedLayoutSpread for older epub defaults in localStorage', async () => {
+    const stored = { ...READER_GROUP_DEFAULTS.epub, fontSize: 20 }
+    delete (stored as Record<string, unknown>).fixedLayoutSpread
+    localStorage.setItem('reader:default:epub', JSON.stringify(stored))
+
+    const s = useReaderDefaultSettings('epub')
+    await s.load()
+
+    expect(s.effective.value).toMatchObject({ fontSize: 20, fixedLayoutSpread: 'auto' })
+    expect(JSON.parse(localStorage.getItem('reader:default:epub') ?? '{}')).toMatchObject({ fixedLayoutSpread: 'auto' })
   })
 
   it('merges cbx localStorage settings with CBX_READER_DEFAULTS', async () => {

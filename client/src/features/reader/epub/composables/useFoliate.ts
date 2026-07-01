@@ -3,7 +3,7 @@ import { api } from '@/lib/api'
 import { useFoliateAnnotations } from './useFoliateAnnotations'
 import { useFoliateSelection } from './useFoliateSelection'
 import { useFoliateInput } from './useFoliateInput'
-import type { EpubBookInfo } from '@bookorbit/types'
+import type { EpubBookInfo, EpubReaderSettings } from '@bookorbit/types'
 
 export interface RelocateDetail {
   cfi?: string | null
@@ -35,6 +35,30 @@ export interface FoliateLocationContext {
   fraction: number | null
 }
 
+export interface EpubOpenOptions {
+  fixedLayoutSpread?: EpubReaderSettings['fixedLayoutSpread']
+}
+
+function isResolvedNavigation(value: unknown): boolean {
+  return Boolean(value && typeof value === 'object' && typeof (value as { index?: unknown }).index === 'number')
+}
+
+function isFixedLayoutBook(book: unknown): boolean {
+  return Boolean(book && typeof book === 'object' && (book as { rendition?: { layout?: unknown } }).rendition?.layout === 'pre-paginated')
+}
+
+function applyEpubOpenOptions(book: unknown, options: EpubOpenOptions | undefined) {
+  if (!book || typeof book !== 'object') return
+  if (options?.fixedLayoutSpread !== 'none') return
+  if (!isFixedLayoutBook(book)) return
+
+  const epubBook = book as { rendition?: Record<string, unknown> }
+  epubBook.rendition = {
+    ...epubBook.rendition,
+    spread: 'none',
+  }
+}
+
 export function useFoliate(
   container: () => HTMLElement | null,
   onRelocate?: (detail: RelocateDetail) => void,
@@ -46,6 +70,7 @@ export function useFoliate(
   const fraction = ref(0)
   const viewRef = ref<unknown>(null)
   const bookLanguage = ref<string>('en')
+  const isFixedLayout = ref(false)
 
   let onAnnotationClick: ((cfi: string, popupPosition: { x: number; y: number; showBelow: boolean }) => void) | null = null
 
@@ -71,14 +96,16 @@ export function useFoliate(
     await customElements.whenDefined('foliate-view')
   }
 
-  async function open(bookId: number, fileId: number, format: string, cfi?: string | null, fallbackFraction?: number) {
+  async function open(bookId: number, fileId: number, format: string, cfi?: string | null, fallbackFraction?: number, options?: EpubOpenOptions) {
     const el = container()
     if (!el) return
 
     loading.value = true
     error.value = null
+    isFixedLayout.value = false
 
     let loadTimeoutId: ReturnType<typeof setTimeout> | undefined
+    let initialNavigationPending = true
 
     try {
       await loadScript()
@@ -86,8 +113,8 @@ export function useFoliate(
       const view = document.createElement('foliate-view') as HTMLElement & {
         renderer: FoliateRenderer
         open: (file: File) => Promise<void>
-        goTo: (target: string | number) => Promise<void>
-        goToFraction?: (f: number) => void
+        goTo: (target: string | number) => Promise<unknown>
+        goToFraction?: (f: number) => void | Promise<void>
         book?: { toc?: unknown[] }
         getSectionFractions?: () => number[]
         prev?: () => void
@@ -100,6 +127,7 @@ export function useFoliate(
         clearSearch?: () => void
       }
       view.style.cssText = 'width:100%;height:100%;display:block;'
+      getViewEl()?.destroy?.()
       el.innerHTML = ''
       el.appendChild(view)
       viewRef.value = view
@@ -111,7 +139,9 @@ export function useFoliate(
       view.addEventListener('load', (e: Event) => {
         const detail = (e as CustomEvent).detail
         clearTimeout(loadTimeoutId)
-        loading.value = false
+        if (!initialNavigationPending) {
+          loading.value = false
+        }
         // The paginator's internal #view reference is updated in a microtask after the
         // 'load' event fires. Deferring to a macrotask ensures setStyles targets the
         // new chapter document, not the previous one.
@@ -191,6 +221,8 @@ export function useFoliate(
         }
       }, 30_000)
 
+      let shouldRestoreByFraction = false
+
       if (format === 'epub') {
         const infoRes = await api(`/api/v1/epub/${bookId}/info?fileId=${fileId}`)
         if (!infoRes.ok) throw new Error(`Failed to fetch EPUB info: ${infoRes.status}`)
@@ -210,6 +242,9 @@ export function useFoliate(
           | undefined
         if (!makeStreamingBook) throw new Error('makeStreamingBook not available')
         const book = await makeStreamingBook(bookId, '/api/v1/epub', bookInfo, api, null, fileId)
+        applyEpubOpenOptions(book, options)
+        shouldRestoreByFraction = isFixedLayoutBook(book)
+        isFixedLayout.value = shouldRestoreByFraction
         await view.open(book as never)
       } else {
         const mimeType = format === 'pdf' ? 'application/pdf' : 'application/zip'
@@ -222,18 +257,18 @@ export function useFoliate(
       }
       if (onApplyStyles) onApplyStyles(view.renderer)
       let didNavigate = false
-      if (cfi) {
+      if (cfi && !shouldRestoreByFraction) {
         await view
           .goTo(cfi)
-          .then(() => {
-            didNavigate = true
+          .then((result) => {
+            didNavigate = isResolvedNavigation(result)
           })
           .catch(() => {})
       }
       if (!didNavigate && fallbackFraction !== undefined && fallbackFraction > 0) {
         if (typeof view.goToFraction === 'function') {
           try {
-            view.goToFraction(fallbackFraction)
+            await view.goToFraction(fallbackFraction)
             didNavigate = true
           } catch {
             didNavigate = false
@@ -243,6 +278,8 @@ export function useFoliate(
       if (!didNavigate) {
         await view.goTo(0).catch(() => {})
       }
+      initialNavigationPending = false
+      loading.value = false
     } catch (e) {
       console.error('[useFoliate]', e)
       clearTimeout(loadTimeoutId)
@@ -256,8 +293,8 @@ export function useFoliate(
       | (ReturnType<typeof document.createElement> & {
           prev?: () => void
           next?: () => void
-          goTo?: (t: string | number) => Promise<void>
-          goToFraction?: (f: number) => void
+          goTo?: (t: string | number) => Promise<unknown>
+          goToFraction?: (f: number) => void | Promise<void>
           getSectionFractions?: () => number[]
           resolveNavigation?: (target: string | number) => { index?: number } | Promise<{ index?: number }>
           getTOCItemOf?: (target: string | number) => Promise<{ label?: string } | null>
@@ -311,9 +348,10 @@ export function useFoliate(
     error,
     fraction,
     bookLanguage,
+    isFixedLayout,
     view: viewRef,
-    open: (bookId: number, fileId: number, format: string, cfi?: string | null, fallbackFraction?: number) =>
-      open(bookId, fileId, format, cfi, fallbackFraction),
+    open: (bookId: number, fileId: number, format: string, cfi?: string | null, fallbackFraction?: number, options?: EpubOpenOptions) =>
+      open(bookId, fileId, format, cfi, fallbackFraction, options),
     prev: () => getViewEl()?.prev?.(),
     next: () => getViewEl()?.next?.(),
     goTo: (t: string | number) => getViewEl()?.goTo?.(t),

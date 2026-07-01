@@ -65,6 +65,8 @@ export interface EpubReaderSettings {
   overrideBookFormatting: boolean;
   // In-page footer display mode: 0 = pages, 1 = time remaining + session, 2 = chapter info
   footerDisplayMode: 0 | 1 | 2;
+  // Fixed-layout EPUB spread handling. auto = respect book metadata; none = force one spine item per page.
+  fixedLayoutSpread: "auto" | "none";
 }
 
 export interface PdfReaderSettings {
@@ -117,6 +119,7 @@ export const EPUB_READER_DEFAULTS: EpubReaderSettings = {
   flow: "paginated",
   overrideBookFormatting: true,
   footerDisplayMode: 0,
+  fixedLayoutSpread: "auto",
 };
 
 export const PDF_READER_DEFAULTS: PdfReaderSettings = {

@@ -200,6 +200,7 @@ describe('ReaderPreferencesService', () => {
       flow: 'paginated' as const,
       overrideBookFormatting: true,
       footerDisplayMode: 0 as const,
+      fixedLayoutSpread: 'auto' as const,
     };
 
     it('accepts valid footerDisplayMode values (0, 1, 2) in full epub defaults', async () => {
@@ -225,6 +226,15 @@ describe('ReaderPreferencesService', () => {
       expect(mockRepo.upsertPreference).toHaveBeenCalledWith(7, 20, { footerDisplayMode: 1 });
     });
 
+    it('accepts partial epub per-book settings with fixedLayoutSpread', async () => {
+      const user = makeUser();
+      mockBookService.verifyFileAccess.mockResolvedValueOnce({ format: 'epub' });
+
+      await service.upsertPreference(user, 22, { fixedLayoutSpread: 'none' });
+
+      expect(mockRepo.upsertPreference).toHaveBeenCalledWith(7, 22, { fixedLayoutSpread: 'none' });
+    });
+
     it('rejects partial epub per-book settings with invalid footerDisplayMode', async () => {
       const user = makeUser();
       mockBookService.verifyFileAccess.mockResolvedValueOnce({ format: 'epub' });
@@ -233,11 +243,26 @@ describe('ReaderPreferencesService', () => {
       expect(mockRepo.upsertPreference).not.toHaveBeenCalled();
     });
 
+    it('rejects partial epub per-book settings with invalid fixedLayoutSpread', async () => {
+      const user = makeUser();
+      mockBookService.verifyFileAccess.mockResolvedValueOnce({ format: 'epub' });
+
+      await expect(service.upsertPreference(user, 23, { fixedLayoutSpread: 'two-page' })).rejects.toThrow(BadRequestException);
+      expect(mockRepo.upsertPreference).not.toHaveBeenCalled();
+    });
+
     it('requires footerDisplayMode when saving full epub defaults', async () => {
       const withoutFooterMode = { ...validEpubDefaults };
       delete (withoutFooterMode as Record<string, unknown>).footerDisplayMode;
 
       await expect(service.upsertDefault(1, 'epub', withoutFooterMode)).rejects.toThrow(BadRequestException);
+    });
+
+    it('requires fixedLayoutSpread when saving full epub defaults', async () => {
+      const withoutSpread = { ...validEpubDefaults };
+      delete (withoutSpread as Record<string, unknown>).fixedLayoutSpread;
+
+      await expect(service.upsertDefault(1, 'epub', withoutSpread)).rejects.toThrow(BadRequestException);
     });
   });
 });

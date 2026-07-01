@@ -70,6 +70,14 @@ onUnmounted(() => {
   previewStyleEl.value?.remove()
   previewStyleEl.value = null
 })
+
+function setFixedLayoutSpreadAuto() {
+  update({ fixedLayoutSpread: 'auto' })
+}
+
+function setFixedLayoutSpreadNone() {
+  update({ fixedLayoutSpread: 'none' })
+}
 </script>
 
 <template>
@@ -140,6 +148,34 @@ onUnmounted(() => {
               @click="update({ flow: 'scrolled' })"
             >
               Scrolled
+            </button>
+          </div>
+        </div>
+
+        <!-- Fixed-layout spread -->
+        <div class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between px-4 py-3.5 md:px-5 md:py-4 bg-card">
+          <div>
+            <p class="settings-label">Fixed-layout page spreads</p>
+            <p class="settings-hint">Default for manga, comics, and image-based EPUBs</p>
+          </div>
+          <div class="flex flex-wrap items-center gap-1.5 p-1 rounded-lg border border-border bg-muted/50 self-start">
+            <button
+              class="h-8 px-3 rounded-md text-xs font-medium transition-colors"
+              :class="
+                effective.fixedLayoutSpread === 'auto' ? 'bg-background shadow-xs text-foreground' : 'text-muted-foreground hover:text-foreground'
+              "
+              @click="setFixedLayoutSpreadAuto"
+            >
+              Book default
+            </button>
+            <button
+              class="h-8 px-3 rounded-md text-xs font-medium transition-colors"
+              :class="
+                effective.fixedLayoutSpread === 'none' ? 'bg-background shadow-xs text-foreground' : 'text-muted-foreground hover:text-foreground'
+              "
+              @click="setFixedLayoutSpreadNone"
+            >
+              Single page
             </button>
           </div>
         </div>

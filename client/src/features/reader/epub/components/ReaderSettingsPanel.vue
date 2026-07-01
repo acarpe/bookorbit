@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { BookOpen, LayoutGrid, Moon, Palette, ScrollText, Sun, Type } from '@lucide/vue'
 import type { ReaderState } from '../composables/useReaderState'
 import type { useCustomFonts } from '../composables/useCustomFonts'
@@ -10,6 +10,7 @@ import { formatFontFamilyLabel } from '@/features/reader/shared/lib/font-display
 const props = defineProps<{
   state: ReaderState
   customFonts?: ReturnType<typeof useCustomFonts>
+  isFixedLayout?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -27,11 +28,13 @@ const scrollMemory = ref<Record<Tab, number>>({
   layout: 0,
 })
 
-const tabs: { id: Tab; icon: typeof Palette; label: string }[] = [
+const allTabs: { id: Tab; icon: typeof Palette; label: string }[] = [
   { id: 'appearance', icon: Palette, label: 'Appearance' },
   { id: 'text', icon: Type, label: 'Text' },
   { id: 'layout', icon: LayoutGrid, label: 'Layout' },
 ]
+
+const tabs = computed(() => (props.isFixedLayout ? allTabs.filter((tab) => tab.id !== 'text') : allTabs))
 
 const stepperButtonClass = 'size-8 rounded-lg border border-border text-lg font-light text-foreground transition-colors hover:bg-muted'
 const stepperGroupClass = 'flex min-w-[11rem] items-center justify-end gap-2'
@@ -105,6 +108,15 @@ watch(
   { immediate: true },
 )
 
+watch(
+  () => props.isFixedLayout,
+  (fixed) => {
+    if (fixed && activeTab.value === 'text') {
+      activeTab.value = 'layout'
+    }
+  },
+)
+
 function selectCustomFont(familyName: string) {
   if (!props.customFonts) return
   const cssFamilyName = props.customFonts.getCssFamilyForDisplay(familyName)
@@ -114,6 +126,14 @@ function selectCustomFont(familyName: string) {
 function isCustomFontSelected(familyName: string): boolean {
   if (!props.customFonts) return false
   return props.customFonts.isFontFamilySelected(familyName, props.state.fontFamily)
+}
+
+function setFixedLayoutSpreadAuto() {
+  emit('update', { fixedLayoutSpread: 'auto' })
+}
+
+function setFixedLayoutSpreadNone() {
+  emit('update', { fixedLayoutSpread: 'none' })
 }
 </script>
 
@@ -201,7 +221,7 @@ function isCustomFontSelected(familyName: string): boolean {
         </div>
       </template>
 
-      <template v-if="activeTab === 'text'">
+      <template v-if="activeTab === 'text' && !isFixedLayout">
         <div class="space-y-6">
           <div class="flex items-center justify-between gap-4">
             <div class="space-y-1 pr-3">
@@ -282,116 +302,153 @@ function isCustomFontSelected(familyName: string): boolean {
 
       <template v-if="activeTab === 'layout'">
         <div class="space-y-6">
-          <div class="space-y-3">
-            <div class="space-y-1">
-              <p class="text-sm font-medium leading-tight">Reading flow</p>
-              <p class="text-xs leading-tight text-muted-foreground">Switch between paged and continuous scrolling.</p>
-            </div>
-            <div class="grid grid-cols-2 gap-1 rounded-lg bg-muted/55 p-1">
-              <button
-                class="flex h-[2.125rem] items-center justify-center gap-2 rounded-lg px-3 text-sm font-medium transition-colors"
-                :class="
-                  state.flow === 'paginated'
-                    ? 'bg-background text-foreground shadow-sm ring-1 ring-border'
-                    : 'text-muted-foreground hover:text-foreground hover:bg-background/70'
-                "
-                @click="emit('update', { flow: 'paginated' })"
-              >
-                <BookOpen :size="15" />
-                <span>Paginated</span>
-              </button>
-              <button
-                class="flex h-[2.125rem] items-center justify-center gap-2 rounded-lg px-3 text-sm font-medium transition-colors"
-                :class="
-                  state.flow === 'scrolled'
-                    ? 'bg-background text-foreground shadow-sm ring-1 ring-border'
-                    : 'text-muted-foreground hover:text-foreground hover:bg-background/70'
-                "
-                @click="emit('update', { flow: 'scrolled' })"
-              >
-                <ScrollText :size="15" />
-                <span>Scrolled</span>
-              </button>
-            </div>
-          </div>
-
-          <div class="h-px bg-border/70" />
-
-          <div class="space-y-4">
-            <div class="flex items-center justify-between gap-4">
-              <div class="space-y-1 pr-3">
-                <p class="text-sm font-medium leading-tight">Max columns</p>
-                <p class="text-xs leading-tight text-muted-foreground">Range: 1-10</p>
+          <template v-if="isFixedLayout">
+            <div class="space-y-3">
+              <div class="space-y-1">
+                <p class="text-sm font-medium leading-tight">Page spreads</p>
+                <p class="text-xs leading-tight text-muted-foreground">Choose how this image-based EPUB pairs pages.</p>
               </div>
-              <div :class="stepperGroupClass">
-                <button :class="stepperButtonClass" @click="step('maxColumnCount', -1, 1, 10)">−</button>
-                <span :class="stepperValueClass">{{ state.maxColumnCount }}</span>
-                <button :class="stepperButtonClass" @click="step('maxColumnCount', 1, 1, 10)">+</button>
+              <div class="grid grid-cols-2 gap-1 rounded-lg bg-muted/55 p-1">
+                <button
+                  class="flex h-[2.125rem] items-center justify-center gap-2 rounded-lg px-3 text-sm font-medium transition-colors"
+                  :class="
+                    state.fixedLayoutSpread === 'auto'
+                      ? 'bg-background text-foreground shadow-sm ring-1 ring-border'
+                      : 'text-muted-foreground hover:text-foreground hover:bg-background/70'
+                  "
+                  @click="setFixedLayoutSpreadAuto"
+                >
+                  <LayoutGrid :size="15" />
+                  <span>Book default</span>
+                </button>
+                <button
+                  class="flex h-[2.125rem] items-center justify-center gap-2 rounded-lg px-3 text-sm font-medium transition-colors"
+                  :class="
+                    state.fixedLayoutSpread === 'none'
+                      ? 'bg-background text-foreground shadow-sm ring-1 ring-border'
+                      : 'text-muted-foreground hover:text-foreground hover:bg-background/70'
+                  "
+                  @click="setFixedLayoutSpreadNone"
+                >
+                  <BookOpen :size="15" />
+                  <span>Single page</span>
+                </button>
               </div>
             </div>
+          </template>
 
-            <div class="flex items-center justify-between gap-4">
-              <div class="space-y-1 pr-3">
-                <p class="text-sm font-medium leading-tight">Column gap</p>
-                <p class="text-xs leading-tight text-muted-foreground">Range: 0-50%</p>
+          <template v-else>
+            <div class="space-y-3">
+              <div class="space-y-1">
+                <p class="text-sm font-medium leading-tight">Reading flow</p>
+                <p class="text-xs leading-tight text-muted-foreground">Switch between paged and continuous scrolling.</p>
               </div>
-              <div :class="stepperGroupClass">
-                <button :class="stepperButtonClass" @click="step('gap', -0.01, 0, 0.5, 2)">−</button>
-                <span :class="stepperValueClass">{{ formatGap(state.gap) }}</span>
-                <button :class="stepperButtonClass" @click="step('gap', 0.01, 0, 0.5, 2)">+</button>
+              <div class="grid grid-cols-2 gap-1 rounded-lg bg-muted/55 p-1">
+                <button
+                  class="flex h-[2.125rem] items-center justify-center gap-2 rounded-lg px-3 text-sm font-medium transition-colors"
+                  :class="
+                    state.flow === 'paginated'
+                      ? 'bg-background text-foreground shadow-sm ring-1 ring-border'
+                      : 'text-muted-foreground hover:text-foreground hover:bg-background/70'
+                  "
+                  @click="emit('update', { flow: 'paginated' })"
+                >
+                  <BookOpen :size="15" />
+                  <span>Paginated</span>
+                </button>
+                <button
+                  class="flex h-[2.125rem] items-center justify-center gap-2 rounded-lg px-3 text-sm font-medium transition-colors"
+                  :class="
+                    state.flow === 'scrolled'
+                      ? 'bg-background text-foreground shadow-sm ring-1 ring-border'
+                      : 'text-muted-foreground hover:text-foreground hover:bg-background/70'
+                  "
+                  @click="emit('update', { flow: 'scrolled' })"
+                >
+                  <ScrollText :size="15" />
+                  <span>Scrolled</span>
+                </button>
               </div>
             </div>
 
-            <div class="flex items-center justify-between gap-4">
-              <div class="space-y-1 pr-3">
-                <p class="text-sm font-medium leading-tight">Max width</p>
-                <p class="text-xs leading-tight text-muted-foreground">Range: 400-1600</p>
+            <div class="h-px bg-border/70" />
+
+            <div class="space-y-4">
+              <div class="flex items-center justify-between gap-4">
+                <div class="space-y-1 pr-3">
+                  <p class="text-sm font-medium leading-tight">Text columns</p>
+                  <p class="text-xs leading-tight text-muted-foreground">Range: 1-10</p>
+                </div>
+                <div :class="stepperGroupClass">
+                  <button :class="stepperButtonClass" @click="step('maxColumnCount', -1, 1, 10)">−</button>
+                  <span :class="stepperValueClass">{{ state.maxColumnCount }}</span>
+                  <button :class="stepperButtonClass" @click="step('maxColumnCount', 1, 1, 10)">+</button>
+                </div>
               </div>
-              <div :class="stepperGroupClass">
-                <button :class="stepperButtonClass" @click="step('maxInlineSize', -40, 400, 1600)">−</button>
-                <span :class="stepperValueClass">{{ state.maxInlineSize }}px</span>
-                <button :class="stepperButtonClass" @click="step('maxInlineSize', 40, 400, 1600)">+</button>
+
+              <div class="flex items-center justify-between gap-4">
+                <div class="space-y-1 pr-3">
+                  <p class="text-sm font-medium leading-tight">Column gap</p>
+                  <p class="text-xs leading-tight text-muted-foreground">Range: 0-50%</p>
+                </div>
+                <div :class="stepperGroupClass">
+                  <button :class="stepperButtonClass" @click="step('gap', -0.01, 0, 0.5, 2)">−</button>
+                  <span :class="stepperValueClass">{{ formatGap(state.gap) }}</span>
+                  <button :class="stepperButtonClass" @click="step('gap', 0.01, 0, 0.5, 2)">+</button>
+                </div>
+              </div>
+
+              <div class="flex items-center justify-between gap-4">
+                <div class="space-y-1 pr-3">
+                  <p class="text-sm font-medium leading-tight">Max width</p>
+                  <p class="text-xs leading-tight text-muted-foreground">Range: 400-1600</p>
+                </div>
+                <div :class="stepperGroupClass">
+                  <button :class="stepperButtonClass" @click="step('maxInlineSize', -40, 400, 1600)">−</button>
+                  <span :class="stepperValueClass">{{ state.maxInlineSize }}px</span>
+                  <button :class="stepperButtonClass" @click="step('maxInlineSize', 40, 400, 1600)">+</button>
+                </div>
               </div>
             </div>
-          </div>
 
-          <div class="h-px bg-border/70" />
+            <div class="h-px bg-border/70" />
 
-          <div class="space-y-4">
-            <div class="flex items-center justify-between gap-4">
-              <div class="space-y-1 pr-3">
-                <p class="text-sm font-medium leading-tight">Justify text</p>
-                <p class="text-xs leading-tight text-muted-foreground">Enable full-width paragraph alignment.</p>
+            <div class="space-y-4">
+              <div class="flex items-center justify-between gap-4">
+                <div class="space-y-1 pr-3">
+                  <p class="text-sm font-medium leading-tight">Justify text</p>
+                  <p class="text-xs leading-tight text-muted-foreground">Enable full-width paragraph alignment.</p>
+                </div>
+                <button
+                  class="relative h-6 w-11 shrink-0 rounded-full transition-colors"
+                  :class="state.justify ? 'bg-primary' : 'bg-muted'"
+                  @click="emit('update', { justify: !state.justify })"
+                >
+                  <div
+                    class="absolute top-1 h-4 w-4 rounded-full bg-white shadow-sm transition-transform"
+                    :class="state.justify ? 'translate-x-6' : 'translate-x-1'"
+                  />
+                </button>
               </div>
-              <button
-                class="relative h-6 w-11 shrink-0 rounded-full transition-colors"
-                :class="state.justify ? 'bg-primary' : 'bg-muted'"
-                @click="emit('update', { justify: !state.justify })"
-              >
-                <div
-                  class="absolute top-1 h-4 w-4 rounded-full bg-white shadow-sm transition-transform"
-                  :class="state.justify ? 'translate-x-6' : 'translate-x-1'"
-                />
-              </button>
-            </div>
 
-            <div class="flex items-center justify-between gap-4">
-              <div class="space-y-1 pr-3">
-                <p class="text-sm font-medium leading-tight">Hyphenation</p>
-                <p class="text-xs leading-tight text-muted-foreground">Enable automatic word-break hyphenation.</p>
+              <div class="flex items-center justify-between gap-4">
+                <div class="space-y-1 pr-3">
+                  <p class="text-sm font-medium leading-tight">Hyphenation</p>
+                  <p class="text-xs leading-tight text-muted-foreground">Enable automatic word-break hyphenation.</p>
+                </div>
+                <button
+                  class="relative h-6 w-11 shrink-0 rounded-full transition-colors"
+                  :class="state.hyphenate ? 'bg-primary' : 'bg-muted'"
+                  @click="emit('update', { hyphenate: !state.hyphenate })"
+                >
+                  <div
+                    class="absolute top-1 h-4 w-4 rounded-full bg-white shadow-sm transition-transform"
+                    :class="state.hyphenate ? 'translate-x-6' : 'translate-x-1'"
+                  />
+                </button>
               </div>
-              <button
-                class="relative h-6 w-11 shrink-0 rounded-full transition-colors"
-                :class="state.hyphenate ? 'bg-primary' : 'bg-muted'"
-                @click="emit('update', { hyphenate: !state.hyphenate })"
-              >
-                <div
-                  class="absolute top-1 h-4 w-4 rounded-full bg-white shadow-sm transition-transform"
-                  :class="state.hyphenate ? 'translate-x-6' : 'translate-x-1'"
-                />
-              </button>
             </div>
-          </div>
+          </template>
         </div>
       </template>
     </div>

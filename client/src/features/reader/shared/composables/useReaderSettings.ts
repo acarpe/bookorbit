@@ -4,7 +4,9 @@ import { api } from '@/lib/api'
 import { useAuth } from '@/features/auth/composables/useAuth'
 import {
   CBX_READER_DEFAULTS,
+  EPUB_READER_DEFAULTS,
   type CbxReaderSettings,
+  type EpubReaderSettings,
   type ReaderFormatGroup,
   type ReaderSettings,
   READER_GROUP_DEFAULTS,
@@ -41,6 +43,68 @@ function jsonEqual(a: unknown, b: unknown): boolean {
   return JSON.stringify(a) === JSON.stringify(b)
 }
 
+function isNumberInRange(value: unknown, min: number, max: number): value is number {
+  return typeof value === 'number' && Number.isFinite(value) && value >= min && value <= max
+}
+
+function isIntegerInRange(value: unknown, min: number, max: number): value is number {
+  return Number.isInteger(value) && isNumberInRange(value, min, max)
+}
+
+function sanitizeEpubPartialSettings(settings: unknown): Partial<EpubReaderSettings> | null {
+  if (!isRecord(settings)) return null
+
+  const out: Partial<EpubReaderSettings> = {}
+
+  if (typeof settings.themeName === 'string' && settings.themeName.length > 0) {
+    out.themeName = settings.themeName
+  }
+  if (typeof settings.isDark === 'boolean') {
+    out.isDark = settings.isDark
+  }
+  if ((typeof settings.fontFamily === 'string' && settings.fontFamily.length > 0) || settings.fontFamily === null) {
+    out.fontFamily = settings.fontFamily
+  }
+  if (isNumberInRange(settings.fontSize, 10, 32)) {
+    out.fontSize = settings.fontSize
+  }
+  if (isNumberInRange(settings.lineHeight, 0.8, 3)) {
+    out.lineHeight = settings.lineHeight
+  }
+  if (isIntegerInRange(settings.maxColumnCount, 1, 10)) {
+    out.maxColumnCount = settings.maxColumnCount
+  }
+  if (isNumberInRange(settings.gap, 0, 0.5)) {
+    out.gap = settings.gap
+  }
+  if (isIntegerInRange(settings.maxInlineSize, 400, 1600)) {
+    out.maxInlineSize = settings.maxInlineSize
+  }
+  if (isIntegerInRange(settings.maxBlockSize, 600, 2400)) {
+    out.maxBlockSize = settings.maxBlockSize
+  }
+  if (typeof settings.justify === 'boolean') {
+    out.justify = settings.justify
+  }
+  if (typeof settings.hyphenate === 'boolean') {
+    out.hyphenate = settings.hyphenate
+  }
+  if (settings.flow === 'paginated' || settings.flow === 'scrolled') {
+    out.flow = settings.flow
+  }
+  if (typeof settings.overrideBookFormatting === 'boolean') {
+    out.overrideBookFormatting = settings.overrideBookFormatting
+  }
+  if (settings.footerDisplayMode === 0 || settings.footerDisplayMode === 1 || settings.footerDisplayMode === 2) {
+    out.footerDisplayMode = settings.footerDisplayMode
+  }
+  if (settings.fixedLayoutSpread === 'auto' || settings.fixedLayoutSpread === 'none') {
+    out.fixedLayoutSpread = settings.fixedLayoutSpread
+  }
+
+  return out
+}
+
 function sanitizeCbxPartialSettings(settings: unknown): Partial<CbxReaderSettings> | null {
   if (!isRecord(settings)) return null
 
@@ -75,12 +139,21 @@ function sanitizeCbxPartialSettings(settings: unknown): Partial<CbxReaderSetting
 }
 
 function sanitizeBookDelta(group: ReaderFormatGroup, raw: unknown): Partial<ReaderSettings> | null {
+  if (group === 'epub') return sanitizeEpubPartialSettings(raw) as Partial<ReaderSettings> | null
   if (group !== 'cbx') return isRecord(raw) ? (raw as Partial<ReaderSettings>) : null
   const sanitized = sanitizeCbxPartialSettings(raw)
   return sanitized as Partial<ReaderSettings> | null
 }
 
 function sanitizeDefaultSettings(group: ReaderFormatGroup, raw: unknown): ReaderSettings | null {
+  if (group === 'epub') {
+    const sanitized = sanitizeEpubPartialSettings(raw)
+    if (!sanitized) return null
+    return {
+      ...EPUB_READER_DEFAULTS,
+      ...sanitized,
+    } as ReaderSettings
+  }
   if (group !== 'cbx') return isRecord(raw) ? (raw as unknown as ReaderSettings) : null
 
   const sanitized = sanitizeCbxPartialSettings(raw)
