@@ -1,5 +1,5 @@
 import { ForbiddenException, Inject, Injectable } from '@nestjs/common';
-import { SQL, and, count, eq, gte, ilike, inArray, lt, or, sql } from 'drizzle-orm';
+import { SQL, and, count, eq, ilike, inArray, or, sql } from 'drizzle-orm';
 import { NodePgDatabase } from 'drizzle-orm/node-postgres';
 
 import { DB } from '../../db';
@@ -294,38 +294,14 @@ export class OpdsBookService {
       baseClauses.push(...buildContentFilterClauses(contentFilters, this.db));
     }
     const baseFilter = and(...baseClauses)!;
-    const [bounds] = await this.db
-      .select({
-        minId: sql<number | null>`min(${books.id})`,
-        maxId: sql<number | null>`max(${books.id})`,
-      })
-      .from(books)
-      .where(baseFilter);
-
-    if (bounds?.minId == null || bounds.maxId == null || bounds.minId > bounds.maxId) return [];
-
-    const range = bounds.maxId - bounds.minId + 1;
-    const anchorId = bounds.minId + Math.floor(Math.random() * range);
-
-    const firstPass = await this.db
+    const idRows = await this.db
       .select({ id: books.id })
       .from(books)
-      .where(and(baseFilter, gte(books.id, anchorId)))
-      .orderBy(books.id)
+      .where(baseFilter)
+      .orderBy(sql`random()`)
       .limit(count);
 
-    const remaining = count - firstPass.length;
-    const secondPass =
-      remaining > 0
-        ? await this.db
-            .select({ id: books.id })
-            .from(books)
-            .where(and(baseFilter, lt(books.id, anchorId)))
-            .orderBy(books.id)
-            .limit(remaining)
-        : [];
-
-    const ids = [...firstPass, ...secondPass].map((row) => row.id);
+    const ids = idRows.map((row) => row.id);
     if (ids.length === 0) return [];
     return this.fetchBookEntries(ids);
   }

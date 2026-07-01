@@ -6,9 +6,10 @@ pages render as KOReader-style menu pages with a cover mosaic and progressive
 thumbnail loading.
 
 The controller is split across modules: bookorbit_catalog_util (constants and
-pure helpers), bookorbit_catalog_widgets (cover and item widgets) and
-bookorbit_catalog_download (download manager mixin). Navigation fetches run off
-the UI thread via Trapper so taps never freeze the reader.
+pure helpers), bookorbit_catalog_widgets (cover and item widgets),
+bookorbit_catalog_download (single-file downloads) and
+bookorbit_catalog_bulk_download (bulk queues). Navigation fetches run off the
+UI thread via Trapper so taps never freeze the reader.
 ]]
 
 local BD = require("ui/bidi")
@@ -23,6 +24,7 @@ local Geom = require("ui/geometry")
 local HorizontalGroup = require("ui/widget/horizontalgroup")
 local HorizontalSpan = require("ui/widget/horizontalspan")
 local IconButton = require("ui/widget/iconbutton")
+local IconWidget = require("ui/widget/iconwidget")
 local InfoMessage = require("ui/widget/infomessage")
 local InputDialog = require("ui/widget/inputdialog")
 local Menu = require("ui/widget/menu")
@@ -47,6 +49,7 @@ local BookOrbitState = require("bookorbit_state")
 local CatalogUtil = require("bookorbit_catalog_util")
 local CatalogWidgets = require("bookorbit_catalog_widgets")
 local CatalogDownload = require("bookorbit_catalog_download")
+local CatalogBulkDownload = require("bookorbit_catalog_bulk_download")
 
 local Screen = Device.screen
 local DGENERIC_ICON_SIZE = G_defaults:readSetting("DGENERIC_ICON_SIZE")
@@ -93,6 +96,8 @@ local DETAIL_TAGS_INLINE = 6
 -- Soft cap on the catalog thumbnail cache (cache/bookorbit). Oldest covers are
 -- evicted past this many files so the cache cannot grow without bound.
 local THUMBNAIL_CACHE_MAX_FILES = 600
+local DOWNLOAD_ICON = "appbar.filebrowser"
+local DOWNLOAD_ICON_FILE = "bookorbit.download.svg"
 
 local function showError(err)
     local text
@@ -110,15 +115,47 @@ local function isDashboardUnsupported(err)
     return err == 404 or err == 405
 end
 
+local BookOrbitIconButton = IconButton:extend{ file = nil }
+
+function BookOrbitIconButton:init()
+    if not self.file then
+        return IconButton.init(self)
+    end
+
+    self.image = IconWidget:new{
+        file = self.file,
+        rotation_angle = self.icon_rotation_angle,
+        width = self.width,
+        height = self.height,
+    }
+    self.show_parent = self.show_parent or self
+
+    self.horizontal_group = HorizontalGroup:new{}
+    table.insert(self.horizontal_group, HorizontalSpan:new{})
+    table.insert(self.horizontal_group, self.image)
+    table.insert(self.horizontal_group, HorizontalSpan:new{})
+
+    self.button = VerticalGroup:new{}
+    table.insert(self.button, VerticalSpan:new{})
+    table.insert(self.button, self.horizontal_group)
+    table.insert(self.button, VerticalSpan:new{})
+
+    self[1] = self.button
+    self:update()
+end
+
 local BookOrbitTitleBar = TitleBar:extend{
     search_icon = nil,
+    search_icon_file = nil,
     search_icon_tap_callback = nil,
     search_icon_hold_callback = nil,
     search_icon_allow_flash = true,
+    search_icon_enabled = true,
     refresh_icon = nil,
     refresh_icon_tap_callback = nil,
     refresh_icon_hold_callback = nil,
     refresh_icon_allow_flash = true,
+    refresh_icon_enabled = true,
 }
 
 function BookOrbitTitleBar:init()
@@ -138,8 +175,9 @@ function BookOrbitTitleBar:init()
     end
 
     if self.search_icon then
-        self.search_button = IconButton:new{
+        self.search_button = BookOrbitIconButton:new{
             icon = self.search_icon,
+            file = self.search_icon_file,
             width = icon_size,
             height = icon_size,
             padding = button_padding,
@@ -148,6 +186,7 @@ function BookOrbitTitleBar:init()
             callback = self.search_icon_tap_callback,
             hold_callback = self.search_icon_hold_callback,
             allow_flash = self.search_icon_allow_flash,
+            enabled = self.search_icon_enabled ~= false,
             show_parent = self.show_parent,
         }
         table.insert(self, self.search_button)
@@ -165,6 +204,7 @@ function BookOrbitTitleBar:init()
             callback = self.refresh_icon_tap_callback,
             hold_callback = self.refresh_icon_hold_callback,
             allow_flash = self.refresh_icon_allow_flash,
+            enabled = self.refresh_icon_enabled ~= false,
             show_parent = self.show_parent,
         }
         table.insert(self, self.refresh_button)
@@ -198,6 +238,7 @@ local BookOrbitCatalog = Menu:extend{
 }
 
 CatalogDownload.install(BookOrbitCatalog)
+CatalogBulkDownload.install(BookOrbitCatalog)
 
 local Menu_recalculateDimen = Menu._recalculateDimen
 local Menu_updateItems = Menu.updateItems
@@ -214,9 +255,11 @@ function BookOrbitCatalog:init()
     self.thumbnail_generation = 0
     self.thumbnail_failures = {}
     self.settings = self.settings or {}
+    self:initBulkDownloadState()
     self.view_mode = self.settings.catalog_view_mode == "list" and "list" or "mosaic"
     self.grid_cols = self:sanitizeGridValue(self.settings.catalog_grid_cols, DEFAULT_GRID_COLUMNS)
     self.grid_rows = self:sanitizeGridValue(self.settings.catalog_grid_rows, DEFAULT_GRID_ROWS)
+    self.mosaic_show_titles = self.settings.catalog_mosaic_show_titles == true
     self.default_sort = self.settings.catalog_sort or "recently_added"
     self.list_rows = self:computeListRows()
     self.on_device = {}
@@ -239,6 +282,14 @@ function BookOrbitCatalog:init()
     end)
 end
 
+function BookOrbitCatalog:downloadIconPath()
+    local source_dir = self.path or (self._manager and self._manager.path)
+    if source_dir then
+        local path = source_dir .. "/assets/" .. DOWNLOAD_ICON_FILE
+        if lfs.attributes(path, "mode") == "file" then return path end
+    end
+end
+
 -- Removes pre-versioning cache files ("<id>.jpg"). They were keyed by book id
 -- only, so after a library rescan reassigned ids they showed the wrong cover.
 function BookOrbitCatalog:cleanLegacyThumbnails()
@@ -249,6 +300,29 @@ function BookOrbitCatalog:cleanLegacyThumbnails()
             os.remove(dir .. "/" .. name)
         end
     end
+end
+
+function BookOrbitCatalog:isBulkSelectionActive()
+    return self:bookMode() and self.bulk_selection_mode == true
+end
+
+function BookOrbitCatalog:titleBarSearchIcon()
+    if self:detailMode() then return nil end
+    return self:isBulkSelectionActive() and DOWNLOAD_ICON or "appbar.search"
+end
+
+function BookOrbitCatalog:titleBarSearchIconFile()
+    if not self:isBulkSelectionActive() then return nil end
+    return self:downloadIconPath()
+end
+
+function BookOrbitCatalog:titleBarSearchEnabled()
+    return not self:isBulkSelectionActive() or self:bulkSelectedCount() > 0
+end
+
+function BookOrbitCatalog:titleBarRefreshIcon()
+    if self:detailMode() then return nil end
+    return self:isBulkSelectionActive() and "close" or "cre.render.reload"
 end
 
 function BookOrbitCatalog:buildTitleBar(title, subtitle)
@@ -270,16 +344,21 @@ function BookOrbitCatalog:buildTitleBar(title, subtitle)
         left_icon_tap_callback = function() self:onLeftButtonTap() end,
         left_icon_hold_callback = function() self:onLeftButtonHold() end,
         right_icon_size_ratio = 1,
-        close_callback = function() self:onClose() end,
-        search_icon = "appbar.search",
+        search_icon = self:titleBarSearchIcon(),
+        search_icon_file = self:titleBarSearchIconFile(),
         search_icon_tap_callback = function() self:onSearchButtonTap() end,
-        refresh_icon = "cre.render.reload",
+        search_icon_allow_flash = self:titleBarSearchEnabled(),
+        search_icon_enabled = self:titleBarSearchEnabled(),
+        refresh_icon = self:titleBarRefreshIcon(),
         refresh_icon_tap_callback = function() self:onRefreshButtonTap() end,
         show_parent = self.show_parent or self,
     }
 end
 
 function BookOrbitCatalog:resetTitleBar(title, subtitle)
+    if self.bulkDecorateTitle then
+        title, subtitle = self:bulkDecorateTitle(title, subtitle)
+    end
     self.custom_title_bar = self:buildTitleBar(title, subtitle)
     self.title_bar = self.custom_title_bar
     if self.content_group then
@@ -656,6 +735,9 @@ function BookOrbitCatalog:switchTo(title, item_table, context, push)
     end
     self:updateReturnPath()
     self.current_context = context
+    if self.bulkHandleContextChange then
+        self:bulkHandleContextChange(context)
+    end
     self:resetTitleBar(title, context.subtitle or "")
     self:switchItemTable(title, item_table, nil, nil, context.subtitle or "")
     if context.kind == "books" then
@@ -1331,6 +1413,20 @@ function BookOrbitCatalog:setGrid(cols, rows)
     end
 end
 
+function BookOrbitCatalog:setMosaicShowTitles(show_titles)
+    show_titles = show_titles == true
+    if self.mosaic_show_titles == show_titles then return end
+    self.mosaic_show_titles = show_titles
+    self:persistSetting("catalog_mosaic_show_titles", show_titles)
+    if self:bookMode() and self.view_mode == "mosaic" then
+        self:updateItems()
+    end
+end
+
+function BookOrbitCatalog:toggleMosaicTitles()
+    self:setMosaicShowTitles(not self.mosaic_show_titles)
+end
+
 function BookOrbitCatalog:showGridDialog()
     local dialog
     local grid_label = _("%1 x %2")
@@ -1419,6 +1515,56 @@ function BookOrbitCatalog:showFormatDialog()
     UIManager:show(dialog)
 end
 
+function BookOrbitCatalog:showDownloadActions()
+    local context = self.current_context or {}
+    local dialog
+    local buttons = {}
+    local function addRow(button)
+        table.insert(buttons, { button })
+    end
+
+    if self:isBulkSelectionActive() and self:bulkSelectedCount() > 0 then
+        addRow({
+            text = _("Download selected"),
+            callback = function()
+                UIManager:close(dialog)
+                self:confirmBulkBooks(self:bulkSelectedBooks(), _("Selected books"), { clear_selection = true })
+            end,
+        })
+    end
+    if self:bookMode() and #(self.item_table or {}) > 0 then
+        addRow({
+            text = _("Download this page"),
+            callback = function()
+                UIManager:close(dialog)
+                self:confirmBulkCurrentPage()
+            end,
+        })
+    end
+    if self:bookMode() and (context.total or 0) > 0 then
+        addRow({
+            text = _("Download all in this list"),
+            callback = function()
+                UIManager:close(dialog)
+                self:confirmBulkAllMatching()
+            end,
+        })
+    end
+    addRow({
+        text = _("Settings"),
+        callback = function()
+            UIManager:close(dialog)
+            self:showBulkDownloadSettings()
+        end,
+    })
+
+    dialog = ButtonDialog:new{
+        title = _("Download"),
+        buttons = buttons,
+    }
+    UIManager:show(dialog)
+end
+
 function BookOrbitCatalog:showBookActions()
     local context = self.current_context or {}
     local in_books = context.kind == "books"
@@ -1427,6 +1573,7 @@ function BookOrbitCatalog:showBookActions()
     local query = context.params or {}
     local view_label = self.view_mode == "list" and _("View: List") or _("View: Mosaic")
     local grid_label = T(_("%1 x %2"), self.grid_cols, self.grid_rows)
+    local titles_label = self.mosaic_show_titles and _("Titles: Shown") or _("Titles: Hidden")
     local dialog
     local buttons = {
         {
@@ -1461,6 +1608,22 @@ function BookOrbitCatalog:showBookActions()
     end
 
     if in_books then
+        table.insert(buttons, {
+            {
+                text = _("Select books"),
+                callback = function()
+                    UIManager:close(dialog)
+                    self:bulkEnterSelectionMode()
+                end,
+            },
+            {
+                text = _("Download..."),
+                callback = function()
+                    UIManager:close(dialog)
+                    self:showDownloadActions()
+                end,
+            },
+        })
         table.insert(buttons, {
             {
                 text = T(_("Sort: %1"), self:sortLabel(query.sort)),
@@ -1514,6 +1677,16 @@ function BookOrbitCatalog:showBookActions()
                 end,
             },
         })
+        table.insert(buttons, {
+            {
+                text = titles_label,
+                enabled = self.view_mode == "mosaic",
+                callback = function()
+                    UIManager:close(dialog)
+                    self:toggleMosaicTitles()
+                end,
+            },
+        })
     end
 
     if not self:dashboardMode() then
@@ -1528,8 +1701,218 @@ function BookOrbitCatalog:showBookActions()
         })
     end
 
+    table.insert(buttons, {
+        {
+            text = _("Close BookOrbit"),
+            callback = function()
+                UIManager:close(dialog)
+                self:onCloseAllMenus()
+            end,
+        },
+    })
+
     dialog = ButtonDialog:new{
         title = _("BookOrbit"),
+        buttons = buttons,
+    }
+    UIManager:show(dialog)
+end
+
+function BookOrbitCatalog:updateVisibleBookSummary(detail)
+    if not detail or not detail.id then return end
+    local changed = false
+    local function update(book)
+        if not book or book.id ~= detail.id then return end
+        book.readStatus = detail.readStatus
+        book.progressPercentage = detail.progressPercentage
+        book.formats = detail.formats or book.formats
+        changed = true
+    end
+
+    for _, entry in ipairs(self.item_table or {}) do
+        update(entry.book)
+    end
+    local context = self.current_context or {}
+    for _, book in ipairs(context.books or {}) do
+        update(book)
+    end
+    local dashboard = context.dashboard or {}
+    for _, book in ipairs(dashboard.continueReading or {}) do
+        update(book)
+    end
+    for _, book in ipairs(dashboard.discover or {}) do
+        update(book)
+    end
+
+    if changed and (self:bookMode() or self:dashboardMode()) then
+        self:updateItems()
+    end
+end
+
+function BookOrbitCatalog:showBookActionSheet(detail, opts)
+    if not detail then return end
+    opts = opts or {}
+    self:refreshOnDevice()
+
+    local has_genres = detail.genres and #detail.genres > 0
+    local has_tags = detail.tags and #detail.tags > 0
+    local supported_files = opts.supported_files or self:supportedFiles(detail)
+    local include_details = opts.include_details ~= false
+    local include_quick_actions = opts.include_quick_actions ~= false
+    local allow_select = opts.allow_select == true
+    local read_path = self:detailReadPath(detail)
+    local undownloaded = 0
+    for _, file in ipairs(supported_files) do
+        if not self:onDeviceFilePath(file) then
+            undownloaded = undownloaded + 1
+        end
+    end
+    local show_download = #supported_files > 0 and (read_path == nil or undownloaded > 0)
+    local dialog
+    local buttons = {}
+    local function addRow(first, second)
+        if second then
+            table.insert(buttons, { first, second })
+        else
+            table.insert(buttons, { first })
+        end
+    end
+    local function closeThen(callback)
+        UIManager:close(dialog)
+        callback()
+    end
+
+    if include_details or allow_select then
+        local details_button = include_details and {
+            text = _("Details"),
+            callback = function()
+                closeThen(function()
+                    self:showBookDetail(detail)
+                end)
+            end,
+        } or nil
+        local select_button
+        if allow_select then
+            local selected = self.bulkIsBookSelected and self:bulkIsBookSelected(detail)
+            select_button = {
+                text = selected and _("Unselect") or _("Select"),
+                callback = function()
+                    closeThen(function()
+                        if self:isBulkSelectionActive() then
+                            self:bulkToggleBook(detail)
+                        else
+                            self:bulkEnterSelectionMode({ kind = "book", book = detail })
+                        end
+                    end)
+                end,
+            }
+        end
+        addRow(details_button or select_button, details_button and select_button or nil)
+    end
+
+    if include_quick_actions then
+        local read_button = read_path and {
+            text = _("Read"),
+            callback = function()
+                closeThen(function()
+                    self:openDownloadedFile(read_path)
+                end)
+            end,
+        } or nil
+        local download_button = {
+            text = _("Download"),
+            enabled = show_download,
+            callback = function()
+                closeThen(function()
+                    if #supported_files == 1 then
+                        self:downloadDefaultFile(detail, supported_files[1])
+                    else
+                        self:showFileChoices(detail)
+                    end
+                end)
+            end,
+        }
+        if read_button and show_download then
+            addRow(read_button, download_button)
+        elseif read_button then
+            addRow(read_button)
+        else
+            addRow(download_button)
+        end
+    end
+
+    addRow({
+        text = _("Set read status"),
+        callback = function()
+            closeThen(function()
+                self:showSetStatusDialog(detail)
+            end)
+        end,
+    }, {
+        text = _("Set rating"),
+        callback = function()
+            closeThen(function()
+                self:showSetRatingDialog(detail)
+            end)
+        end,
+    })
+
+    addRow({
+        text = _("Description"),
+        enabled = cleanDescriptionText(detail.description) ~= nil,
+        callback = function()
+            closeThen(function()
+                self:showFullText(_("Description"), detail.description)
+            end)
+        end,
+    })
+
+    addRow({
+        text = _("Genres"),
+        enabled = has_genres,
+        callback = function()
+            closeThen(function()
+                self:showFullList(_("Genres"), detail.genres)
+            end)
+        end,
+    }, {
+        text = _("Tags"),
+        enabled = has_tags,
+        callback = function()
+            closeThen(function()
+                self:showFullList(_("Tags"), detail.tags)
+            end)
+        end,
+    })
+
+    if opts.include_page_actions == true then
+        addRow({
+            text = _("Refresh"),
+            callback = function()
+                closeThen(function()
+                    self:refreshCurrent()
+                end)
+            end,
+        }, {
+            text = _("Dashboard"),
+            callback = function()
+                closeThen(function()
+                    self:goDashboard()
+                end)
+            end,
+        })
+        addRow({
+            text = _("Close BookOrbit"),
+            callback = function()
+                closeThen(function()
+                    self:onCloseAllMenus()
+                end)
+            end,
+        })
+    end
+
+    dialog = ButtonDialog:new{
+        title = detail.title or _("Book"),
         buttons = buttons,
     }
     UIManager:show(dialog)
@@ -1539,84 +1922,33 @@ function BookOrbitCatalog:showDetailActions()
     local context = self.current_context or {}
     local detail = context.detail
     if not detail then return end
-    local has_genres = detail.genres and #detail.genres > 0
-    local has_tags = detail.tags and #detail.tags > 0
-    local supported_files = context.supported_files or self:supportedFiles(detail)
-    local dialog
-    dialog = ButtonDialog:new{
-        title = detail.title or _("Book"),
-        buttons = {
-            {
-                {
-                    text = _("Set read status"),
-                    callback = function()
-                        UIManager:close(dialog)
-                        self:showSetStatusDialog(detail)
-                    end,
-                },
-                {
-                    text = _("Set rating"),
-                    callback = function()
-                        UIManager:close(dialog)
-                        self:showSetRatingDialog(detail)
-                    end,
-                },
-            },
-            {
-                {
-                    text = _("Download options"),
-                    enabled = #supported_files > 0,
-                    callback = function()
-                        UIManager:close(dialog)
-                        self:showDownloadOptions(detail)
-                    end,
-                },
-                {
-                    text = _("Description"),
-                    enabled = cleanDescriptionText(detail.description) ~= nil,
-                    callback = function()
-                        UIManager:close(dialog)
-                        self:showFullText(_("Description"), detail.description)
-                    end,
-                },
-            },
-            {
-                {
-                    text = _("Genres"),
-                    enabled = has_genres,
-                    callback = function()
-                        UIManager:close(dialog)
-                        self:showFullList(_("Genres"), detail.genres)
-                    end,
-                },
-                {
-                    text = _("Tags"),
-                    enabled = has_tags,
-                    callback = function()
-                        UIManager:close(dialog)
-                        self:showFullList(_("Tags"), detail.tags)
-                    end,
-                },
-            },
-            {
-                {
-                    text = _("Refresh"),
-                    callback = function()
-                        UIManager:close(dialog)
-                        self:refreshCurrent()
-                    end,
-                },
-                {
-                    text = _("Dashboard"),
-                    callback = function()
-                        UIManager:close(dialog)
-                        self:goDashboard()
-                    end,
-                },
-            },
-        },
-    }
-    UIManager:show(dialog)
+    self:showBookActionSheet(detail, {
+        supported_files = context.supported_files,
+        include_details = false,
+        include_quick_actions = false,
+        include_page_actions = true,
+    })
+end
+
+function BookOrbitCatalog:showBookActionSheetForEntry(item)
+    local book_id = item and (item.book_id or (item.book and item.book.id))
+    if not book_id then return end
+    self:runConnected(function()
+        local detail, err = self:fetch(_("Loading book..."), function()
+            return self.client:catalogBook(book_id)
+        end)
+        if not detail then
+            if err ~= "cancelled" then
+                self:showRetry(err, function()
+                    self:showBookActionSheetForEntry(item)
+                end)
+            end
+            return
+        end
+        self:showBookActionSheet(detail, {
+            allow_select = item.kind == "book" and self:bookMode(),
+        })
+    end)
 end
 
 function BookOrbitCatalog:showSetStatusDialog(detail)
@@ -1694,6 +2026,7 @@ function BookOrbitCatalog:applyReadStatus(detail, status)
         end
         detail.readStatus = body.readStatus or status
         self:markStackDirty()
+        self:updateVisibleBookSummary(detail)
         self:refreshDetailView()
         UIManager:show(InfoMessage:new{ text = _("Read status updated"), timeout = 1 })
     end)
@@ -1710,6 +2043,7 @@ function BookOrbitCatalog:applyRating(detail, rating)
         end
         detail.rating = body.rating
         self:markStackDirty()
+        self:updateVisibleBookSummary(detail)
         self:refreshDetailView()
         UIManager:show(InfoMessage:new{ text = _("Rating updated"), timeout = 1 })
     end)
@@ -1725,7 +2059,9 @@ function BookOrbitCatalog:updateLeftIcon()
 end
 
 function BookOrbitCatalog:onLeftButtonTap()
-    if self:dashboardMode() and self.show_dashboard_menu then
+    if self:isBulkSelectionActive() then
+        self:showBulkSelectionActions()
+    elseif self:dashboardMode() and self.show_dashboard_menu then
         self.show_dashboard_menu(self)
     elseif self:detailMode() then
         self:showDetailActions()
@@ -1736,6 +2072,13 @@ function BookOrbitCatalog:onLeftButtonTap()
 end
 
 function BookOrbitCatalog:onSearchButtonTap()
+    if self:isBulkSelectionActive() then
+        if self:bulkSelectedCount() > 0 then
+            self:confirmBulkBooks(self:bulkSelectedBooks(), _("Selected books"), { clear_selection = true })
+        end
+        return true
+    end
+
     local context = self.current_context or {}
     if context.kind == "books" then
         self:promptSearch(self:scopeParams(context.params or {}), context.title)
@@ -1746,6 +2089,11 @@ function BookOrbitCatalog:onSearchButtonTap()
 end
 
 function BookOrbitCatalog:onRefreshButtonTap()
+    if self:isBulkSelectionActive() then
+        self:bulkExitSelectionMode()
+        return true
+    end
+
     self:refreshCurrent()
     return true
 end
@@ -2756,11 +3104,23 @@ function BookOrbitCatalog:onMenuSelect(item)
     elseif item.kind == "books" then
         self:loadBooks(item.params or {}, item.list_title or item.text)
     elseif item.kind == "book" then
-        self:loadBookDetail(item.book_id)
+        if self:isBulkSelectionActive() then
+            self:bulkToggleEntry(item)
+        else
+            self:loadBookDetail(item.book_id)
+        end
     elseif item.kind == "sort" then
         self:showSortDialog(item)
     end
     return true
+end
+
+function BookOrbitCatalog:onMenuHoldSelect(item)
+    if item.kind == "book" or item.kind == "dashboard-book" then
+        self:showBookActionSheetForEntry(item)
+        return true
+    end
+    return self:onMenuSelect(item)
 end
 
 -- Fetches a fresh set of random Discover books and swaps them into the current
@@ -2794,6 +3154,9 @@ function BookOrbitCatalog:onReturn()
         dirty = self.current_context.dirty == true
         self.current_context.dirty = nil
         self:updateReturnPath()
+        if self.bulkHandleContextChange then
+            self:bulkHandleContextChange(self.current_context)
+        end
         self:switchItemTable(previous.title, previous.item_table, nil, nil, previous.subtitle or "")
         if self.current_context.kind == "books" then
             self:scheduleThumbnailDownloads(self.current_context.books or {})
@@ -2805,6 +3168,9 @@ function BookOrbitCatalog:onReturn()
     else
         self.item_table, self.current_context = self:dashboardRoot()
         self:updateReturnPath()
+        if self.bulkHandleContextChange then
+            self:bulkHandleContextChange(self.current_context)
+        end
         self:switchItemTable(self.current_context.title or self.title, self.item_table, nil, nil, self.current_context.subtitle or "")
         if self.current_context.kind == "dashboard" then
             self:scheduleThumbnailDownloads(self:dashboardBooks(self.current_context.dashboard))
@@ -2825,6 +3191,15 @@ end
 
 function BookOrbitCatalog:onCloseWidget()
     self:cancelThumbnailJobs()
+    if self.bulk_ctx then
+        local ctx = self.bulk_ctx
+        self.bulk_running = false
+        self.bulk_ctx = nil
+        if ctx.progress_dialog then
+            UIManager:close(ctx.progress_dialog)
+            ctx.progress_dialog = nil
+        end
+    end
     return Menu.onCloseWidget(self)
 end
 

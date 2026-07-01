@@ -263,8 +263,12 @@ function CatalogDownload.install(Catalog)
         if linked then
             self:refreshOnDevice()
             if self.markStackDirty then self:markStackDirty() end
+            local on_catalog_page = (self.bookMode and self:bookMode())
+                or (self.dashboardMode and self:dashboardMode())
             if self.detailMode and self:detailMode() then
                 self:refreshDetailView()
+            elseif self.updateItems and on_catalog_page then
+                self:updateItems()
             end
         end
         self:showDownloadedDialog(local_path, linked)

@@ -38,7 +38,7 @@ local BookOrbitMenuPin = require("bookorbit_menu_pin")
 local BookOrbitSweep = require("bookorbit_sweep")
 local BookOrbitUpdater = require("bookorbit_updater")
 
-local PLUGIN_VERSION = "1.0.1"
+local PLUGIN_VERSION = "1.1.0"
 
 local SYNC_STRATEGY = {
     PROMPT = 1,
@@ -76,6 +76,7 @@ BookOrbit.default_settings = {
     catalog_sort = "recently_added",
     catalog_grid_cols = 3,
     catalog_grid_rows = 3,
+    catalog_mosaic_show_titles = false,
     catalog_recent_searches = {},
     catalog_auto_open = "off",
     catalog_dashboard_cache = nil,
@@ -594,6 +595,18 @@ function BookOrbit:dashboardMenuItems(catalog)
             table.insert(items, item)
         end
     end
+    if catalog then
+        table.insert(items, {
+            text = _("Close BookOrbit"),
+            separator = true,
+            callback = function()
+                local menu_container = self.dashboard_menu_container
+                self.dashboard_menu_container = nil
+                if menu_container then UIManager:close(menu_container) end
+                catalog:onCloseAllMenus()
+            end,
+        })
+    end
     return items
 end
 
@@ -637,6 +650,7 @@ function BookOrbit:openCatalogBrowser(prefer_cached_dashboard)
         title = _("BookOrbit"),
         api = self:apiOpts(),
         settings = self.settings,
+        path = self.path,
         prefer_cached_dashboard = prefer_cached_dashboard,
         save_settings = function()
             G_reader_settings:flush()

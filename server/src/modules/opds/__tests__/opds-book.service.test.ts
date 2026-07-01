@@ -160,8 +160,8 @@ describe('OpdsBookService', () => {
     await expect(service.getRecentBooksPage(5, 2, 15)).resolves.toEqual({ entries: [{ id: 1 }], total: 1 });
   });
 
-  it('handles getRandomBooks guard branches and wrapped id selection', async () => {
-    const { service } = makeService([[{ minId: null, maxId: null }], [{ minId: 10, maxId: 12 }], [{ id: 11 }], [{ id: 10 }]]);
+  it('handles getRandomBooks guard branches and randomized id selection', async () => {
+    const { service, db } = makeService([[], [{ id: 11 }, { id: 10 }]]);
     const accessSpy = vi.spyOn(service, 'getAccessibleLibraryIds');
     const fetchSpy = vi.spyOn(testable(service), 'fetchBookEntries');
 
@@ -175,9 +175,13 @@ describe('OpdsBookService', () => {
 
     accessSpy.mockResolvedValueOnce([1]);
     fetchSpy.mockResolvedValueOnce([{ id: 11 }, { id: 10 }]);
-    vi.spyOn(Math, 'random').mockReturnValue(0.5);
     await expect(service.getRandomBooks(7, 2)).resolves.toEqual([{ id: 11 }, { id: 10 }]);
     expect(fetchSpy).toHaveBeenCalledWith([11, 10]);
+
+    const chains = (db.select as ReturnType<typeof vi.fn>).mock.results.map((r) => r.value as Record<string, unknown>);
+    const orderBy = chains.at(-1)!['orderBy'] as ReturnType<typeof vi.fn>;
+    const values = orderBy.mock.calls.flat().flatMap((arg: unknown) => collectValues(arg));
+    expect(values).toContain('random()');
   });
 
   it('returns distinct authors and membership-backed series with and without access', async () => {

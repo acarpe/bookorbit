@@ -66,20 +66,23 @@ describe('KOReader plugin update source wiring', () => {
     expect(syncSettingsBlock).not.toContain('text = _("Sync all books now")');
   });
 
-  it('keeps the primary detail download as a default download and puts customization in options', async () => {
+  it('keeps book action downloads compact without duplicating download options', async () => {
     const catalog = await readPluginFile('bookorbit_catalog.lua');
     const download = await readPluginFile('bookorbit_catalog_download.lua');
     const detailActionsBlock = catalog.slice(
+      catalog.indexOf('function BookOrbitCatalog:showBookActionSheet(detail, opts)'),
       catalog.indexOf('function BookOrbitCatalog:showDetailActions()'),
-      catalog.indexOf('function BookOrbitCatalog:showSetStatusDialog'),
     );
     const detailHeaderBlock = catalog.slice(
       catalog.indexOf('function BookOrbitCatalog:buildDetailHeader'),
       catalog.indexOf('function BookOrbitCatalog:updateDetailItems'),
     );
 
-    expect(detailActionsBlock).toContain('text = _("Download options")');
-    expect(detailActionsBlock).toContain('self:showDownloadOptions(detail)');
+    expect(detailActionsBlock).toContain('text = _("Download")');
+    expect(detailActionsBlock).toContain('self:downloadDefaultFile(detail, supported_files[1])');
+    expect(detailActionsBlock).toContain('self:showFileChoices(detail)');
+    expect(detailActionsBlock).not.toContain('text = _("Download options")');
+    expect(detailActionsBlock).not.toContain('self:showDownloadOptions(detail)');
     expect(detailHeaderBlock).toContain('if #supported_files == 1 then');
     expect(detailHeaderBlock).toContain('self:downloadDefaultFile(detail, supported_files[1])');
     expect(detailHeaderBlock).toContain('self:showFileChoices(detail)');
@@ -104,5 +107,101 @@ describe('KOReader plugin update source wiring', () => {
     expect(main).toContain('if not err then self:maybeCheckForUpdate(false) end');
     expect(sweep).toContain('on_finish = opts.on_finish');
     expect(sweep).toContain('pcall(ctx.on_finish, err)');
+  });
+
+  it('wires bulk catalog downloads through a dedicated mixin and selection UI hooks', async () => {
+    const catalog = await readPluginFile('bookorbit_catalog.lua');
+    const bulk = await readPluginFile('bookorbit_catalog_bulk_download.lua');
+    const download = await readPluginFile('bookorbit_catalog_download.lua');
+    const main = await readPluginFile('main.lua');
+    const widgets = await readPluginFile('bookorbit_catalog_widgets.lua');
+    const downloadIcon = await readPluginFile('assets/bookorbit.download.svg');
+    const refreshTapBlock = catalog.slice(
+      catalog.indexOf('function BookOrbitCatalog:onRefreshButtonTap()'),
+      catalog.indexOf('function BookOrbitCatalog:loadBookDetail'),
+    );
+
+    expect(catalog).toContain('local CatalogBulkDownload = require("bookorbit_catalog_bulk_download")');
+    expect(catalog).toContain('CatalogBulkDownload.install(BookOrbitCatalog)');
+    expect(catalog).toContain('self:initBulkDownloadState()');
+    expect(catalog).toContain('text = _("Select books")');
+    expect(catalog).toContain('text = _("Download...")');
+    expect(catalog).toContain('function BookOrbitCatalog:showDownloadActions()');
+    expect(catalog).toContain('text = _("Download selected")');
+    expect(catalog).toContain('text = _("Download this page")');
+    expect(catalog).toContain('text = _("Download all in this list")');
+    expect(catalog).toContain('text = _("Settings")');
+    expect(catalog).toContain('catalog_mosaic_show_titles');
+    expect(catalog).toContain('function BookOrbitCatalog:setMosaicShowTitles(show_titles)');
+    expect(catalog).toContain('text = titles_label');
+    expect(catalog).toContain('self:showBulkSelectionActions()');
+    expect(catalog).toContain('function BookOrbitCatalog:onMenuHoldSelect(item)');
+    expect(catalog).toContain('function BookOrbitCatalog:showBookActionSheet(detail, opts)');
+    expect(catalog).toContain('function BookOrbitCatalog:showBookActionSheetForEntry(item)');
+    expect(catalog).toContain('function BookOrbitCatalog:isBulkSelectionActive()');
+    expect(catalog).toContain('self:bulkHandleContextChange(self.current_context)');
+    expect(catalog).toContain('function BookOrbitCatalog:titleBarSearchIcon()');
+    expect(catalog).toContain('local DOWNLOAD_ICON = "appbar.filebrowser"');
+    expect(catalog).toContain('local DOWNLOAD_ICON_FILE = "bookorbit.download.svg"');
+    expect(catalog).toContain('local BookOrbitIconButton = IconButton:extend{ file = nil }');
+    expect(catalog).toContain('file = self.search_icon_file');
+    expect(catalog).toContain('function BookOrbitCatalog:titleBarSearchIconFile()');
+    expect(catalog).toContain('search_icon_file = self:titleBarSearchIconFile()');
+    expect(catalog).toContain('if self:detailMode() then return nil end');
+    expect(catalog).toContain('return self:isBulkSelectionActive() and DOWNLOAD_ICON or "appbar.search"');
+    expect(catalog).toContain('function BookOrbitCatalog:titleBarRefreshIcon()');
+    expect(catalog).not.toContain('"move.down"');
+    expect(catalog).toContain('search_icon_enabled = self:titleBarSearchEnabled()');
+    expect(catalog).toContain('self:confirmBulkBooks(self:bulkSelectedBooks(), _("Selected books")');
+    expect(refreshTapBlock).toContain('self:bulkExitSelectionMode()');
+    expect(refreshTapBlock).not.toContain('self:bulkClearSelectedBooks(true)');
+    expect(catalog).toContain('self:showBookActionSheetForEntry(item)');
+    expect(catalog).toContain('allow_select = item.kind == "book" and self:bookMode()');
+    expect(catalog).toContain('text = _("Close BookOrbit")');
+    expect(catalog).not.toContain('"appbar.download"');
+    expect(catalog).not.toContain('close_callback = function() self:onClose() end');
+
+    expect(bulk).toContain('function Catalog:confirmBulkAllMatching()');
+    expect(bulk).toContain('function Catalog:bulkClearSelectedBooks(redraw)');
+    expect(bulk).toContain('function Catalog:bulkQueueStep(ctx)');
+    expect(bulk).toContain('text = _("Cancel after current file")');
+    expect(bulk).toContain('text = _("Retry failed")');
+    expect(bulk).toContain('label = _("EPUB first")');
+    expect(bulk).toContain('label = _("PDF first")');
+    expect(bulk).toContain('label = _("Comics first")');
+    expect(bulk).toContain('label = _("Skip existing")');
+    expect(bulk).toContain('text = _("Close BookOrbit")');
+    expect(bulk).not.toContain('function Catalog:showDashboardActions()');
+    expect(bulk).not.toContain('Download Continue reading');
+    expect(bulk).not.toContain('Download Discover');
+    expect(bulk).not.toContain('Download dashboard books');
+
+    expect(download).toContain('local on_catalog_page = (self.bookMode and self:bookMode())');
+    expect(download).toContain('elseif self.updateItems and on_catalog_page then');
+
+    expect(main).toContain('text = _("Close BookOrbit")');
+    expect(main).toContain('catalog:onCloseAllMenus()');
+    expect(main).toContain('path = self.path');
+    expect(main).toContain('catalog_mosaic_show_titles = false');
+
+    expect(widgets).toContain('function CatalogWidgets.buildSelectionBadge(max_width)');
+    expect(widgets).toContain('function CatalogWidgets.buildDownloadedBadge(max_width)');
+    expect(widgets).toContain('icon = "appbar.filebrowser"');
+    expect(widgets).toContain('function CatalogWidgets.buildCoverWithStateBadges');
+    expect(widgets).toContain('local show_label = self.menu.mosaic_show_titles == true');
+    expect(widgets).toContain('local label_text = shortText(book and book.title or _("Untitled"), 30)');
+    expect(widgets).not.toContain('local label_text = self.menu:cellLabel(book)');
+    expect(widgets).toContain('local function mosaicLabelFontSize(text, width, height)');
+    expect(widgets).toContain('face = Font:getFace("cfont", mosaicLabelFontSize(label_text, label_w, label_h))');
+    expect(widgets).toContain('local SELECTED_BACKGROUND = Blitbuffer.COLOR_LIGHT_GRAY');
+    expect(widgets).toContain('fgcolor = selectedTextColor(selected)');
+    expect(widgets).toContain('bgcolor = selectedTextBgColor(selected)');
+    expect(widgets).toContain('background = selectedBackground(selected)');
+    expect(widgets).toContain('function DashboardCoverCard:onHoldSelect()');
+    expect(widgets).toContain('self.menu:onMenuHoldSelect(self.entry)');
+    expect(widgets).toContain('self.menu:bulkIsBookSelected(book)');
+    expect(widgets).toContain('self.menu:isOnDevice(book)');
+    expect(downloadIcon).toContain('<svg');
+    expect(downloadIcon).toContain('M24 7v24');
   });
 });

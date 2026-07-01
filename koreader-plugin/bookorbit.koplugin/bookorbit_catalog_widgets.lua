@@ -38,6 +38,8 @@ local firstAuthor = CatalogUtil.firstAuthor
 
 local PROGRESS_BAR_HEIGHT = Screen:scaleBySize(3)
 local SCALE_BY_SIZE = Screen:scaleBySize(1000000) * (1 / 1000000)
+local SELECTED_BACKGROUND = Blitbuffer.COLOR_LIGHT_GRAY
+local SELECTED_TEXT = Blitbuffer.COLOR_DARK_GRAY
 local READ_STATUS_BADGE_ICONS = {
     want_to_read = "bookmark",
     reading = "dogear.reading",
@@ -64,6 +66,22 @@ local function rowFontSize(nominal, max_size, row_h)
     local size = math.floor(nominal * row_h * (1 / 64) / SCALE_BY_SIZE)
     if max_size and size > max_size then return max_size end
     return math.max(8, size)
+end
+
+local function longestLineLength(text)
+    local longest = 0
+    for line in (tostring(text or "") .. "\n"):gmatch("(.-)\n") do
+        longest = math.max(longest, #line)
+    end
+    return math.max(1, longest)
+end
+
+local function mosaicLabelFontSize(text, width, height)
+    local longest = longestLineLength(text)
+    local height_size = math.floor(height * 0.46 / SCALE_BY_SIZE)
+    local width_size = math.floor(width / math.max(8, math.min(longest, 16)) * 2.05 / SCALE_BY_SIZE)
+    local card_size = math.floor(width * (1 / 9.5) / SCALE_BY_SIZE)
+    return math.max(13, math.min(20, height_size, width_size, card_size))
 end
 
 -- A slim borderless progress bar, e-ink friendly (no animation): a light-gray
@@ -174,6 +192,58 @@ function CatalogWidgets.buildReadStatusBadge(book, max_width)
     }
 end
 
+function CatalogWidgets.buildSelectionBadge(max_width)
+    local size = math.max(Screen:scaleBySize(16), math.min(max_width, Screen:scaleBySize(26)))
+    return IconWidget:new{
+        icon = "check",
+        width = size,
+        height = size,
+    }
+end
+
+function CatalogWidgets.buildDownloadedBadge(max_width)
+    local size = math.max(Screen:scaleBySize(14), math.min(max_width, Screen:scaleBySize(24)))
+    return IconWidget:new{
+        icon = "appbar.filebrowser",
+        width = size,
+        height = size,
+    }
+end
+
+function CatalogWidgets.buildCoverWithStateBadges(book, width, height, path, state, downloaded, selected)
+    local cover = CatalogWidgets.buildCoverWidget(book, width, height, path, state)
+    if not downloaded and not selected then return cover end
+
+    local group = OverlapGroup:new{
+        dimen = Geom:new{ w = width, h = height },
+        allow_mirroring = false,
+        cover,
+    }
+    if downloaded then
+        local badge = CatalogWidgets.buildDownloadedBadge(math.floor(math.min(width, height) * 0.18))
+        badge.overlap_align = "left"
+        table.insert(group, badge)
+    end
+    if selected then
+        local badge = CatalogWidgets.buildSelectionBadge(math.floor(math.min(width, height) * 0.18))
+        badge.overlap_align = "right"
+        table.insert(group, badge)
+    end
+    return group
+end
+
+local function selectedTextColor(selected)
+    return selected and SELECTED_TEXT or nil
+end
+
+local function selectedBackground(selected)
+    return selected and SELECTED_BACKGROUND or Blitbuffer.COLOR_WHITE
+end
+
+local function selectedTextBgColor(selected)
+    return selected and SELECTED_BACKGROUND or nil
+end
+
 local MosaicItem = InputContainer:extend{
     entry = nil,
     dimen = nil,
@@ -198,34 +268,57 @@ function MosaicItem:init()
     }
 
     local book = self.entry.book
+    local show_label = self.menu.mosaic_show_titles == true
     local bar_reserve = hasProgress(book) and (PROGRESS_BAR_HEIGHT + Size.span.vertical_default) or 0
-    local label_h = math.max(Screen:scaleBySize(44), math.floor(self.dimen.h * 0.24))
-    local cover_h = math.max(Screen:scaleBySize(60), self.dimen.h - label_h - Size.span.vertical_default - bar_reserve)
-    local cover_w = math.min(self.dimen.w - 2 * Size.padding.default, math.floor(cover_h * 0.68))
-    cover_h = math.min(cover_h, self.dimen.h - label_h - Size.span.vertical_default - bar_reserve)
+    local label_h = show_label and math.max(Screen:scaleBySize(44), math.floor(self.dimen.h * 0.24)) or 0
+    local label_gap = show_label and Size.span.vertical_default or 0
+    local max_cover_w = math.max(1, self.dimen.w - 2 * Size.padding.default)
+    local available_cover_h = math.max(1, self.dimen.h - label_h - label_gap - bar_reserve)
+    local cover_h = math.min(available_cover_h, math.floor(max_cover_w / 0.68))
+    cover_h = math.max(math.min(Screen:scaleBySize(60), available_cover_h), cover_h)
+    local cover_w = math.min(max_cover_w, math.floor(cover_h * 0.68))
 
     local path = self.menu:cachedThumbnailPath(book)
     local state = self.menu:thumbnailState(book)
+    local downloaded = self.menu:isOnDevice(book)
+    local selected = self.menu.bulkIsBookSelected and self.menu:bulkIsBookSelected(book)
     local content = VerticalGroup:new{ align = "center" }
-    table.insert(content, CatalogWidgets.buildCoverWidget(book, cover_w, cover_h, path, state))
+    table.insert(
+        content,
+        CatalogWidgets.buildCoverWithStateBadges(book, cover_w, cover_h, path, state, downloaded, selected))
     local bar = CatalogWidgets.buildProgressBar(book and book.progressPercentage, cover_w)
     if bar then
         table.insert(content, VerticalSpan:new{ width = Size.span.vertical_default })
         table.insert(content, bar)
     end
-    table.insert(content, VerticalSpan:new{ width = Size.span.vertical_default })
-    table.insert(content, TextBoxWidget:new{
-        text = self.menu:cellLabel(book),
-        width = self.dimen.w - 2 * Size.padding.tiny,
-        height = label_h,
-        alignment = "center",
-        face = Font:getFace("x_smallinfofont"),
-        height_overflow_show_ellipsis = true,
-    })
+    if show_label then
+        local label_text = shortText(book and book.title or _("Untitled"), 30)
+        local label_w = math.max(1, self.dimen.w - 2 * Size.padding.tiny)
+        table.insert(content, VerticalSpan:new{ width = Size.span.vertical_default })
+        table.insert(content, TextBoxWidget:new{
+            text = label_text,
+            width = label_w,
+            height = label_h,
+            alignment = "center",
+            fgcolor = selectedTextColor(selected),
+            bgcolor = selectedTextBgColor(selected),
+            face = Font:getFace("cfont", mosaicLabelFontSize(label_text, label_w, label_h)),
+            height_overflow_show_ellipsis = true,
+        })
+    end
 
-    self[1] = CenterContainer:new{
+    local body = CenterContainer:new{
         dimen = Geom:new{ w = self.dimen.w, h = self.dimen.h },
         content,
+    }
+    self[1] = FrameContainer:new{
+        width = self.dimen.w,
+        height = self.dimen.h,
+        margin = 0,
+        padding = 0,
+        bordersize = 0,
+        background = selectedBackground(selected),
+        body,
     }
 end
 
@@ -235,7 +328,11 @@ function MosaicItem:onTapSelect()
 end
 
 function MosaicItem:onHoldSelect()
-    self.menu:onMenuSelect(self.entry)
+    if self.menu.onMenuHoldSelect then
+        self.menu:onMenuHoldSelect(self.entry)
+    else
+        self.menu:onMenuSelect(self.entry)
+    end
     return true
 end
 
@@ -286,6 +383,8 @@ function ListItem:init()
 
     local path = self.menu:cachedThumbnailPath(book)
     local state = self.menu:thumbnailState(book)
+    local downloaded = self.menu:isOnDevice(book)
+    local selected = self.menu.bulkIsBookSelected and self.menu:bulkIsBookSelected(book)
 
     local text_col = VerticalGroup:new{ align = "left" }
     table.insert(text_col, TextBoxWidget:new{
@@ -295,6 +394,8 @@ function ListItem:init()
         height_adjust = true,
         alignment = "left",
         bold = true,
+        fgcolor = selectedTextColor(selected),
+        bgcolor = selectedTextBgColor(selected),
         face = Font:getFace("cfont", title_font),
         height_overflow_show_ellipsis = true,
     })
@@ -306,6 +407,8 @@ function ListItem:init()
             height = subtitle_h,
             height_adjust = true,
             alignment = "left",
+            fgcolor = selectedTextColor(selected),
+            bgcolor = selectedTextBgColor(selected),
             face = Font:getFace("cfont", subtitle_font),
             height_overflow_show_ellipsis = true,
         })
@@ -326,7 +429,7 @@ function ListItem:init()
             dimen = row_dimen:copy(),
             CenterContainer:new{
                 dimen = Geom:new{ w = left_w, h = inner_h },
-                CatalogWidgets.buildCoverWidget(book, cover_w, cover_h, path, state),
+                CatalogWidgets.buildCoverWithStateBadges(book, cover_w, cover_h, path, state, downloaded, selected),
             },
         },
         LeftContainer:new{
@@ -347,6 +450,8 @@ function ListItem:init()
                     height = text_h,
                     height_adjust = true,
                     alignment = "right",
+                    fgcolor = selectedTextColor(selected),
+                    bgcolor = selectedTextBgColor(selected),
                     face = Font:getFace("cfont", side_font),
                     height_overflow_show_ellipsis = true,
                 },
@@ -354,7 +459,6 @@ function ListItem:init()
             },
         })
     end
-
     local content = VerticalGroup:new{ align = "left" }
     table.insert(content, row)
     table.insert(content, LineWidget:new{
@@ -368,7 +472,7 @@ function ListItem:init()
         margin = 0,
         padding = 0,
         bordersize = 0,
-        background = Blitbuffer.COLOR_WHITE,
+        background = selectedBackground(selected),
         content,
     }
 end
@@ -379,7 +483,11 @@ function ListItem:onTapSelect()
 end
 
 function ListItem:onHoldSelect()
-    self.menu:onMenuSelect(self.entry)
+    if self.menu.onMenuHoldSelect then
+        self.menu:onMenuHoldSelect(self.entry)
+    else
+        self.menu:onMenuSelect(self.entry)
+    end
     return true
 end
 
@@ -419,19 +527,26 @@ function CatalogWidgets.coverCardWidth(card_h, with_progress)
     return cover_w + 2 * COVER_CARD_PAD + 2 * CARD_BORDER
 end
 
-function CatalogWidgets.buildDashboardCoverWidget(book, width, height, path, state)
+function CatalogWidgets.buildDashboardCoverWidget(book, width, height, path, state, downloaded)
     local cover = CatalogWidgets.buildCoverWidget(book, width, height, path, state)
-    local badge = CatalogWidgets.buildReadStatusBadge(book, math.floor(math.min(width, height) * 0.18))
-    if not badge then return cover end
-    badge.overlap_align = "right"
+    local read_badge = CatalogWidgets.buildReadStatusBadge(book, math.floor(math.min(width, height) * 0.18))
+    if not downloaded and not read_badge then return cover end
 
-    local dimen = Geom:new{ w = width, h = height }
-    return OverlapGroup:new{
-        dimen = dimen:copy(),
+    local group = OverlapGroup:new{
+        dimen = Geom:new{ w = width, h = height },
         allow_mirroring = false,
         cover,
-        badge,
     }
+    if downloaded then
+        local badge = CatalogWidgets.buildDownloadedBadge(math.floor(math.min(width, height) * 0.18))
+        badge.overlap_align = "left"
+        table.insert(group, badge)
+    end
+    if read_badge then
+        read_badge.overlap_align = "right"
+        table.insert(group, read_badge)
+    end
+    return group
 end
 
 -- A thin horizontal rule used to separate dashboard sections.
@@ -493,11 +608,12 @@ function DashboardCoverCard:init()
 
     local path = self.menu:cachedThumbnailPath(book)
     local state = self.menu:thumbnailState(book)
+    local downloaded = self.menu:isOnDevice(book)
 
     local col = VerticalGroup:new{ align = "center" }
     table.insert(col, CenterContainer:new{
         dimen = Geom:new{ w = inner_w, h = cover_h },
-        CatalogWidgets.buildDashboardCoverWidget(book, cover_w, cover_h, path, state),
+        CatalogWidgets.buildDashboardCoverWidget(book, cover_w, cover_h, path, state, downloaded),
     })
     if bar_h > 0 then
         table.insert(col, VerticalSpan:new{ width = Size.span.vertical_default })
@@ -516,7 +632,11 @@ function DashboardCoverCard:onTapSelect()
 end
 
 function DashboardCoverCard:onHoldSelect()
-    self.menu:onMenuSelect(self.entry)
+    if self.menu.onMenuHoldSelect then
+        self.menu:onMenuHoldSelect(self.entry)
+    else
+        self.menu:onMenuSelect(self.entry)
+    end
     return true
 end
 

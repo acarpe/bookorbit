@@ -92,7 +92,7 @@ CatalogUtil.SETTABLE_READ_STATUSES = {
 CatalogUtil.COMMON_FORMATS = { "epub", "pdf", "cbz", "cbr", "mobi", "azw3", "fb2", "djvu", "txt" }
 
 CatalogUtil.GRID_PRESETS = {
-    { 2, 2 }, { 2, 3 }, { 3, 3 }, { 3, 4 }, { 4, 4 }, { 4, 5 },
+    { 3, 3 }, { 4, 3 }, { 4, 4 }, { 5, 4 },
 }
 
 function CatalogUtil.isAuthError(err)
