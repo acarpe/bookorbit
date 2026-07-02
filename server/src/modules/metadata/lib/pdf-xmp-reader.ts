@@ -101,6 +101,15 @@ function str(val: unknown): string | null {
   return t ?? null;
 }
 
+function splitListText(val: unknown): string[] {
+  const t = getText(val);
+  if (!t) return [];
+  return t
+    .split(/[,;]/)
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
+
 function num(val: unknown): number | null {
   const t = getText(val);
   if (!t) return null;
@@ -138,6 +147,7 @@ export function parseXmp(xmpXml: string): XmpParsed | null {
   }
 
   const px = BOOKORBIT_NS_PREFIX;
+  const tags = getList(merged[`${px}:tags`]);
 
   return {
     title: str(merged['dc:title']),
@@ -148,7 +158,7 @@ export function parseXmp(xmpXml: string): XmpParsed | null {
     language: str(merged['dc:language']),
     authors: getList(merged['dc:creator']).map((name) => ({ name, sortName: null })),
     genres: getList(merged['dc:subject']),
-    tags: getList(merged[`${px}:tags`]),
+    tags: tags.length ? tags : splitListText(merged['pdf:Keywords']),
     isbn10: str(merged[`${px}:isbn10`]),
     isbn13: str(merged[`${px}:isbn13`]),
     seriesName: str(merged[`${px}:seriesName`]),
