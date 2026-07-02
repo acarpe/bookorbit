@@ -8,6 +8,9 @@ import { useSetupStatus } from './useSetupStatus'
 import { disconnectAuthorEnrichmentSocket } from '@/features/settings/composables/useAuthorEnrichmentStatus'
 import { disconnectBookMetadataFetchSocket } from '@/features/book-metadata-fetch/composables/useBookMetadataFetchStatus'
 import { resetWhatsNew } from '@/features/whats-new/composables/useWhatsNew'
+import { resetLibraries } from '@/features/library/composables/useLibraries'
+import { resetSmartScopes } from '@/features/smart-scope/composables/useSmartScopes'
+import { resetCollections } from '@/features/collection/composables/useCollections'
 
 const SESSION_REFRESH_INTERVAL_MS = 5 * 60 * 1000
 
@@ -49,6 +52,9 @@ function clearAuth() {
   cancelPendingThemeSync()
   cancelPendingDisplaySettingsSync()
   stopSessionRefresh()
+  resetLibraries()
+  resetSmartScopes()
+  resetCollections()
   user.value = null
   setAccessToken(null)
   disconnectAuthorEnrichmentSocket()
