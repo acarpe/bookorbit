@@ -162,6 +162,7 @@ describe('KoreaderService', () => {
         failedPositions: 0,
         pageStatEvents: 0,
         annotations: 0,
+        unmatchedBooks: 0,
       }),
     };
 
@@ -348,7 +349,7 @@ describe('KoreaderService', () => {
         timestamp: 1700000000,
       });
 
-      expect(mockRepo.resolveBookFileByHash).toHaveBeenCalledWith('abcdef1234567890fedcba', [1, 2]);
+      expect(mockRepo.resolveBookFileByHash).toHaveBeenCalledWith('abcdef1234567890fedcba', [1, 2], 12);
       expect(mockChapterService.parseChapterIndexFromProgress).toHaveBeenCalledWith('/body/DocFragment[7]');
       expect(mockChapterExtractor.extractAndStoreChapters).toHaveBeenCalledWith(44);
       expect(mockRepo.upsertDeviceProgress).toHaveBeenCalledWith({
@@ -407,7 +408,7 @@ describe('KoreaderService', () => {
         }),
       ).rejects.toThrow(NotFoundException);
 
-      expect(mockRepo.resolveBookFileByHash).toHaveBeenCalledWith('no-access-document', []);
+      expect(mockRepo.resolveBookFileByHash).toHaveBeenCalledWith('no-access-document', [], 12);
     });
 
     it('uses the default device and generated device id when the payload leaves them empty', async () => {
@@ -587,7 +588,15 @@ describe('KoreaderService', () => {
         latestPluginVersion: null,
         pluginUpdateAvailable: false,
         sweeps: [],
-        pluginTotals: { matchedBooks: 0, trashedAnnotations: 0, pendingDeletes: 0, failedPositions: 0, pageStatEvents: 0, annotations: 0 },
+        pluginTotals: {
+          matchedBooks: 0,
+          trashedAnnotations: 0,
+          pendingDeletes: 0,
+          failedPositions: 0,
+          pageStatEvents: 0,
+          annotations: 0,
+          unmatchedBooks: 0,
+        },
       });
 
       expect(getCredentialsSpy).toHaveBeenCalledWith(7);

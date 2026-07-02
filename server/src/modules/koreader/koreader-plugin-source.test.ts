@@ -204,4 +204,57 @@ describe('KOReader plugin update source wiring', () => {
     expect(downloadIcon).toContain('<svg');
     expect(downloadIcon).toContain('M24 7v24');
   });
+
+  it('revalidates current-book matches and sends metadata when checking live books', async () => {
+    const bookSync = await readPluginFile('bookorbit_book_sync.lua');
+    const statsReader = await readPluginFile('bookorbit_stats_reader.lua');
+
+    expect(statsReader).toContain('function BookOrbitStatsReader.getBook(md5)');
+    expect(statsReader).toContain('if title == "" then title = nil end');
+    expect(statsReader).toContain('if authors == "" then authors = nil end');
+    expect(statsReader).toContain('if title then entry.title = title end');
+    expect(statsReader).toContain('if authors then entry.authors = authors end');
+    expect(bookSync).toContain('local metadata = BookOrbitStatsReader.getBook(digest) or {}');
+    expect(bookSync).toContain('local stats_ambiguous = metadata.metadata_ambiguous == true');
+    expect(bookSync).toContain('title = stats_ambiguous and titleFromFile(file) or (metadata.title or titleFromFile(file))');
+    expect(bookSync).toContain('authors = stats_ambiguous and nil or metadata.authors');
+    expect(bookSync).toContain('last_open = metadata.last_open or ts');
+    expect(bookSync).toContain('metadata_ambiguous = false');
+    expect(bookSync).toContain('stats_metadata_ambiguous = stats_ambiguous');
+    expect(bookSync).toContain('local body, err = ctx.client:matchCheck({ ctx.snap.digest }, {');
+    expect(bookSync).toContain('title = ctx.snap.title');
+    expect(bookSync).toContain('authors = ctx.snap.authors');
+    expect(bookSync).toContain('last_open = ctx.snap.last_open');
+    expect(bookSync).toContain('source = "current_file"');
+    expect(bookSync).toContain('metadata_ambiguous = ctx.snap.metadata_ambiguous');
+    expect(bookSync).toContain('if ctx.snap.stats_metadata_ambiguous then');
+    expect(bookSync).toContain('ctx.state:setMatched(match.hash, match.bookFileId, match.bookId, ctx.snap.file)');
+    expect(bookSync).not.toContain(
+      'if book then\n        if ctx.snap.file and not book.file then\n            book.file = ctx.snap.file\n        end\n        return step(ctx, stepStats)\n    end',
+    );
+  });
+
+  it('rechecks matched local hashes during full-library revalidation', async () => {
+    const sweep = await readPluginFile('bookorbit_sweep.lua');
+
+    expect(sweep).toContain('if ctx.full_recheck then\n            queue(md5)\n        elseif not ctx.state:getBook(md5) then');
+    expect(sweep).toContain('for md5 in pairs(ctx.state.books) do\n            queue(md5)\n        end');
+  });
+
+  it('marks unmatched match-check candidates by source and ambiguity', async () => {
+    const api = await readPluginFile('bookorbit_api.lua');
+    const sweep = await readPluginFile('bookorbit_sweep.lua');
+    const statsReader = await readPluginFile('bookorbit_stats_reader.lua');
+
+    expect(api).toContain('source = cand.source');
+    expect(api).toContain('metadataAmbiguous = cand.metadata_ambiguous');
+    expect(statsReader).toContain('entry.metadata_ambiguous = (entry._variant_count or 0) > 1');
+    expect(sweep).toContain('source = "statistics"');
+    expect(sweep).toContain('metadata_ambiguous = entry.metadata_ambiguous');
+    expect(sweep).toContain('stats_metadata_ambiguous = entry.metadata_ambiguous');
+    expect(sweep).toContain('local file_exists = lfs.attributes(file, "mode") == "file"');
+    expect(sweep).toContain('cand.source = "file"');
+    expect(sweep).toContain('cand.metadata_ambiguous = false');
+    expect(sweep).toContain('if cand.stat_ids and not cand.stats_metadata_ambiguous and ctx.state:getBook(md5) then');
+  });
 });

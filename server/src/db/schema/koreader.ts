@@ -102,6 +102,63 @@ export const bookFileHashHistory = pgTable(
 export type BookFileHashHistory = typeof bookFileHashHistory.$inferSelect;
 export type NewBookFileHashHistory = typeof bookFileHashHistory.$inferInsert;
 
+export const koreaderBookHashLinks = pgTable(
+  'koreader_book_hash_links',
+  {
+    id: serial('id').primaryKey(),
+    userId: integer('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    hash: varchar('hash', { length: 32 }).notNull(),
+    bookFileId: integer('book_file_id')
+      .notNull()
+      .references(() => bookFiles.id, { onDelete: 'cascade' }),
+    koreaderTitle: varchar('koreader_title', { length: 500 }),
+    koreaderAuthors: text('koreader_authors'),
+    koreaderLastOpen: bigint('koreader_last_open', { mode: 'number' }),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true })
+      .defaultNow()
+      .notNull()
+      .$onUpdateFn(() => new Date()),
+  },
+  (t) => [
+    uniqueIndex('koreader_book_hash_links_user_hash_uidx').on(t.userId, t.hash),
+    index('koreader_book_hash_links_user_updated_idx').on(t.userId, sql`${t.updatedAt} desc`),
+    index('koreader_book_hash_links_book_file_id_idx').on(t.bookFileId),
+    check('koreader_book_hash_links_hash_chk', sql`${t.hash} ~ '^[0-9a-f]{32}$'`),
+  ],
+);
+
+export type KoreaderBookHashLink = typeof koreaderBookHashLinks.$inferSelect;
+export type NewKoreaderBookHashLink = typeof koreaderBookHashLinks.$inferInsert;
+
+export const koreaderUnmatchedBooks = pgTable(
+  'koreader_unmatched_books',
+  {
+    userId: integer('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    hash: varchar('hash', { length: 32 }).notNull(),
+    title: varchar('title', { length: 500 }),
+    authors: text('authors'),
+    lastOpen: bigint('last_open', { mode: 'number' }),
+    source: varchar('source', { length: 20 }).notNull().default('statistics'),
+    metadataAmbiguous: boolean('metadata_ambiguous').notNull().default(false),
+    firstSeenAt: timestamp('first_seen_at', { withTimezone: true }).defaultNow().notNull(),
+    lastSeenAt: timestamp('last_seen_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.userId, t.hash] }),
+    index('koreader_unmatched_books_user_seen_idx').on(t.userId, sql`${t.lastSeenAt} desc`),
+    check('koreader_unmatched_books_hash_chk', sql`${t.hash} ~ '^[0-9a-f]{32}$'`),
+    check('koreader_unmatched_books_source_chk', sql`${t.source} in ('current_file', 'file', 'statistics')`),
+  ],
+);
+
+export type KoreaderUnmatchedBook = typeof koreaderUnmatchedBooks.$inferSelect;
+export type NewKoreaderUnmatchedBook = typeof koreaderUnmatchedBooks.$inferInsert;
+
 export const bookFileChapters = pgTable(
   'book_file_chapters',
   {

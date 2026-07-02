@@ -1,5 +1,12 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import type { CreateKoreaderCredentialsPayload, KoreaderCredentials, KoreaderSyncStatus, UpdateKoreaderCredentialsPayload } from '@bookorbit/types'
+import type {
+  CreateKoreaderCredentialsPayload,
+  KoreaderCredentials,
+  KoreaderManualHashLink,
+  KoreaderSyncStatus,
+  KoreaderUnmatchedBook,
+  UpdateKoreaderCredentialsPayload,
+} from '@bookorbit/types'
 
 const apiMock = vi.hoisted(() => vi.fn<(input: RequestInfo | URL, init?: RequestInit) => Promise<Response>>())
 
@@ -32,7 +39,43 @@ function makeSyncStatus(overrides: Partial<KoreaderSyncStatus> = {}): KoreaderSy
     latestPluginVersion: '0.5.0',
     pluginUpdateAvailable: false,
     sweeps: [],
-    pluginTotals: { matchedBooks: 0, trashedAnnotations: 0, pendingDeletes: 0, failedPositions: 0, pageStatEvents: 0, annotations: 0 },
+    pluginTotals: {
+      matchedBooks: 0,
+      trashedAnnotations: 0,
+      pendingDeletes: 0,
+      failedPositions: 0,
+      pageStatEvents: 0,
+      annotations: 0,
+      unmatchedBooks: 0,
+    },
+    ...overrides,
+  }
+}
+
+function makeUnmatchedBook(overrides: Partial<KoreaderUnmatchedBook> = {}): KoreaderUnmatchedBook {
+  return {
+    hash: 'a'.repeat(32),
+    title: 'Unmatched Title',
+    authors: 'Author One',
+    lastOpen: 1700000000,
+    firstSeenAt: '2026-06-01T00:00:00.000Z',
+    lastSeenAt: '2026-06-02T00:00:00.000Z',
+    ...overrides,
+  }
+}
+
+function makeManualHashLink(overrides: Partial<KoreaderManualHashLink> = {}): KoreaderManualHashLink {
+  return {
+    hash: 'b'.repeat(32),
+    bookId: 70,
+    bookFileId: 71,
+    bookTitle: 'Linked Book',
+    bookAuthors: ['Linked Author'],
+    koreaderTitle: 'KOReader Title',
+    koreaderAuthors: 'Device Author',
+    koreaderLastOpen: 1700000001,
+    createdAt: '2026-06-03T00:00:00.000Z',
+    updatedAt: '2026-06-04T00:00:00.000Z',
     ...overrides,
   }
 }
@@ -201,15 +244,19 @@ describe('useKoreaderSync', () => {
     apiMock.mockResolvedValueOnce(makeResponse({}))
 
     const { useKoreaderSync } = await import('../useKoreaderSync')
-    const { syncStatus, credentials, deleteCredentials } = useKoreaderSync()
+    const { syncStatus, credentials, unmatchedBooks, manualHashLinks, deleteCredentials } = useKoreaderSync()
     syncStatus.value = makeSyncStatus()
     credentials.value = syncStatus.value.credentials
+    unmatchedBooks.value = [makeUnmatchedBook()]
+    manualHashLinks.value = [makeManualHashLink()]
 
     await deleteCredentials()
 
     expect(apiMock).toHaveBeenCalledWith('/api/v1/koreader/credentials', { method: 'DELETE' })
     expect(syncStatus.value).toBeNull()
     expect(credentials.value).toBeNull()
+    expect(unmatchedBooks.value).toEqual([])
+    expect(manualHashLinks.value).toEqual([])
   })
 
   it('deleteCredentials throws when the delete request fails', async () => {
@@ -296,5 +343,144 @@ describe('useKoreaderSync', () => {
     const { downloadPluginPackage } = useKoreaderSync()
 
     await expect(downloadPluginPackage()).rejects.toThrow('Failed to download the plugin')
+  })
+
+  it('fetchUnmatchedBooks updates unmatched state', async () => {
+    const rows = [makeUnmatchedBook()]
+    apiMock.mockResolvedValueOnce(makeResponse(rows))
+
+    const { useKoreaderSync } = await import('../useKoreaderSync')
+    const { unmatchedBooks, fetchUnmatchedBooks } = useKoreaderSync()
+
+    await fetchUnmatchedBooks()
+
+    expect(apiMock).toHaveBeenCalledWith('/api/v1/koreader/unmatched-books')
+    expect(unmatchedBooks.value).toEqual(rows)
+  })
+
+  it('fetchUnmatchedBooks throws the server message on failure', async () => {
+    apiMock.mockResolvedValueOnce(makeResponse({ message: 'No permission' }, { ok: false, status: 403 }))
+
+    const { useKoreaderSync } = await import('../useKoreaderSync')
+    const { fetchUnmatchedBooks } = useKoreaderSync()
+
+    await expect(fetchUnmatchedBooks()).rejects.toThrow('No permission')
+  })
+
+  it('fetchManualHashLinks updates manual link state', async () => {
+    const rows = [makeManualHashLink()]
+    apiMock.mockResolvedValueOnce(makeResponse(rows))
+
+    const { useKoreaderSync } = await import('../useKoreaderSync')
+    const { manualHashLinks, fetchManualHashLinks } = useKoreaderSync()
+
+    await fetchManualHashLinks()
+
+    expect(apiMock).toHaveBeenCalledWith('/api/v1/koreader/hash-links')
+    expect(manualHashLinks.value).toEqual(rows)
+  })
+
+  it('fetchManualHashLinks throws the server message on failure', async () => {
+    apiMock.mockResolvedValueOnce(makeResponse({ message: 'No permission' }, { ok: false, status: 403 }))
+
+    const { useKoreaderSync } = await import('../useKoreaderSync')
+    const { fetchManualHashLinks } = useKoreaderSync()
+
+    await expect(fetchManualHashLinks()).rejects.toThrow('No permission')
+  })
+
+  it('linkUnmatchedBook posts the target book, removes the linked row, and refreshes status and manual links', async () => {
+    const linked = { hash: 'a'.repeat(32), bookId: 55, bookFileId: 44 }
+    const refreshedStatus = makeSyncStatus({ pluginTotals: { ...makeSyncStatus().pluginTotals, unmatchedBooks: 0 } })
+    const manualLinks = [makeManualHashLink({ hash: linked.hash, bookId: linked.bookId, bookFileId: linked.bookFileId })]
+    apiMock
+      .mockResolvedValueOnce(makeResponse(linked))
+      .mockResolvedValueOnce(makeResponse(refreshedStatus))
+      .mockResolvedValueOnce(makeResponse(manualLinks))
+
+    const { useKoreaderSync } = await import('../useKoreaderSync')
+    const { unmatchedBooks, syncStatus, manualHashLinks, linkUnmatchedBook } = useKoreaderSync()
+    unmatchedBooks.value = [makeUnmatchedBook({ hash: linked.hash }), makeUnmatchedBook({ hash: 'b'.repeat(32) })]
+
+    await expect(linkUnmatchedBook(linked.hash, { bookId: linked.bookId })).resolves.toEqual(linked)
+
+    const [url, request] = apiMock.mock.calls[0] as [string, RequestInit]
+    expect(url).toBe(`/api/v1/koreader/unmatched-books/${linked.hash}/link`)
+    expect(request.method).toBe('POST')
+    expect(request.headers).toEqual({ 'Content-Type': 'application/json' })
+    expect(JSON.parse(String(request.body))).toEqual({ bookId: linked.bookId })
+    expect(unmatchedBooks.value).toEqual([makeUnmatchedBook({ hash: 'b'.repeat(32) })])
+    expect(syncStatus.value).toEqual(refreshedStatus)
+    expect(manualHashLinks.value).toEqual(manualLinks)
+  })
+
+  it('linkUnmatchedBook throws the server message on failure', async () => {
+    apiMock.mockResolvedValueOnce(makeResponse({ message: 'KOReader hash already matches a different book' }, { ok: false, status: 409 }))
+
+    const { useKoreaderSync } = await import('../useKoreaderSync')
+    const { linkUnmatchedBook } = useKoreaderSync()
+
+    await expect(linkUnmatchedBook('a'.repeat(32), { bookId: 55 })).rejects.toThrow('KOReader hash already matches a different book')
+  })
+
+  it('relinkManualHashLink patches the target book and refreshes status and manual links', async () => {
+    const linked = { hash: 'b'.repeat(32), bookId: 88, bookFileId: 89 }
+    const refreshedStatus = makeSyncStatus()
+    const manualLinks = [makeManualHashLink({ hash: linked.hash, bookId: linked.bookId, bookFileId: linked.bookFileId })]
+    apiMock
+      .mockResolvedValueOnce(makeResponse(linked))
+      .mockResolvedValueOnce(makeResponse(refreshedStatus))
+      .mockResolvedValueOnce(makeResponse(manualLinks))
+
+    const { useKoreaderSync } = await import('../useKoreaderSync')
+    const { syncStatus, manualHashLinks, relinkManualHashLink } = useKoreaderSync()
+
+    await expect(relinkManualHashLink(linked.hash, { bookId: linked.bookId })).resolves.toEqual(linked)
+
+    const [url, request] = apiMock.mock.calls[0] as [string, RequestInit]
+    expect(url).toBe(`/api/v1/koreader/hash-links/${linked.hash}`)
+    expect(request.method).toBe('PATCH')
+    expect(JSON.parse(String(request.body))).toEqual({ bookId: linked.bookId })
+    expect(syncStatus.value).toEqual(refreshedStatus)
+    expect(manualHashLinks.value).toEqual(manualLinks)
+  })
+
+  it('relinkManualHashLink throws the server message on failure', async () => {
+    apiMock.mockResolvedValueOnce(makeResponse({ message: 'KOReader hash already matches a different book' }, { ok: false, status: 409 }))
+
+    const { useKoreaderSync } = await import('../useKoreaderSync')
+    const { relinkManualHashLink } = useKoreaderSync()
+
+    await expect(relinkManualHashLink('b'.repeat(32), { bookId: 88 })).rejects.toThrow('KOReader hash already matches a different book')
+  })
+
+  it('unlinkManualHashLink deletes the link, removes it locally, and refreshes unmatched books', async () => {
+    const hash = 'b'.repeat(32)
+    const refreshedStatus = makeSyncStatus({ pluginTotals: { ...makeSyncStatus().pluginTotals, unmatchedBooks: 1 } })
+    const unmatched = [makeUnmatchedBook({ hash })]
+    apiMock
+      .mockResolvedValueOnce(makeResponse({ hash }))
+      .mockResolvedValueOnce(makeResponse(refreshedStatus))
+      .mockResolvedValueOnce(makeResponse(unmatched))
+
+    const { useKoreaderSync } = await import('../useKoreaderSync')
+    const { syncStatus, manualHashLinks, unmatchedBooks, unlinkManualHashLink } = useKoreaderSync()
+    manualHashLinks.value = [makeManualHashLink({ hash }), makeManualHashLink({ hash: 'c'.repeat(32) })]
+
+    await expect(unlinkManualHashLink(hash)).resolves.toEqual({ hash })
+
+    expect(apiMock).toHaveBeenCalledWith(`/api/v1/koreader/hash-links/${hash}`, { method: 'DELETE' })
+    expect(manualHashLinks.value).toEqual([makeManualHashLink({ hash: 'c'.repeat(32) })])
+    expect(syncStatus.value).toEqual(refreshedStatus)
+    expect(unmatchedBooks.value).toEqual(unmatched)
+  })
+
+  it('unlinkManualHashLink throws the server message on failure', async () => {
+    apiMock.mockResolvedValueOnce(makeResponse({ message: 'KOReader manual link not found' }, { ok: false, status: 404 }))
+
+    const { useKoreaderSync } = await import('../useKoreaderSync')
+    const { unlinkManualHashLink } = useKoreaderSync()
+
+    await expect(unlinkManualHashLink('b'.repeat(32))).rejects.toThrow('KOReader manual link not found')
   })
 })

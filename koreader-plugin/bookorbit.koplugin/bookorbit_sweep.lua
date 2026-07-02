@@ -16,6 +16,7 @@ local Notification = require("ui/widget/notification")
 local ReadHistory = require("readhistory")
 local UIManager = require("ui/uimanager")
 local logger = require("logger")
+local lfs = require("libs/libkoreader-lfs")
 local util = require("util")
 local T = require("ffi/util").template
 local _ = require("gettext")
@@ -37,6 +38,17 @@ local PROGRESS_BATCH = 100
 local BookOrbitSweep = {
     running = false,
 }
+
+local function titleFromHistoryItem(item)
+    local name = item.text
+    if (not name or name == "") and item.file then
+        name = item.file:gsub(".*/", "")
+    end
+    if not name or name == "" then return nil end
+    local title = name:gsub("%.[^%.]+$", "")
+    if title == "" then return name end
+    return title
+end
 
 function BookOrbitSweep.isRunning()
     return BookOrbitSweep.running
@@ -137,14 +149,23 @@ local function stepEnumerate(ctx)
 
     local stats_books = BookOrbitStatsReader.getBooks()
     for _, entry in ipairs(stats_books or {}) do
-        ctx.candidates[entry.md5] = { stat_ids = entry.ids, last_open = entry.last_open }
+        ctx.candidates[entry.md5] = {
+            stat_ids = entry.ids,
+            last_open = entry.last_open,
+            title = entry.title,
+            authors = entry.authors,
+            source = "statistics",
+            metadata_ambiguous = entry.metadata_ambiguous,
+            stats_metadata_ambiguous = entry.metadata_ambiguous,
+        }
     end
 
     for _, item in ipairs(ReadHistory.hist or {}) do
         local file = item.file
         if file then
+            local file_exists = lfs.attributes(file, "mode") == "file"
             local md5 = ctx.state.files[file]
-            if not md5 and DocSettings:hasSidecarFile(file) then
+            if not md5 and file_exists and DocSettings:hasSidecarFile(file) then
                 local doc_settings = DocSettings:open(file)
                 md5 = doc_settings:readSetting("partial_md5_checksum")
                 if not md5 then
@@ -155,13 +176,23 @@ local function stepEnumerate(ctx)
             end
             if md5 then
                 local cand = ctx.candidates[md5] or {}
-                cand.file = file
+                if file_exists then
+                    cand.file = file
+                    cand.source = "file"
+                    if cand.metadata_ambiguous then
+                        cand.title = titleFromHistoryItem(item)
+                        cand.authors = nil
+                    elseif not cand.title then
+                        cand.title = titleFromHistoryItem(item)
+                    end
+                    cand.metadata_ambiguous = false
+                end
                 if (item.time or 0) > (cand.last_open or 0) then
                     cand.last_open = item.time
                 end
                 ctx.candidates[md5] = cand
                 local book = ctx.state:getBook(md5)
-                if book and not book.file then
+                if book and file_exists and not book.file then
                     book.file = file
                 end
             end
@@ -173,7 +204,7 @@ end
 
 -- Phase 2: ask the server which hashes it knows. Only never-seen hashes,
 -- unmatched hashes with new activity, and (when the library version token
--- changed or on manual sync) the whole unmatched backlog are checked.
+-- changed or on manual sync) all known local matches are checked.
 local function stepMatch(ctx)
     local to_check = {}
     local queued = {}
@@ -185,7 +216,9 @@ local function stepMatch(ctx)
     end
 
     for md5, cand in pairs(ctx.candidates) do
-        if not ctx.state:getBook(md5) then
+        if ctx.full_recheck then
+            queue(md5)
+        elseif not ctx.state:getBook(md5) then
             local last_check = ctx.state.unmatched[md5]
             if not last_check then
                 queue(md5)
@@ -196,6 +229,9 @@ local function stepMatch(ctx)
     end
 
     if ctx.full_recheck then
+        for md5 in pairs(ctx.state.books) do
+            queue(md5)
+        end
         for md5 in pairs(ctx.state.unmatched) do
             queue(md5)
         end
@@ -224,7 +260,7 @@ local function stepMatchNext(ctx)
         ctx.state:flush()
         ctx.stats_queue = {}
         for md5, cand in pairs(ctx.candidates) do
-            if cand.stat_ids and ctx.state:getBook(md5) then
+            if cand.stat_ids and not cand.stats_metadata_ambiguous and ctx.state:getBook(md5) then
                 table.insert(ctx.stats_queue, { md5 = md5, ids = cand.stat_ids })
             end
         end
@@ -234,7 +270,7 @@ local function stepMatchNext(ctx)
     end
 
     setProgress(ctx, _("BookOrbit sync: matching books..."))
-    local body, err = ctx.client:matchCheck(batch)
+    local body, err = ctx.client:matchCheck(batch, ctx.candidates)
     if not body then
         if isAuthError(err) then return finish(ctx, "auth") end
         return finish(ctx, "network")
@@ -656,7 +692,7 @@ local function stepDone(ctx)
         if ctx.full_recheck or known == nil then
             ctx.state.global.needsFullRecheck = false
         elseif ctx.server_library_version ~= known then
-            -- The library changed; the next sweep rechecks the unmatched backlog.
+            -- The library changed; the next sweep rechecks local hash mappings.
             ctx.state.global.needsFullRecheck = true
         end
         ctx.state.global.libraryVersion = ctx.server_library_version

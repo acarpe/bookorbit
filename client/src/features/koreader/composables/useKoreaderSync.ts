@@ -1,10 +1,25 @@
 import { ref } from 'vue'
 import { api } from '@/lib/api'
-import type { KoreaderCredentials, KoreaderSyncStatus, CreateKoreaderCredentialsPayload, UpdateKoreaderCredentialsPayload } from '@bookorbit/types'
+import type {
+  CreateKoreaderCredentialsPayload,
+  KoreaderCredentials,
+  KoreaderManualHashLink,
+  KoreaderSyncStatus,
+  KoreaderUnmatchedBook,
+  LinkKoreaderUnmatchedBookPayload,
+  LinkKoreaderUnmatchedBookResult,
+  UnlinkKoreaderManualHashLinkResult,
+  UpdateKoreaderCredentialsPayload,
+  UpdateKoreaderManualHashLinkPayload,
+} from '@bookorbit/types'
 
 const credentials = ref<KoreaderCredentials | null>(null)
 const syncStatus = ref<KoreaderSyncStatus | null>(null)
+const unmatchedBooks = ref<KoreaderUnmatchedBook[]>([])
+const manualHashLinks = ref<KoreaderManualHashLink[]>([])
 const loading = ref(false)
+const unmatchedLoading = ref(false)
+const manualLinksLoading = ref(false)
 
 export function useKoreaderSync() {
   async function fetchSyncStatus(): Promise<void> {
@@ -50,6 +65,8 @@ export function useKoreaderSync() {
     if (!res.ok) throw new Error('Failed to delete credentials')
     credentials.value = null
     syncStatus.value = null
+    unmatchedBooks.value = []
+    manualHashLinks.value = []
   }
 
   async function testConnection(username: string, password: string): Promise<boolean> {
@@ -78,17 +95,97 @@ export function useKoreaderSync() {
     triggerBlobDownload(blob, 'bookorbit.koplugin.zip')
   }
 
+  async function fetchUnmatchedBooks(): Promise<void> {
+    unmatchedLoading.value = true
+    try {
+      const res = await api('/api/v1/koreader/unmatched-books')
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}))
+        throw new Error(body.message || 'Failed to fetch unmatched KOReader books')
+      }
+      unmatchedBooks.value = await res.json()
+    } finally {
+      unmatchedLoading.value = false
+    }
+  }
+
+  async function fetchManualHashLinks(): Promise<void> {
+    manualLinksLoading.value = true
+    try {
+      const res = await api('/api/v1/koreader/hash-links')
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}))
+        throw new Error(body.message || 'Failed to fetch KOReader manual links')
+      }
+      manualHashLinks.value = await res.json()
+    } finally {
+      manualLinksLoading.value = false
+    }
+  }
+
+  async function linkUnmatchedBook(hash: string, payload: LinkKoreaderUnmatchedBookPayload): Promise<LinkKoreaderUnmatchedBookResult> {
+    const res = await api(`/api/v1/koreader/unmatched-books/${hash}/link`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    })
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}))
+      throw new Error(body.message || 'Failed to link KOReader book')
+    }
+    const result: LinkKoreaderUnmatchedBookResult = await res.json()
+    unmatchedBooks.value = unmatchedBooks.value.filter((book) => book.hash !== result.hash)
+    await Promise.all([fetchSyncStatus(), fetchManualHashLinks()])
+    return result
+  }
+
+  async function relinkManualHashLink(hash: string, payload: UpdateKoreaderManualHashLinkPayload): Promise<LinkKoreaderUnmatchedBookResult> {
+    const res = await api(`/api/v1/koreader/hash-links/${hash}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    })
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}))
+      throw new Error(body.message || 'Failed to update KOReader manual link')
+    }
+    const result: LinkKoreaderUnmatchedBookResult = await res.json()
+    await Promise.all([fetchSyncStatus(), fetchManualHashLinks()])
+    return result
+  }
+
+  async function unlinkManualHashLink(hash: string): Promise<UnlinkKoreaderManualHashLinkResult> {
+    const res = await api(`/api/v1/koreader/hash-links/${hash}`, { method: 'DELETE' })
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}))
+      throw new Error(body.message || 'Failed to unlink KOReader manual link')
+    }
+    const result: UnlinkKoreaderManualHashLinkResult = await res.json()
+    manualHashLinks.value = manualHashLinks.value.filter((link) => link.hash !== result.hash)
+    await Promise.all([fetchSyncStatus(), fetchUnmatchedBooks()])
+    return result
+  }
+
   return {
     credentials,
     syncStatus,
+    unmatchedBooks,
+    manualHashLinks,
     loading,
+    unmatchedLoading,
+    manualLinksLoading,
     fetchSyncStatus,
+    fetchUnmatchedBooks,
+    fetchManualHashLinks,
     createCredentials,
     updateCredentials,
     deleteCredentials,
     testConnection,
     getSyncUrl,
     downloadPluginPackage,
+    linkUnmatchedBook,
+    relinkManualHashLink,
+    unlinkManualHashLink,
   }
 }
 

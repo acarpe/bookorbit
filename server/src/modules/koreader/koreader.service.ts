@@ -116,7 +116,7 @@ export class KoreaderService {
     this.logger.debug(`[${SYNC_EVENT}] [start] userId=${userId} document=${data.document.slice(0, 16)} device=${device} - save progress started`);
 
     const accessibleLibraryIds = await this.repo.getAccessibleLibraryIds(userId);
-    const bookFile = await this.repo.resolveBookFileByHash(data.document, accessibleLibraryIds);
+    const bookFile = await this.repo.resolveBookFileByHash(data.document, accessibleLibraryIds, userId);
 
     if (!bookFile) {
       this.logger.debug(
@@ -188,7 +188,7 @@ export class KoreaderService {
 
   async getProgress(userId: number, documentHash: string) {
     const accessibleLibraryIds = await this.repo.getAccessibleLibraryIds(userId);
-    const bookFile = await this.repo.resolveBookFileByHash(documentHash, accessibleLibraryIds);
+    const bookFile = await this.repo.resolveBookFileByHash(documentHash, accessibleLibraryIds, userId);
 
     if (!bookFile) return null;
 

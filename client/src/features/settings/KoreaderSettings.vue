@@ -1,40 +1,56 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import {
   AlertTriangle,
   BookOpen,
   Calendar,
   Check,
   ChevronDown,
+  ChevronLeft,
+  ChevronRight,
   ChevronUp,
   Copy,
   Download,
   Eye,
   EyeOff,
   Library,
+  Link2,
   RefreshCw,
+  Search,
   Smartphone,
   Trash2,
   User,
+  X,
 } from '@lucide/vue'
 import { toast } from 'vue-sonner'
+import type { BookCard, KoreaderManualHashLink, KoreaderUnmatchedBook } from '@bookorbit/types'
 import SettingsPageHeader from './SettingsPageHeader.vue'
 import ToggleSwitch from '@/components/ui/ToggleSwitch.vue'
 import { copyToClipboard } from '@/lib/clipboard'
 import { useKoreaderSync } from '@/features/koreader/composables/useKoreaderSync'
+import { useGlobalSearch } from '@/features/book/composables/useGlobalSearch'
 
 const props = withDefaults(defineProps<{ embedded?: boolean }>(), { embedded: false })
 
 const {
   credentials,
   syncStatus,
+  unmatchedBooks,
+  manualHashLinks,
   loading,
+  unmatchedLoading,
+  manualLinksLoading,
   fetchSyncStatus,
+  fetchUnmatchedBooks,
+  fetchManualHashLinks,
   createCredentials,
   updateCredentials,
   deleteCredentials,
   getSyncUrl,
   downloadPluginPackage,
+  linkUnmatchedBook,
+  relinkManualHashLink,
+  unlinkManualHashLink,
 } = useKoreaderSync()
 
 const error = ref<string | null>(null)
@@ -46,6 +62,24 @@ const showPassword = ref(false)
 const deleteConfirmOpen = ref(false)
 const helpOpen = ref(false)
 const urlCopied = ref(false)
+const selectedUnmatched = ref<KoreaderUnmatchedBook | null>(null)
+const selectedManualLink = ref<KoreaderManualHashLink | null>(null)
+const linkSearchQuery = ref('')
+const linkingBookId = ref<number | null>(null)
+const pendingLinkTarget = ref<BookCard | null>(null)
+const unlinkConfirmLink = ref<KoreaderManualHashLink | null>(null)
+const unlinkingHash = ref<string | null>(null)
+const unmatchedPage = ref(1)
+const unmatchedPageSize = 6
+const {
+  results: linkSearchResults,
+  loading: linkSearchLoading,
+  loadingMore: linkSearchLoadingMore,
+  settled: linkSearchSettled,
+  hasMore: linkSearchHasMore,
+  loadMore: loadMoreLinkSearch,
+  clear: clearLinkSearch,
+} = useGlobalSearch(linkSearchQuery)
 
 let urlCopiedTimer: ReturnType<typeof setTimeout> | null = null
 
@@ -67,6 +101,7 @@ const pluginTotals = computed(
       trashedAnnotations: 0,
       pendingDeletes: 0,
       failedPositions: 0,
+      unmatchedBooks: 0,
     },
 )
 const latestPluginVersion = computed(() => syncStatus.value?.latestPluginVersion ?? null)
@@ -74,6 +109,16 @@ const pluginUpdateAvailable = computed(() => syncStatus.value?.pluginUpdateAvail
 const latestPluginLabel = computed(() => (latestPluginVersion.value ? `Latest plugin: v${latestPluginVersion.value}` : 'Latest plugin unavailable'))
 const pendingDeletes = computed(() => pluginTotals.value.pendingDeletes)
 const failedPositions = computed(() => pluginTotals.value.failedPositions)
+const unmatchedCount = computed(() => Math.max(pluginTotals.value.unmatchedBooks, unmatchedBooks.value.length))
+const unmatchedTotalPages = computed(() => Math.max(1, Math.ceil(unmatchedBooks.value.length / unmatchedPageSize)))
+const clampedUnmatchedPage = computed(() => Math.min(unmatchedPage.value, unmatchedTotalPages.value))
+const pagedUnmatchedBooks = computed(() => {
+  const start = (clampedUnmatchedPage.value - 1) * unmatchedPageSize
+  return unmatchedBooks.value.slice(start, start + unmatchedPageSize)
+})
+const unmatchedPageStart = computed(() => (unmatchedBooks.value.length === 0 ? 0 : (clampedUnmatchedPage.value - 1) * unmatchedPageSize + 1))
+const unmatchedPageEnd = computed(() => Math.min(clampedUnmatchedPage.value * unmatchedPageSize, unmatchedBooks.value.length))
+const showUnmatchedPager = computed(() => unmatchedBooks.value.length > unmatchedPageSize)
 const hasPluginActivity = computed(
   () =>
     sweeps.value.length > 0 ||
@@ -82,9 +127,28 @@ const hasPluginActivity = computed(
     pluginTotals.value.annotations > 0 ||
     pluginTotals.value.trashedAnnotations > 0 ||
     pendingDeletes.value > 0 ||
-    failedPositions.value > 0,
+    failedPositions.value > 0 ||
+    unmatchedCount.value > 0,
 )
 const createDisabled = computed(() => creating.value || !newUsername.value || newPassword.value.length < 6)
+const linkDialogOpen = computed(() => !!selectedUnmatched.value || !!selectedManualLink.value)
+const selectedLinkHash = computed(() => selectedUnmatched.value?.hash ?? selectedManualLink.value?.hash ?? '')
+const selectedLinkLabel = computed(() => {
+  if (selectedUnmatched.value) return unmatchedBookTitle(selectedUnmatched.value)
+  if (selectedManualLink.value) return manualLinkTitle(selectedManualLink.value)
+  return ''
+})
+const selectedLinkSubtitle = computed(() => {
+  if (selectedUnmatched.value) return unmatchedBookSubtitle(selectedUnmatched.value)
+  if (selectedManualLink.value) return manualLinkSubtitle(selectedManualLink.value)
+  return ''
+})
+const selectedLinkLastOpen = computed(() => selectedUnmatched.value?.lastOpen ?? selectedManualLink.value?.koreaderLastOpen ?? null)
+const linkDialogTitle = computed(() => (selectedManualLink.value ? 'Change KOReader link' : 'Link KOReader book'))
+
+watch(unmatchedTotalPages, (totalPages) => {
+  if (unmatchedPage.value > totalPages) unmatchedPage.value = totalPages
+})
 
 function formatLastSync(dateStr: string | null): string {
   if (!dateStr) return 'Never'
@@ -103,6 +167,46 @@ function formatLastSync(dateStr: string | null): string {
 function formatDate(dateStr: string | null | undefined): string {
   if (!dateStr) return 'Unknown'
   return new Intl.DateTimeFormat(undefined, { dateStyle: 'medium' }).format(new Date(dateStr))
+}
+
+function formatDateTime(dateStr: string | null | undefined): string {
+  if (!dateStr) return 'Unknown'
+  return new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(dateStr))
+}
+
+function formatEpochSeconds(seconds: number | null | undefined): string {
+  if (!seconds) return 'Unknown'
+  return formatDateTime(new Date(seconds * 1000).toISOString())
+}
+
+function shortHash(hash: string): string {
+  return hash.slice(0, 8)
+}
+
+function unmatchedBookTitle(book: KoreaderUnmatchedBook): string {
+  return book.title?.trim() || `Unknown KOReader file ${shortHash(book.hash)}`
+}
+
+function unmatchedBookSubtitle(book: KoreaderUnmatchedBook): string {
+  if (book.authors?.trim()) return book.authors
+  return book.title?.trim() ? 'Unknown author' : 'No title or author reported'
+}
+
+function manualLinkTitle(link: KoreaderManualHashLink): string {
+  return link.koreaderTitle?.trim() || `Unknown KOReader file ${shortHash(link.hash)}`
+}
+
+function manualLinkSubtitle(link: KoreaderManualHashLink): string {
+  if (link.koreaderAuthors?.trim()) return link.koreaderAuthors
+  return link.koreaderTitle?.trim() ? 'Unknown author' : 'No title or author reported'
+}
+
+function linkedBookTitle(link: KoreaderManualHashLink): string {
+  return link.bookTitle?.trim() || `BookOrbit book #${link.bookId}`
+}
+
+function linkedBookAuthors(link: KoreaderManualHashLink): string {
+  return link.bookAuthors.length > 0 ? link.bookAuthors.join(', ') : 'Unknown author'
 }
 
 function formatCount(value: number, singular: string, plural = `${singular}s`): string {
@@ -124,6 +228,7 @@ function pluginUpdateClass(updateAvailable: boolean | null): string {
 onMounted(async () => {
   try {
     await fetchSyncStatus()
+    if (credentials.value) await Promise.all([fetchUnmatchedBooks(), fetchManualHashLinks()])
   } catch (e) {
     error.value = e instanceof Error ? e.message : 'Failed to load KOReader settings'
   }
@@ -207,10 +312,127 @@ async function handleCopyUrl() {
 async function handleRefresh() {
   try {
     await fetchSyncStatus()
+    if (credentials.value) await Promise.all([fetchUnmatchedBooks(), fetchManualHashLinks()])
     toast.success('Sync status refreshed')
   } catch {
     toast.error('Failed to refresh')
   }
+}
+
+async function handleRefreshUnmatched() {
+  try {
+    await fetchUnmatchedBooks()
+    unmatchedPage.value = 1
+    toast.success('Unmatched KOReader books refreshed')
+  } catch {
+    toast.error('Failed to refresh unmatched books')
+  }
+}
+
+function handlePreviousUnmatchedPage() {
+  unmatchedPage.value = Math.max(1, clampedUnmatchedPage.value - 1)
+}
+
+function handleNextUnmatchedPage() {
+  unmatchedPage.value = Math.min(unmatchedTotalPages.value, clampedUnmatchedPage.value + 1)
+}
+
+async function handleRefreshManualLinks() {
+  try {
+    await fetchManualHashLinks()
+    toast.success('Manual KOReader links refreshed')
+  } catch {
+    toast.error('Failed to refresh manual links')
+  }
+}
+
+function handleOpenLink(book: KoreaderUnmatchedBook) {
+  selectedUnmatched.value = book
+  selectedManualLink.value = null
+  pendingLinkTarget.value = null
+  clearLinkSearch()
+  linkSearchQuery.value = book.title ?? ''
+}
+
+function handleOpenRelink(link: KoreaderManualHashLink) {
+  selectedManualLink.value = link
+  selectedUnmatched.value = null
+  pendingLinkTarget.value = null
+  clearLinkSearch()
+  linkSearchQuery.value = link.koreaderTitle ?? link.bookTitle ?? ''
+}
+
+function handleCloseLink() {
+  selectedUnmatched.value = null
+  selectedManualLink.value = null
+  pendingLinkTarget.value = null
+  linkingBookId.value = null
+  linkSearchQuery.value = ''
+  clearLinkSearch()
+}
+
+function handleChooseLinkTarget(book: BookCard) {
+  pendingLinkTarget.value = book
+}
+
+function handleClearLinkTarget() {
+  pendingLinkTarget.value = null
+}
+
+async function handleLoadMoreLinkSearch() {
+  await loadMoreLinkSearch()
+}
+
+async function handleConfirmLinkTarget() {
+  if (!pendingLinkTarget.value || !selectedLinkHash.value) return
+  const target = pendingLinkTarget.value
+  linkingBookId.value = target.id
+  try {
+    if (selectedManualLink.value) {
+      await relinkManualHashLink(selectedLinkHash.value, { bookId: target.id })
+      toast.success('KOReader link updated')
+    } else {
+      await linkUnmatchedBook(selectedLinkHash.value, { bookId: target.id })
+      toast.success('KOReader book linked')
+    }
+    handleCloseLink()
+  } catch (e) {
+    toast.error(e instanceof Error ? e.message : 'Failed to link KOReader book')
+  } finally {
+    linkingBookId.value = null
+  }
+}
+
+function handleOpenUnlink(link: KoreaderManualHashLink) {
+  unlinkConfirmLink.value = link
+}
+
+function handleCloseUnlink() {
+  unlinkConfirmLink.value = null
+  unlinkingHash.value = null
+}
+
+async function handleUnlinkManualLink() {
+  if (!unlinkConfirmLink.value) return
+  unlinkingHash.value = unlinkConfirmLink.value.hash
+  try {
+    await unlinkManualHashLink(unlinkConfirmLink.value.hash)
+    toast.success('KOReader link removed')
+    handleCloseUnlink()
+  } catch (e) {
+    toast.error(e instanceof Error ? e.message : 'Failed to unlink KOReader book')
+  } finally {
+    unlinkingHash.value = null
+  }
+}
+
+function bookSearchSubtitle(book: BookCard): string {
+  const authors = book.authors.length > 0 ? book.authors.join(', ') : 'Unknown author'
+  const formats = book.files
+    .map((file) => file.format)
+    .filter(Boolean)
+    .join(', ')
+  return formats ? `${authors} - ${formats}` : authors
 }
 
 const downloadingPlugin = ref(false)
@@ -477,7 +699,7 @@ async function handleDownloadPlugin() {
               <Library :size="14" class="text-muted-foreground shrink-0" />
               <p class="settings-label">Synced totals</p>
             </div>
-            <div class="grid gap-2 text-xs text-muted-foreground sm:grid-cols-2 lg:grid-cols-4">
+            <div class="grid gap-2 text-xs text-muted-foreground sm:grid-cols-2 lg:grid-cols-5">
               <div class="rounded-md border border-border bg-background px-3 py-2">
                 <p class="font-medium text-foreground">{{ pluginTotals.matchedBooks }}</p>
                 <p>Matched books</p>
@@ -494,6 +716,10 @@ async function handleDownloadPlugin() {
                 <p class="font-medium text-foreground">{{ pluginTotals.trashedAnnotations }}</p>
                 <p>Trashed highlights</p>
               </div>
+              <div class="rounded-md border border-border bg-background px-3 py-2">
+                <p class="font-medium text-foreground">{{ unmatchedCount }}</p>
+                <p>Unmatched books</p>
+              </div>
             </div>
             <div v-if="pendingDeletes > 0" class="mt-3 flex gap-2 rounded-md border border-border bg-muted/40 px-3 py-2 text-xs text-foreground">
               <AlertTriangle :size="14" class="mt-0.5 shrink-0 text-muted-foreground" />
@@ -504,6 +730,128 @@ async function handleDownloadPlugin() {
               <p>{{ formatCount(failedPositions, 'highlight position') }} need attention.</p>
             </div>
           </div>
+        </div>
+      </div>
+
+      <div class="mb-8">
+        <div class="flex items-center justify-between gap-3 mb-3">
+          <p class="settings-group-label mb-0">Unmatched KOReader Books</p>
+          <button class="settings-btn-outline" :disabled="unmatchedLoading" @click="handleRefreshUnmatched">
+            <RefreshCw :size="12" />
+            Refresh
+          </button>
+        </div>
+        <div class="border border-border rounded-lg overflow-hidden shadow-xs divide-y divide-border">
+          <div v-if="unmatchedLoading" class="px-4 py-5 bg-card text-sm text-muted-foreground md:px-5">Loading unmatched books...</div>
+          <div v-else-if="unmatchedBooks.length === 0" class="px-4 py-5 bg-card text-sm text-muted-foreground md:px-5">
+            No unmatched KOReader books.
+          </div>
+          <template v-else>
+            <div v-for="book in pagedUnmatchedBooks" :key="book.hash" class="px-4 py-4 bg-card md:px-5">
+              <div class="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                <div class="min-w-0">
+                  <p class="settings-label truncate">{{ unmatchedBookTitle(book) }}</p>
+                  <p class="settings-hint truncate">{{ unmatchedBookSubtitle(book) }}</p>
+                  <div class="mt-2 grid gap-1 text-xs text-muted-foreground sm:grid-cols-2">
+                    <p class="min-w-0 truncate">
+                      Hash: <span class="font-mono text-foreground/75">{{ book.hash }}</span>
+                    </p>
+                    <p>
+                      Last opened: <span class="text-foreground/75">{{ formatEpochSeconds(book.lastOpen) }}</span>
+                    </p>
+                    <p>
+                      First seen: <span class="text-foreground/75">{{ formatDateTime(book.firstSeenAt) }}</span>
+                    </p>
+                    <p>
+                      Last seen: <span class="text-foreground/75">{{ formatDateTime(book.lastSeenAt) }}</span>
+                    </p>
+                  </div>
+                </div>
+                <button class="settings-btn-primary self-start md:self-auto" @click="handleOpenLink(book)">
+                  <Link2 :size="12" />
+                  Link
+                </button>
+              </div>
+            </div>
+            <div
+              v-if="showUnmatchedPager"
+              class="flex flex-col gap-3 px-4 py-3 bg-card text-xs text-muted-foreground md:flex-row md:items-center md:justify-between md:px-5"
+            >
+              <p>Showing {{ unmatchedPageStart }}-{{ unmatchedPageEnd }} of {{ unmatchedBooks.length }}</p>
+              <div class="flex flex-wrap items-center gap-2">
+                <button class="settings-btn-outline" :disabled="clampedUnmatchedPage <= 1" @click="handlePreviousUnmatchedPage">
+                  <ChevronLeft :size="12" />
+                  Previous
+                </button>
+                <span class="min-w-20 text-center">Page {{ clampedUnmatchedPage }} of {{ unmatchedTotalPages }}</span>
+                <button class="settings-btn-outline" :disabled="clampedUnmatchedPage >= unmatchedTotalPages" @click="handleNextUnmatchedPage">
+                  Next
+                  <ChevronRight :size="12" />
+                </button>
+              </div>
+            </div>
+          </template>
+        </div>
+      </div>
+
+      <div class="mb-8">
+        <div class="flex items-center justify-between gap-3 mb-3">
+          <p class="settings-group-label mb-0">Manual KOReader Links</p>
+          <button class="settings-btn-outline" :disabled="manualLinksLoading" @click="handleRefreshManualLinks">
+            <RefreshCw :size="12" />
+            Refresh
+          </button>
+        </div>
+        <div class="border border-border rounded-lg overflow-hidden shadow-xs divide-y divide-border">
+          <div v-if="manualLinksLoading" class="px-4 py-5 bg-card text-sm text-muted-foreground md:px-5">Loading manual links...</div>
+          <div v-else-if="manualHashLinks.length === 0" class="px-4 py-5 bg-card text-sm text-muted-foreground md:px-5">
+            No manual KOReader links.
+          </div>
+          <template v-else>
+            <div v-for="link in manualHashLinks" :key="link.hash" class="px-4 py-4 bg-card md:px-5">
+              <div class="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                <div class="grid min-w-0 flex-1 gap-4 md:grid-cols-2">
+                  <div class="min-w-0">
+                    <p class="settings-label truncate">{{ manualLinkTitle(link) }}</p>
+                    <p class="settings-hint truncate">{{ manualLinkSubtitle(link) }}</p>
+                    <div class="mt-2 grid gap-1 text-xs text-muted-foreground">
+                      <p class="min-w-0 truncate">
+                        Hash: <span class="font-mono text-foreground/75">{{ link.hash }}</span>
+                      </p>
+                      <p>
+                        Last opened: <span class="text-foreground/75">{{ formatEpochSeconds(link.koreaderLastOpen) }}</span>
+                      </p>
+                    </div>
+                  </div>
+                  <div class="min-w-0">
+                    <p class="settings-label truncate">Linked to {{ linkedBookTitle(link) }}</p>
+                    <p class="settings-hint truncate">{{ linkedBookAuthors(link) }}</p>
+                    <div class="mt-2 grid gap-1 text-xs text-muted-foreground">
+                      <p>
+                        Linked: <span class="text-foreground/75">{{ formatDateTime(link.createdAt) }}</span>
+                      </p>
+                      <p>
+                        Updated: <span class="text-foreground/75">{{ formatDateTime(link.updatedAt) }}</span>
+                      </p>
+                    </div>
+                  </div>
+                </div>
+                <div class="flex gap-2 self-start">
+                  <button class="settings-btn-outline" @click="handleOpenRelink(link)">
+                    <Link2 :size="12" />
+                    Change
+                  </button>
+                  <button
+                    class="flex items-center gap-1.5 rounded-md border border-destructive/30 px-3 py-2 text-xs font-medium text-destructive hover:bg-destructive/10 transition-colors"
+                    @click="handleOpenUnlink(link)"
+                  >
+                    <Trash2 :size="12" />
+                    Unlink
+                  </button>
+                </div>
+              </div>
+            </div>
+          </template>
         </div>
       </div>
 
@@ -597,6 +945,136 @@ async function handleDownloadPlugin() {
           >
             Delete
           </button>
+        </div>
+      </div>
+    </div>
+
+    <div v-if="unlinkConfirmLink" class="fixed inset-0 z-[70] flex items-end justify-center md:items-center md:px-4" @click.self="handleCloseUnlink">
+      <button class="absolute inset-0 bg-black/45" @click="handleCloseUnlink" />
+      <div class="relative w-full rounded-t-lg border border-border bg-card p-4 shadow-xl md:max-w-md md:rounded-lg md:p-5">
+        <p class="text-base font-semibold text-foreground">Unlink KOReader book?</p>
+        <p class="mt-1 text-sm text-muted-foreground">
+          Future syncs for this hash will stop resolving to {{ linkedBookTitle(unlinkConfirmLink) }} until it is linked again. Already synced stats
+          will stay on their current BookOrbit book.
+        </p>
+        <div class="mt-4 rounded-md border border-border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
+          <p class="font-mono text-foreground/75 truncate">{{ unlinkConfirmLink.hash }}</p>
+          <p class="mt-1 truncate">{{ manualLinkTitle(unlinkConfirmLink) }}</p>
+        </div>
+        <div class="mt-4 flex items-center justify-end gap-2">
+          <button
+            class="rounded-md border border-border px-3 py-2 text-sm text-foreground hover:bg-muted transition-colors"
+            @click="handleCloseUnlink"
+          >
+            Cancel
+          </button>
+          <button
+            class="rounded-md bg-destructive px-3 py-2 text-sm font-medium text-destructive-foreground hover:bg-destructive/90 disabled:opacity-60"
+            :disabled="unlinkingHash !== null"
+            @click="handleUnlinkManualLink"
+          >
+            {{ unlinkingHash === unlinkConfirmLink.hash ? 'Unlinking...' : 'Unlink' }}
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <div
+      v-if="linkDialogOpen"
+      class="fixed inset-0 z-[70] flex items-end justify-center md:items-center md:px-4"
+      @click.self="handleCloseLink"
+      @keydown.esc="handleCloseLink"
+    >
+      <button class="absolute inset-0 bg-black/45" @click="handleCloseLink" />
+      <div class="relative w-full rounded-t-lg border border-border bg-card p-4 shadow-xl md:max-w-2xl md:rounded-lg md:p-5">
+        <div class="flex items-start justify-between gap-3">
+          <div class="min-w-0">
+            <p class="text-base font-semibold text-foreground">{{ linkDialogTitle }}</p>
+            <p class="mt-1 text-sm text-muted-foreground truncate">{{ selectedLinkLabel }}</p>
+          </div>
+          <button class="rounded-md p-2 text-muted-foreground hover:bg-muted hover:text-foreground" @click="handleCloseLink">
+            <X :size="16" />
+          </button>
+        </div>
+        <div class="mt-4">
+          <label class="block text-xs font-medium text-muted-foreground mb-1.5">BookOrbit book</label>
+          <div class="relative">
+            <Search :size="14" class="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+            <input
+              v-model="linkSearchQuery"
+              type="search"
+              class="input-field w-full pl-9"
+              autocomplete="off"
+              placeholder="Search your BookOrbit library"
+            />
+          </div>
+        </div>
+        <div class="mt-4 max-h-[55vh] overflow-y-auto rounded-md border border-border divide-y divide-border">
+          <div v-if="linkSearchQuery.trim().length < 2" class="px-3 py-4 text-sm text-muted-foreground">Enter at least 2 characters.</div>
+          <div v-else-if="linkSearchLoading" class="px-3 py-4 text-sm text-muted-foreground">Searching...</div>
+          <div v-else-if="linkSearchSettled && linkSearchResults.length === 0" class="px-3 py-4 text-sm text-muted-foreground">No books found.</div>
+          <template v-else>
+            <button
+              v-for="book in linkSearchResults"
+              :key="book.id"
+              class="flex w-full items-start justify-between gap-3 px-3 py-3 text-left hover:bg-muted/70 disabled:opacity-60"
+              :disabled="linkingBookId !== null"
+              @click="handleChooseLinkTarget(book)"
+            >
+              <span class="min-w-0">
+                <span class="block text-sm font-medium text-foreground truncate">{{ book.title ?? 'Untitled book' }}</span>
+                <span class="block text-xs text-muted-foreground truncate">{{ bookSearchSubtitle(book) }}</span>
+              </span>
+              <span class="shrink-0 rounded-md border border-border px-2 py-1 text-xs text-muted-foreground">
+                {{ pendingLinkTarget?.id === book.id ? 'Selected' : 'Select' }}
+              </span>
+            </button>
+            <button
+              v-if="linkSearchHasMore"
+              class="flex w-full items-center justify-center gap-2 px-3 py-3 text-sm font-medium text-foreground hover:bg-muted/70 disabled:opacity-60"
+              :disabled="linkSearchLoadingMore"
+              @click="handleLoadMoreLinkSearch"
+            >
+              <ChevronDown :size="14" />
+              {{ linkSearchLoadingMore ? 'Loading...' : 'Load more' }}
+            </button>
+          </template>
+        </div>
+        <div v-if="pendingLinkTarget" class="mt-4 rounded-md border border-border bg-muted/30 p-3">
+          <p class="text-sm font-medium text-foreground">Confirm KOReader link</p>
+          <div class="mt-3 grid gap-3 md:grid-cols-2">
+            <div class="min-w-0 rounded-md border border-border bg-background px-3 py-2">
+              <p class="text-xs font-medium text-muted-foreground">KOReader</p>
+              <p class="mt-1 text-sm font-medium text-foreground truncate">{{ selectedLinkLabel }}</p>
+              <p class="text-xs text-muted-foreground truncate">{{ selectedLinkSubtitle }}</p>
+              <p class="mt-1 text-xs text-muted-foreground">
+                Last opened: <span class="text-foreground/75">{{ formatEpochSeconds(selectedLinkLastOpen) }}</span>
+              </p>
+              <p class="mt-1 font-mono text-xs text-muted-foreground truncate">{{ selectedLinkHash }}</p>
+            </div>
+            <div class="min-w-0 rounded-md border border-border bg-background px-3 py-2">
+              <p class="text-xs font-medium text-muted-foreground">BookOrbit</p>
+              <p class="mt-1 text-sm font-medium text-foreground truncate">{{ pendingLinkTarget.title ?? 'Untitled book' }}</p>
+              <p class="text-xs text-muted-foreground truncate">{{ bookSearchSubtitle(pendingLinkTarget) }}</p>
+              <p class="mt-1 text-xs text-muted-foreground">Book ID: {{ pendingLinkTarget.id }}</p>
+            </div>
+          </div>
+          <div class="mt-3 flex gap-2 rounded-md border border-border bg-background px-3 py-2 text-xs text-muted-foreground">
+            <AlertTriangle :size="14" class="mt-0.5 shrink-0" />
+            <p>Already synced stats will stay on their current BookOrbit book.</p>
+          </div>
+          <div class="mt-3 flex items-center justify-end gap-2">
+            <button
+              class="rounded-md border border-border px-3 py-2 text-sm text-foreground hover:bg-muted transition-colors"
+              :disabled="linkingBookId !== null"
+              @click="handleClearLinkTarget"
+            >
+              Choose different
+            </button>
+            <button class="settings-btn-primary" :disabled="linkingBookId !== null" @click="handleConfirmLinkTarget">
+              {{ linkingBookId === pendingLinkTarget.id ? 'Saving...' : 'Confirm link' }}
+            </button>
+          </div>
         </div>
       </div>
     </div>

@@ -2,6 +2,7 @@ import { Type } from 'class-transformer';
 import {
   ArrayMaxSize,
   ArrayMinSize,
+  IsBoolean,
   IsArray,
   IsIn,
   IsInt,
@@ -42,6 +43,35 @@ export class PluginDeviceDto {
   deviceTime?: string;
 }
 
+export class MatchCheckBookDto {
+  @IsString()
+  @Matches(MD5_HEX)
+  hash!: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  title?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(1000)
+  authors?: string;
+
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  lastOpen?: number;
+
+  @IsOptional()
+  @IsIn(['current_file', 'file', 'statistics'])
+  source?: 'current_file' | 'file' | 'statistics';
+
+  @IsOptional()
+  @IsBoolean()
+  metadataAmbiguous?: boolean;
+}
+
 export class MatchCheckDto extends PluginDeviceDto {
   @IsArray()
   @ArrayMinSize(1)
@@ -49,6 +79,13 @@ export class MatchCheckDto extends PluginDeviceDto {
   @IsString({ each: true })
   @Matches(MD5_HEX, { each: true })
   hashes!: string[];
+
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(500)
+  @ValidateNested({ each: true })
+  @Type(() => MatchCheckBookDto)
+  books?: MatchCheckBookDto[];
 }
 
 export class PageStatEventDto {

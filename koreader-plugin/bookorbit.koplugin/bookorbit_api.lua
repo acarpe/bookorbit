@@ -210,8 +210,23 @@ end
 
 -- BookOrbit plugin endpoints (camelCase wire format)
 
-function BookOrbitApi:matchCheck(hashes)
-    return self:request("POST", "/koreader/plugin/match-check", self:withDevice({ hashes = hashes }))
+function BookOrbitApi:matchCheck(hashes, candidates)
+    local payload = { hashes = hashes }
+    if candidates then
+        payload.books = {}
+        for _, hash in ipairs(hashes) do
+            local cand = candidates[hash] or {}
+            table.insert(payload.books, {
+                hash = hash,
+                title = cand.title,
+                authors = cand.authors,
+                lastOpen = cand.last_open,
+                source = cand.source,
+                metadataAmbiguous = cand.metadata_ambiguous,
+            })
+        end
+    end
+    return self:request("POST", "/koreader/plugin/match-check", self:withDevice(payload))
 end
 
 function BookOrbitApi:uploadPageStats(books)

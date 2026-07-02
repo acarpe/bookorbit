@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { sqlChunkText } from '../../common/test-utils/sql-chunk-text';
 import { KoreaderRepository } from './koreader.repository';
 
 function makeQueryChain(result: unknown) {
@@ -13,6 +14,7 @@ function makeQueryChain(result: unknown) {
   chain.where = vi.fn().mockReturnValue(chain);
   chain.orderBy = vi.fn().mockReturnValue(chain);
   chain.limit = vi.fn().mockResolvedValue(result);
+  chain.returning = vi.fn().mockResolvedValue(result);
   return chain;
 }
 
@@ -74,6 +76,28 @@ describe('KoreaderRepository', () => {
       expect(result).toEqual(file);
       expect(db.select).toHaveBeenCalledTimes(2);
     });
+
+    it('falls back to a user-scoped manual link after direct and history lookups miss', async () => {
+      const file = { id: 10, bookId: 20, libraryId: 1 };
+      db.select
+        .mockReturnValueOnce(makeQueryChain([]))
+        .mockReturnValueOnce(makeQueryChain([]))
+        .mockReturnValueOnce(makeQueryChain([file]));
+
+      const result = await repo.resolveBookFileByHash('manualhash', [1], 7);
+
+      expect(result).toEqual(file);
+      expect(db.select).toHaveBeenCalledTimes(3);
+    });
+
+    it('returns null when a user-scoped manual link lookup also misses', async () => {
+      db.select.mockReturnValueOnce(makeQueryChain([])).mockReturnValueOnce(makeQueryChain([])).mockReturnValueOnce(makeQueryChain([]));
+
+      const result = await repo.resolveBookFileByHash('manualhash', [1], 7);
+
+      expect(result).toBeNull();
+      expect(db.select).toHaveBeenCalledTimes(3);
+    });
   });
 
   describe('resolveBookFilesByHashes', () => {
@@ -116,6 +140,188 @@ describe('KoreaderRepository', () => {
 
       expect(result.get('current')).toEqual({ bookFileId: 11, bookId: 21, libraryId: 31 });
       expect(db.select).toHaveBeenCalledTimes(1);
+    });
+
+    it('resolves remaining hashes from user-scoped manual links', async () => {
+      db.select
+        .mockReturnValueOnce(makeQueryChain([{ hash: 'current', bookFileId: 11, bookId: 21, libraryId: 31 }]))
+        .mockReturnValueOnce(makeQueryChain([]))
+        .mockReturnValueOnce(makeQueryChain([{ hash: 'manual', bookFileId: 12, bookId: 22, libraryId: 32 }]));
+
+      const result = await repo.resolveBookFilesByHashes(['current', 'manual'], [31, 32], 7);
+
+      expect(result.get('current')).toEqual({ bookFileId: 11, bookId: 21, libraryId: 31 });
+      expect(result.get('manual')).toEqual({ bookFileId: 12, bookId: 22, libraryId: 32 });
+      expect(db.select).toHaveBeenCalledTimes(3);
+    });
+  });
+
+  describe('unmatched books and manual hash links', () => {
+    it('upserts unmatched candidates with trimmed nullable metadata', async () => {
+      const onConflictDoUpdate = vi.fn().mockResolvedValue(undefined);
+      const values = vi.fn().mockReturnValue({ onConflictDoUpdate });
+      db.insert.mockReturnValue({ values });
+
+      await repo.upsertUnmatchedBooks(7, [
+        { hash: 'a'.repeat(32), title: '  Title  ', authors: '  Author  ', lastOpen: 100, source: 'file', metadataAmbiguous: true },
+      ]);
+
+      expect(values).toHaveBeenCalledWith([
+        expect.objectContaining({
+          userId: 7,
+          hash: 'a'.repeat(32),
+          title: 'Title',
+          authors: 'Author',
+          lastOpen: 100,
+          source: 'file',
+          metadataAmbiguous: true,
+          lastSeenAt: expect.any(Date),
+        }),
+      ]);
+      expect(onConflictDoUpdate).toHaveBeenCalledWith(
+        expect.objectContaining({
+          target: expect.any(Array),
+          set: expect.objectContaining({
+            source: expect.anything(),
+            metadataAmbiguous: expect.anything(),
+            lastSeenAt: expect.any(Date),
+          }),
+        }),
+      );
+      const conflictSet = onConflictDoUpdate.mock.calls[0]![0].set as Record<string, unknown>;
+      expect(sqlChunkText(conflictSet.source)).toContain("case excluded.source when 'current_file' then 2 when 'file' then 1 else 0 end");
+      expect(sqlChunkText(conflictSet.source)).toContain('>=');
+      expect(sqlChunkText(conflictSet.source)).toContain('excluded.source');
+      expect(sqlChunkText(conflictSet.metadataAmbiguous)).toContain('excluded.metadata_ambiguous');
+      expect(sqlChunkText(conflictSet.title)).toContain('coalesce');
+    });
+
+    it('clears unmatched books for a user and hash set', async () => {
+      const where = vi.fn().mockResolvedValue(undefined);
+      db.delete.mockReturnValue({ where });
+
+      await repo.clearUnmatchedBooks(7, ['a'.repeat(32), 'b'.repeat(32)]);
+
+      expect(db.delete).toHaveBeenCalledTimes(1);
+      expect(where).toHaveBeenCalledTimes(1);
+    });
+
+    it('does not issue a delete query when clearing an empty hash set', async () => {
+      await repo.clearUnmatchedBooks(7, []);
+
+      expect(db.delete).not.toHaveBeenCalled();
+    });
+
+    it('lists unmatched books newest first with the requested limit', async () => {
+      const rows = [{ hash: 'a'.repeat(32), lastSeenAt: new Date() }];
+      const chain = makeQueryChain(rows);
+      db.select.mockReturnValue(chain);
+
+      await expect(repo.listUnmatchedBooks(7, 25)).resolves.toBe(rows);
+      expect(chain.orderBy).toHaveBeenCalledTimes(1);
+      expect(chain.limit).toHaveBeenCalledWith(25);
+    });
+
+    it('returns one unmatched book for a user and hash', async () => {
+      const row = { hash: 'a'.repeat(32), title: 'Stats title' };
+      db.select.mockReturnValue(makeQueryChain([row]));
+
+      await expect(repo.getUnmatchedBook(7, 'a'.repeat(32))).resolves.toBe(row);
+    });
+
+    it('returns null when no unmatched book exists for the user and hash', async () => {
+      db.select.mockReturnValue(makeQueryChain([]));
+
+      await expect(repo.getUnmatchedBook(7, 'a'.repeat(32))).resolves.toBeNull();
+    });
+
+    it('lists manual hash links with aggregated BookOrbit authors', async () => {
+      const linkRows = [
+        {
+          hash: 'a'.repeat(32),
+          bookFileId: 44,
+          bookId: 55,
+          bookTitle: 'BookOrbit Title',
+          koreaderTitle: 'KOReader Title',
+          koreaderAuthors: 'KOReader Author',
+          koreaderLastOpen: 100,
+          createdAt: new Date('2026-06-01T10:00:00.000Z'),
+          updatedAt: new Date('2026-06-02T10:00:00.000Z'),
+        },
+      ];
+      db.select.mockReturnValueOnce(makeQueryChain(linkRows)).mockReturnValueOnce(makeQueryChain([{ bookId: 55, name: 'BookOrbit Author' }]));
+
+      await expect(repo.listBookHashLinks(7, 25, [1])).resolves.toEqual([{ ...linkRows[0], bookAuthors: ['BookOrbit Author'] }]);
+      expect(db.select).toHaveBeenCalledTimes(2);
+    });
+
+    it('does not query manual hash links when accessible libraries are empty', async () => {
+      await expect(repo.listBookHashLinks(7, 25, [])).resolves.toEqual([]);
+
+      expect(db.select).not.toHaveBeenCalled();
+    });
+
+    it('upserts a user-scoped manual hash link with KOReader metadata', async () => {
+      const onConflictDoUpdate = vi.fn().mockResolvedValue(undefined);
+      const values = vi.fn().mockReturnValue({ onConflictDoUpdate });
+      db.insert.mockReturnValue({ values });
+
+      await repo.upsertBookHashLink(7, 'a'.repeat(32), 44, { title: '  KOReader Title  ', authors: '  Author  ', lastOpen: 100 });
+
+      expect(values).toHaveBeenCalledWith(
+        expect.objectContaining({
+          userId: 7,
+          hash: 'a'.repeat(32),
+          bookFileId: 44,
+          koreaderTitle: 'KOReader Title',
+          koreaderAuthors: 'Author',
+          koreaderLastOpen: 100,
+          updatedAt: expect.any(Date),
+        }),
+      );
+      expect(onConflictDoUpdate).toHaveBeenCalledWith(
+        expect.objectContaining({
+          target: expect.any(Array),
+          set: expect.objectContaining({ bookFileId: 44, updatedAt: expect.any(Date) }),
+        }),
+      );
+    });
+
+    it('upserts a manual hash link with null metadata when none is provided', async () => {
+      const onConflictDoUpdate = vi.fn().mockResolvedValue(undefined);
+      const values = vi.fn().mockReturnValue({ onConflictDoUpdate });
+      db.insert.mockReturnValue({ values });
+
+      await repo.upsertBookHashLink(7, 'a'.repeat(32), 44);
+
+      expect(values).toHaveBeenCalledWith(
+        expect.objectContaining({
+          koreaderTitle: null,
+          koreaderAuthors: null,
+          koreaderLastOpen: null,
+        }),
+      );
+    });
+
+    it('returns an existing manual hash link for the user', async () => {
+      db.select.mockReturnValue(makeQueryChain([{ bookFileId: 44 }]));
+
+      await expect(repo.getBookHashLink(7, 'a'.repeat(32))).resolves.toEqual({ bookFileId: 44 });
+    });
+
+    it('returns null when no manual hash link exists for the user', async () => {
+      db.select.mockReturnValue(makeQueryChain([]));
+
+      await expect(repo.getBookHashLink(7, 'a'.repeat(32))).resolves.toBeNull();
+    });
+
+    it('deletes and returns a user-scoped manual hash link', async () => {
+      const row = { hash: 'a'.repeat(32), bookFileId: 44, koreaderTitle: 'Title', koreaderAuthors: 'Author', koreaderLastOpen: 100 };
+      const chain = makeQueryChain([row]);
+      db.delete.mockReturnValue(chain);
+
+      await expect(repo.deleteBookHashLink(7, 'a'.repeat(32))).resolves.toEqual(row);
+      expect(chain.returning).toHaveBeenCalledTimes(1);
     });
   });
 

@@ -1,23 +1,47 @@
 import { flushPromises, mount } from '@vue/test-utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import KoreaderSettings from '../KoreaderSettings.vue'
-import type { KoreaderCredentials, KoreaderSyncStatus } from '@bookorbit/types'
+import type { BookCard, KoreaderCredentials, KoreaderManualHashLink, KoreaderSyncStatus, KoreaderUnmatchedBook } from '@bookorbit/types'
 import { copyToClipboard } from '@/lib/clipboard'
 
 const koreaderMock = vi.hoisted(() => ({
   credentials: { __v_isRef: true, value: null as KoreaderCredentials | null },
   syncStatus: { __v_isRef: true, value: null as KoreaderSyncStatus | null },
+  unmatchedBooks: { __v_isRef: true, value: [] as KoreaderUnmatchedBook[] },
+  manualHashLinks: { __v_isRef: true, value: [] as KoreaderManualHashLink[] },
   loading: { __v_isRef: true, value: false },
+  unmatchedLoading: { __v_isRef: true, value: false },
+  manualLinksLoading: { __v_isRef: true, value: false },
   fetchSyncStatus: vi.fn<() => Promise<void>>(),
+  fetchUnmatchedBooks: vi.fn<() => Promise<void>>(),
+  fetchManualHashLinks: vi.fn<() => Promise<void>>(),
   createCredentials: vi.fn<() => Promise<void>>(),
   updateCredentials: vi.fn<() => Promise<void>>(),
   deleteCredentials: vi.fn<() => Promise<void>>(),
   getSyncUrl: vi.fn<() => string>(),
   downloadPluginPackage: vi.fn<() => Promise<void>>(),
+  linkUnmatchedBook: vi.fn<() => Promise<void>>(),
+  relinkManualHashLink: vi.fn<() => Promise<void>>(),
+  unlinkManualHashLink: vi.fn<() => Promise<void>>(),
+}))
+
+const searchMock = vi.hoisted(() => ({
+  results: { __v_isRef: true, value: [] as BookCard[] },
+  total: { __v_isRef: true, value: 0 },
+  loading: { __v_isRef: true, value: false },
+  loadingMore: { __v_isRef: true, value: false },
+  settled: { __v_isRef: true, value: true },
+  hasMore: { __v_isRef: true, value: false },
+  loadMore: vi.fn<() => Promise<void>>(),
+  clear: vi.fn<() => void>(),
 }))
 
 vi.mock('@/features/koreader/composables/useKoreaderSync', () => ({
   useKoreaderSync: () => koreaderMock,
+}))
+
+vi.mock('@/features/book/composables/useGlobalSearch', () => ({
+  useGlobalSearch: () => searchMock,
 }))
 
 vi.mock('vue-sonner', () => ({
@@ -69,9 +93,81 @@ function makeSyncStatus(overrides: Partial<KoreaderSyncStatus> = {}): KoreaderSy
         lastSweepAnnotations: 8,
       },
     ],
-    pluginTotals: { matchedBooks: 12, pageStatEvents: 30, annotations: 8, trashedAnnotations: 1, pendingDeletes: 2, failedPositions: 3 },
+    pluginTotals: {
+      matchedBooks: 12,
+      pageStatEvents: 30,
+      annotations: 8,
+      trashedAnnotations: 1,
+      pendingDeletes: 2,
+      failedPositions: 3,
+      unmatchedBooks: 0,
+    },
     ...overrides,
   }
+}
+
+function makeUnmatchedBook(overrides: Partial<KoreaderUnmatchedBook> = {}): KoreaderUnmatchedBook {
+  return {
+    hash: 'a'.repeat(32),
+    title: 'KOReader Stats Title',
+    authors: 'Device Author',
+    lastOpen: 1700000000,
+    firstSeenAt: '2026-06-01T00:00:00.000Z',
+    lastSeenAt: '2026-06-02T00:00:00.000Z',
+    ...overrides,
+  }
+}
+
+function makeHash(index: number): string {
+  return index.toString(16).padStart(32, '0')
+}
+
+function makeManualHashLink(overrides: Partial<KoreaderManualHashLink> = {}): KoreaderManualHashLink {
+  return {
+    hash: 'b'.repeat(32),
+    bookId: 70,
+    bookFileId: 71,
+    bookTitle: 'Linked BookOrbit Title',
+    bookAuthors: ['Linked Author'],
+    koreaderTitle: 'Linked KOReader Title',
+    koreaderAuthors: 'Device Author',
+    koreaderLastOpen: 1700000001,
+    createdAt: '2026-06-03T00:00:00.000Z',
+    updatedAt: '2026-06-04T00:00:00.000Z',
+    ...overrides,
+  }
+}
+
+function makeBookCard(overrides: Partial<BookCard> = {}): BookCard {
+  return {
+    id: 55,
+    title: 'BookOrbit Title',
+    authors: ['BookOrbit Author'],
+    files: [{ id: 44, format: 'epub', role: 'main', sizeBytes: 123 }],
+    status: 'present',
+    seriesName: null,
+    seriesIndex: null,
+    publishedYear: null,
+    language: null,
+    genres: [],
+    rating: null,
+    readingProgress: null,
+    readStatus: null,
+    addedAt: '2026-01-01T00:00:00.000Z',
+    updatedAt: null,
+    metadataScore: null,
+    hasCover: false,
+    hasMetadataLocks: false,
+    lockedFields: [],
+    subtitle: null,
+    publisher: null,
+    pageCount: null,
+    isbn13: null,
+    narrators: [],
+    tags: [],
+    customMetadata: [],
+    ...overrides,
+  } as BookCard
 }
 
 function mountComponent() {
@@ -87,13 +183,29 @@ describe('KoreaderSettings', () => {
     vi.clearAllMocks()
     koreaderMock.credentials.value = null
     koreaderMock.syncStatus.value = null
+    koreaderMock.unmatchedBooks.value = []
+    koreaderMock.manualHashLinks.value = []
     koreaderMock.loading.value = false
+    koreaderMock.unmatchedLoading.value = false
+    koreaderMock.manualLinksLoading.value = false
     koreaderMock.fetchSyncStatus.mockResolvedValue(undefined)
+    koreaderMock.fetchUnmatchedBooks.mockResolvedValue(undefined)
+    koreaderMock.fetchManualHashLinks.mockResolvedValue(undefined)
     koreaderMock.createCredentials.mockResolvedValue(undefined)
     koreaderMock.updateCredentials.mockResolvedValue(undefined)
     koreaderMock.deleteCredentials.mockResolvedValue(undefined)
     koreaderMock.getSyncUrl.mockReturnValue('https://bookorbit.example')
     koreaderMock.downloadPluginPackage.mockResolvedValue(undefined)
+    koreaderMock.linkUnmatchedBook.mockResolvedValue(undefined)
+    koreaderMock.relinkManualHashLink.mockResolvedValue(undefined)
+    koreaderMock.unlinkManualHashLink.mockResolvedValue(undefined)
+    searchMock.results.value = []
+    searchMock.loading.value = false
+    searchMock.loadingMore.value = false
+    searchMock.settled.value = true
+    searchMock.hasMore.value = false
+    searchMock.loadMore.mockClear()
+    searchMock.clear.mockClear()
   })
 
   it('shows loading state', () => {
@@ -144,6 +256,8 @@ describe('KoreaderSettings', () => {
       'Setup',
       'Devices',
       'Plugin Activity',
+      'Unmatched KOReader Books',
+      'Manual KOReader Links',
       'Setup Guide',
       'Danger Zone',
     ])
@@ -158,6 +272,8 @@ describe('KoreaderSettings', () => {
     expect(wrapper.text()).toContain('Update available')
     expect(wrapper.text()).toContain('latest plugin v0.5.0')
     expect(wrapper.text()).toContain('Matched books')
+    expect(wrapper.text()).toContain('No unmatched KOReader books.')
+    expect(wrapper.text()).toContain('No manual KOReader links.')
     expect(wrapper.text()).toContain('2 deleted highlights awaiting KOReader plugin acknowledgement.')
     expect(wrapper.text()).toContain('3 highlight positions need attention.')
     expect(wrapper.text()).not.toContain('Download the preconfigured plugin above.')
@@ -251,6 +367,8 @@ describe('KoreaderSettings', () => {
     await flushPromises()
 
     expect(koreaderMock.fetchSyncStatus).toHaveBeenCalledTimes(2)
+    expect(koreaderMock.fetchUnmatchedBooks).toHaveBeenCalledTimes(2)
+    expect(koreaderMock.fetchManualHashLinks).toHaveBeenCalledTimes(2)
     expect(koreaderMock.updateCredentials).toHaveBeenCalledWith({ syncEnabled: false })
     expect(vi.mocked(copyToClipboard)).toHaveBeenCalledWith('https://bookorbit.example')
     expect(koreaderMock.downloadPluginPackage).toHaveBeenCalledTimes(1)
@@ -260,5 +378,237 @@ describe('KoreaderSettings', () => {
     await deleteButtons[deleteButtons.length - 1]!.trigger('click')
 
     expect(koreaderMock.deleteCredentials).toHaveBeenCalledTimes(1)
+  })
+
+  it('opens the unmatched link dialog and submits the selected BookOrbit book', async () => {
+    const status = makeSyncStatus({ pluginTotals: { ...makeSyncStatus().pluginTotals, unmatchedBooks: 1 } })
+    koreaderMock.credentials.value = status.credentials
+    koreaderMock.syncStatus.value = status
+    koreaderMock.unmatchedBooks.value = [makeUnmatchedBook()]
+    searchMock.results.value = [makeBookCard()]
+
+    const wrapper = mountComponent()
+    await flushPromises()
+
+    await buttonByText(wrapper, 'Link')!.trigger('click')
+    expect(wrapper.text()).toContain('Link KOReader book')
+    expect(wrapper.text()).toContain('BookOrbit Title')
+
+    const bookResult = wrapper.findAll('button').find((button) => button.text().includes('BookOrbit Title'))!
+    await bookResult.trigger('click')
+    expect(wrapper.text()).toContain('Confirm KOReader link')
+    expect(wrapper.text()).toContain('Already synced stats will stay on their current BookOrbit book.')
+
+    await buttonByText(wrapper, 'Confirm link')!.trigger('click')
+    await flushPromises()
+
+    expect(koreaderMock.linkUnmatchedBook).toHaveBeenCalledWith('a'.repeat(32), { bookId: 55 })
+  })
+
+  it('loads more BookOrbit search results from the link dialog', async () => {
+    const status = makeSyncStatus({ pluginTotals: { ...makeSyncStatus().pluginTotals, unmatchedBooks: 1 } })
+    koreaderMock.credentials.value = status.credentials
+    koreaderMock.syncStatus.value = status
+    koreaderMock.unmatchedBooks.value = [makeUnmatchedBook()]
+    searchMock.results.value = [makeBookCard()]
+    searchMock.hasMore.value = true
+
+    const wrapper = mountComponent()
+    await flushPromises()
+
+    await buttonByText(wrapper, 'Link')!.trigger('click')
+    await buttonByText(wrapper, 'Load more')!.trigger('click')
+
+    expect(searchMock.loadMore).toHaveBeenCalledTimes(1)
+  })
+
+  it('renders manual links and can relink with confirmation', async () => {
+    const status = makeSyncStatus()
+    koreaderMock.credentials.value = status.credentials
+    koreaderMock.syncStatus.value = status
+    koreaderMock.manualHashLinks.value = [makeManualHashLink()]
+    searchMock.results.value = [makeBookCard({ id: 88, title: 'Replacement Book', authors: ['Replacement Author'] })]
+
+    const wrapper = mountComponent()
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('Linked KOReader Title')
+    expect(wrapper.text()).toContain('Linked to Linked BookOrbit Title')
+
+    await buttonByText(wrapper, 'Change')!.trigger('click')
+    await wrapper
+      .findAll('button')
+      .find((button) => button.text().includes('Replacement Book'))!
+      .trigger('click')
+    await buttonByText(wrapper, 'Confirm link')!.trigger('click')
+    await flushPromises()
+
+    expect(koreaderMock.relinkManualHashLink).toHaveBeenCalledWith('b'.repeat(32), { bookId: 88 })
+  })
+
+  it('confirms before unlinking a manual hash link', async () => {
+    const status = makeSyncStatus()
+    koreaderMock.credentials.value = status.credentials
+    koreaderMock.syncStatus.value = status
+    koreaderMock.manualHashLinks.value = [makeManualHashLink()]
+
+    const wrapper = mountComponent()
+    await flushPromises()
+
+    await buttonByText(wrapper, 'Unlink')!.trigger('click')
+
+    expect(wrapper.text()).toContain('Unlink KOReader book?')
+    expect(wrapper.text()).toContain('Already synced stats will stay on their current BookOrbit book.')
+
+    const unlinkButtons = wrapper.findAll('button').filter((button) => button.text() === 'Unlink')
+    await unlinkButtons[unlinkButtons.length - 1]!.trigger('click')
+    await flushPromises()
+
+    expect(koreaderMock.unlinkManualHashLink).toHaveBeenCalledWith('b'.repeat(32))
+  })
+
+  it('renders hash-only unmatched rows with a distinguishable fallback label', async () => {
+    const hash = 'c1aa241d98bcdbc5c52b2eff31c4920e'
+    const status = makeSyncStatus({ pluginTotals: { ...makeSyncStatus().pluginTotals, unmatchedBooks: 1 } })
+    koreaderMock.credentials.value = status.credentials
+    koreaderMock.syncStatus.value = status
+    koreaderMock.unmatchedBooks.value = [makeUnmatchedBook({ hash, title: null, authors: null, lastOpen: null })]
+
+    const wrapper = mountComponent()
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('Unknown KOReader file c1aa241d')
+    expect(wrapper.text()).toContain('No title or author reported')
+  })
+
+  it('paginates unmatched KOReader rows six at a time', async () => {
+    const status = makeSyncStatus({ pluginTotals: { ...makeSyncStatus().pluginTotals, unmatchedBooks: 7 } })
+    koreaderMock.credentials.value = status.credentials
+    koreaderMock.syncStatus.value = status
+    koreaderMock.unmatchedBooks.value = Array.from({ length: 7 }, (_, index) =>
+      makeUnmatchedBook({
+        hash: makeHash(index + 1),
+        title: `KOReader Row ${index + 1}`,
+      }),
+    )
+
+    const wrapper = mountComponent()
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('KOReader Row 1')
+    expect(wrapper.text()).toContain('KOReader Row 6')
+    expect(wrapper.text()).not.toContain('KOReader Row 7')
+    expect(wrapper.text()).toContain('Showing 1-6 of 7')
+    expect(wrapper.text()).toContain('Page 1 of 2')
+
+    await buttonByText(wrapper, 'Next')!.trigger('click')
+
+    expect(wrapper.text()).not.toContain('KOReader Row 1')
+    expect(wrapper.text()).toContain('KOReader Row 7')
+    expect(wrapper.text()).toContain('Showing 7-7 of 7')
+    expect(wrapper.text()).toContain('Page 2 of 2')
+
+    await buttonByText(wrapper, 'Previous')!.trigger('click')
+
+    expect(wrapper.text()).toContain('KOReader Row 1')
+    expect(wrapper.text()).not.toContain('KOReader Row 7')
+    expect(wrapper.text()).toContain('Showing 1-6 of 7')
+    expect(wrapper.text()).toContain('Page 1 of 2')
+  })
+
+  it('refreshes unmatched books and resets to the first page', async () => {
+    const status = makeSyncStatus({ pluginTotals: { ...makeSyncStatus().pluginTotals, unmatchedBooks: 7 } })
+    koreaderMock.credentials.value = status.credentials
+    koreaderMock.syncStatus.value = status
+    koreaderMock.unmatchedBooks.value = Array.from({ length: 7 }, (_, index) => makeUnmatchedBook({ hash: makeHash(index + 1) }))
+    koreaderMock.fetchUnmatchedBooks.mockResolvedValue(undefined)
+
+    const wrapper = mountComponent()
+    await flushPromises()
+    await buttonByText(wrapper, 'Next')!.trigger('click')
+    expect(wrapper.text()).toContain('Page 2 of 2')
+
+    const refreshButtons = wrapper.findAll('button').filter((button) => button.text() === 'Refresh')
+    await refreshButtons[1]!.trigger('click')
+    await flushPromises()
+
+    expect(koreaderMock.fetchUnmatchedBooks).toHaveBeenCalledTimes(2)
+    expect(wrapper.text()).toContain('Page 1 of 2')
+  })
+
+  it('shows an error toast when refreshing unmatched books fails', async () => {
+    const status = makeSyncStatus({ pluginTotals: { ...makeSyncStatus().pluginTotals, unmatchedBooks: 1 } })
+    koreaderMock.credentials.value = status.credentials
+    koreaderMock.syncStatus.value = status
+    koreaderMock.unmatchedBooks.value = [makeUnmatchedBook()]
+    koreaderMock.fetchUnmatchedBooks.mockReset()
+    koreaderMock.fetchUnmatchedBooks.mockResolvedValueOnce(undefined).mockRejectedValueOnce(new Error('network down'))
+
+    const wrapper = mountComponent()
+    await flushPromises()
+
+    const refreshButtons = wrapper.findAll('button').filter((button) => button.text() === 'Refresh')
+    await refreshButtons[1]!.trigger('click')
+    await flushPromises()
+
+    expect(koreaderMock.fetchUnmatchedBooks).toHaveBeenCalledTimes(2)
+  })
+
+  it('refreshes manual KOReader links', async () => {
+    const status = makeSyncStatus()
+    koreaderMock.credentials.value = status.credentials
+    koreaderMock.syncStatus.value = status
+    koreaderMock.manualHashLinks.value = [makeManualHashLink()]
+    koreaderMock.fetchManualHashLinks.mockResolvedValue(undefined)
+
+    const wrapper = mountComponent()
+    await flushPromises()
+
+    const refreshButtons = wrapper.findAll('button').filter((button) => button.text() === 'Refresh')
+    await refreshButtons[2]!.trigger('click')
+    await flushPromises()
+
+    expect(koreaderMock.fetchManualHashLinks).toHaveBeenCalledTimes(2)
+  })
+
+  it('shows an error toast when refreshing manual KOReader links fails', async () => {
+    const status = makeSyncStatus()
+    koreaderMock.credentials.value = status.credentials
+    koreaderMock.syncStatus.value = status
+    koreaderMock.manualHashLinks.value = [makeManualHashLink()]
+    koreaderMock.fetchManualHashLinks.mockReset()
+    koreaderMock.fetchManualHashLinks.mockResolvedValueOnce(undefined).mockRejectedValueOnce(new Error('network down'))
+
+    const wrapper = mountComponent()
+    await flushPromises()
+
+    const refreshButtons = wrapper.findAll('button').filter((button) => button.text() === 'Refresh')
+    await refreshButtons[2]!.trigger('click')
+    await flushPromises()
+
+    expect(koreaderMock.fetchManualHashLinks).toHaveBeenCalledTimes(2)
+  })
+
+  it('returns to search results when choosing a different book from the confirm step', async () => {
+    const status = makeSyncStatus({ pluginTotals: { ...makeSyncStatus().pluginTotals, unmatchedBooks: 1 } })
+    koreaderMock.credentials.value = status.credentials
+    koreaderMock.syncStatus.value = status
+    koreaderMock.unmatchedBooks.value = [makeUnmatchedBook()]
+    searchMock.results.value = [makeBookCard()]
+
+    const wrapper = mountComponent()
+    await flushPromises()
+
+    await buttonByText(wrapper, 'Link')!.trigger('click')
+    const bookResult = wrapper.findAll('button').find((button) => button.text().includes('BookOrbit Title'))!
+    await bookResult.trigger('click')
+    expect(wrapper.text()).toContain('Confirm KOReader link')
+    expect(wrapper.text()).toContain('Book ID: 55')
+
+    await buttonByText(wrapper, 'Choose different')!.trigger('click')
+
+    expect(wrapper.text()).not.toContain('Confirm KOReader link')
+    expect(wrapper.text()).not.toContain('Book ID: 55')
+    expect(wrapper.text()).toContain('BookOrbit Title')
   })
 })

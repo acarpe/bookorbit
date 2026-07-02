@@ -348,6 +348,7 @@ export class KoreaderPluginRepository {
     trashedAnnotations: number;
     pendingDeletes: number;
     failedPositions: number;
+    unmatchedBooks: number;
   }> {
     const result = await this.db.execute<{
       matched_books: string | number;
@@ -356,6 +357,7 @@ export class KoreaderPluginRepository {
       trashed_annotations: string | number;
       pending_deletes: string | number;
       failed_positions: string | number;
+      unmatched_books: string | number;
     }>(sql`
       select
         (select count(distinct t.book_file_id) from (
@@ -373,7 +375,11 @@ export class KoreaderPluginRepository {
           where s.user_id = ${userId} and a.deleted_at is not null and s.delete_acked_at is null) as pending_deletes,
         (select count(*) from annotation_positions ap
           join annotations a on a.id = ap.annotation_id
-          where ap.user_id = ${userId} and a.deleted_at is null and ap.status = 'failed') as failed_positions
+          where ap.user_id = ${userId} and a.deleted_at is null and ap.status = 'failed') as failed_positions,
+        (select count(*) from koreader_unmatched_books
+          where user_id = ${userId}
+            and source in ('current_file', 'file')
+            and metadata_ambiguous = false) as unmatched_books
     `);
     const row = result.rows[0];
     return {
@@ -383,6 +389,7 @@ export class KoreaderPluginRepository {
       trashedAnnotations: Number(row?.trashed_annotations ?? 0),
       pendingDeletes: Number(row?.pending_deletes ?? 0),
       failedPositions: Number(row?.failed_positions ?? 0),
+      unmatchedBooks: Number(row?.unmatched_books ?? 0),
     };
   }
 
@@ -397,5 +404,17 @@ export class KoreaderPluginRepository {
       .where(libraryFilter);
 
     return row?.maxTs ? new Date(row.maxTs) : null;
+  }
+
+  async getHashLinkVersion(userId: number): Promise<{ count: number; maxTs: Date | null }> {
+    const [row] = await this.db
+      .select({
+        count: sql<number | string>`count(*)`,
+        maxTs: sql<Date | string | null>`max(${schema.koreaderBookHashLinks.updatedAt})`,
+      })
+      .from(schema.koreaderBookHashLinks)
+      .where(eq(schema.koreaderBookHashLinks.userId, userId));
+
+    return { count: Number(row?.count ?? 0), maxTs: row?.maxTs ? new Date(row.maxTs) : null };
   }
 }

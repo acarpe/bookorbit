@@ -239,6 +239,13 @@
       "when": 1782775423934,
       "tag": "0033_community-rating-filter-indexes",
       "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "7",
+      "when": 1782943263105,
+      "tag": "0034_koreader-manual-hash-links",
+      "breakpoints": true
     }
   ]
 }

@@ -281,7 +281,7 @@ function CatalogDownload.install(Catalog)
             return false
         end
 
-        local body, err = self.client:matchCheck({ digest })
+        local body, err = self.client:matchCheck({ digest }, { [digest] = { source = "file" } })
         if not body then
             logger.warn("BookOrbit: downloaded file match-check failed", err)
             return false

@@ -26,6 +26,8 @@ describe('KoreaderPluginService', () => {
   let koreaderRepo: {
     getAccessibleLibraryIds: ReturnType<typeof vi.fn>;
     resolveBookFilesByHashes: ReturnType<typeof vi.fn>;
+    upsertUnmatchedBooks: ReturnType<typeof vi.fn>;
+    clearUnmatchedBooks: ReturnType<typeof vi.fn>;
     getAllDeviceProgress: ReturnType<typeof vi.fn>;
     getReadingProgress: ReturnType<typeof vi.fn>;
   };
@@ -36,6 +38,7 @@ describe('KoreaderPluginService', () => {
     listSweeps: ReturnType<typeof vi.fn>;
     getPluginTotals: ReturnType<typeof vi.fn>;
     getLibraryMaxFileTimestamp: ReturnType<typeof vi.fn>;
+    getHashLinkVersion: ReturnType<typeof vi.fn>;
   };
   let koreaderService: { applyProgressForResolvedFile: ReturnType<typeof vi.fn> };
   let userBookStatusService: { findOne: ReturnType<typeof vi.fn>; setManual: ReturnType<typeof vi.fn> };
@@ -50,6 +53,8 @@ describe('KoreaderPluginService', () => {
     koreaderRepo = {
       getAccessibleLibraryIds: vi.fn().mockResolvedValue([1]),
       resolveBookFilesByHashes: vi.fn().mockResolvedValue(new Map([[HASH_A, { bookFileId: 10, bookId: 20, libraryId: 1 }]])),
+      upsertUnmatchedBooks: vi.fn().mockResolvedValue(undefined),
+      clearUnmatchedBooks: vi.fn().mockResolvedValue(undefined),
       getAllDeviceProgress: vi.fn().mockResolvedValue([]),
       getReadingProgress: vi.fn().mockResolvedValue(null),
     };
@@ -58,8 +63,9 @@ describe('KoreaderPluginService', () => {
       upsertRating: vi.fn().mockResolvedValue(undefined),
       upsertSweep: vi.fn().mockResolvedValue(new Date('2026-06-09T10:00:00.000Z')),
       listSweeps: vi.fn().mockResolvedValue([]),
-      getPluginTotals: vi.fn().mockResolvedValue({ matchedBooks: 0, pageStatEvents: 0, annotations: 0 }),
+      getPluginTotals: vi.fn().mockResolvedValue({ matchedBooks: 0, pageStatEvents: 0, annotations: 0, unmatchedBooks: 0 }),
       getLibraryMaxFileTimestamp: vi.fn().mockResolvedValue(new Date('2026-06-01T00:00:00.000Z')),
+      getHashLinkVersion: vi.fn().mockResolvedValue({ count: 0, maxTs: null }),
     };
     koreaderService = { applyProgressForResolvedFile: vi.fn().mockResolvedValue(undefined) };
     userBookStatusService = { findOne: vi.fn().mockResolvedValue(null), setManual: vi.fn().mockResolvedValue(undefined) };
@@ -80,9 +86,62 @@ describe('KoreaderPluginService', () => {
 
       const result = await service.matchCheck(makeUser(), dto);
 
-      expect(koreaderRepo.resolveBookFilesByHashes).toHaveBeenCalledWith([HASH_A, HASH_B], [1]);
+      expect(koreaderRepo.resolveBookFilesByHashes).toHaveBeenCalledWith([HASH_A, HASH_B], [1], 7);
+      expect(koreaderRepo.clearUnmatchedBooks).toHaveBeenCalledWith(7, [HASH_A]);
+      expect(koreaderRepo.upsertUnmatchedBooks).toHaveBeenCalledWith(7, [{ hash: HASH_B, source: 'statistics' }]);
       expect(result.matches).toEqual([{ hash: HASH_A, bookId: 20, bookFileId: 10 }]);
       expect(result.libraryVersion).toMatch(/^[0-9a-f]{16}$/);
+    });
+
+    it('persists unmatched candidate metadata from the device statistics database', async () => {
+      const dto = {
+        ...deviceFields(),
+        hashes: [HASH_A, HASH_B],
+        books: [
+          { hash: HASH_A, title: 'Matched title', authors: 'Matched author', lastOpen: 100 },
+          { hash: HASH_B.toUpperCase(), title: 'Unmatched title', authors: 'Author One', lastOpen: 200 },
+        ],
+      } as MatchCheckDto;
+
+      await service.matchCheck(makeUser(), dto);
+
+      expect(koreaderRepo.upsertUnmatchedBooks).toHaveBeenCalledWith(7, [
+        { hash: HASH_B, title: 'Unmatched title', authors: 'Author One', lastOpen: 200, source: 'statistics', metadataAmbiguous: false },
+      ]);
+    });
+
+    it('keeps the strongest unmatched source and ambiguity flag for duplicate candidate metadata', async () => {
+      const dto = {
+        ...deviceFields(),
+        hashes: [HASH_B],
+        books: [
+          { hash: HASH_B, title: 'Stats title', lastOpen: 100, source: 'statistics' },
+          { hash: HASH_B, title: 'File title', authors: 'File author', lastOpen: 200, source: 'file', metadataAmbiguous: true },
+        ],
+      } as MatchCheckDto;
+
+      await service.matchCheck(makeUser(), dto);
+
+      expect(koreaderRepo.upsertUnmatchedBooks).toHaveBeenCalledWith(7, [
+        { hash: HASH_B, title: 'File title', authors: 'File author', lastOpen: 200, source: 'file', metadataAmbiguous: true },
+      ]);
+    });
+
+    it('does not overwrite stronger unmatched metadata with a weaker later candidate', async () => {
+      const dto = {
+        ...deviceFields(),
+        hashes: [HASH_B],
+        books: [
+          { hash: HASH_B, title: 'Open file title', authors: 'Open file author', lastOpen: 200, source: 'current_file', metadataAmbiguous: false },
+          { hash: HASH_B, title: 'Stats title', authors: 'Stats author', lastOpen: 300, source: 'statistics', metadataAmbiguous: true },
+        ],
+      } as MatchCheckDto;
+
+      await service.matchCheck(makeUser(), dto);
+
+      expect(koreaderRepo.upsertUnmatchedBooks).toHaveBeenCalledWith(7, [
+        { hash: HASH_B, title: 'Open file title', authors: 'Open file author', lastOpen: 300, source: 'current_file', metadataAmbiguous: false },
+      ]);
     });
 
     it('changes the library version token when the accessible library set changes', async () => {
@@ -90,6 +149,28 @@ describe('KoreaderPluginService', () => {
 
       const first = await service.matchCheck(makeUser(), dto);
       koreaderRepo.getAccessibleLibraryIds.mockResolvedValue([1, 2]);
+      const second = await service.matchCheck(makeUser(), dto);
+
+      expect(second.libraryVersion).not.toBe(first.libraryVersion);
+    });
+
+    it('changes the library version token when manual hash links change', async () => {
+      const dto = { ...deviceFields(), hashes: [HASH_A] } as MatchCheckDto;
+
+      const first = await service.matchCheck(makeUser(), dto);
+      pluginRepo.getHashLinkVersion.mockResolvedValue({ count: 1, maxTs: new Date('2026-06-02T00:00:00.000Z') });
+      const second = await service.matchCheck(makeUser(), dto);
+
+      expect(second.libraryVersion).not.toBe(first.libraryVersion);
+    });
+
+    it('changes the library version token when a manual hash link count changes without a newer timestamp', async () => {
+      const dto = { ...deviceFields(), hashes: [HASH_A] } as MatchCheckDto;
+      const maxTs = new Date('2026-06-02T00:00:00.000Z');
+      pluginRepo.getHashLinkVersion.mockResolvedValue({ count: 2, maxTs });
+
+      const first = await service.matchCheck(makeUser(), dto);
+      pluginRepo.getHashLinkVersion.mockResolvedValue({ count: 1, maxTs });
       const second = await service.matchCheck(makeUser(), dto);
 
       expect(second.libraryVersion).not.toBe(first.libraryVersion);
