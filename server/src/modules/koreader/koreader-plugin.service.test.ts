@@ -88,7 +88,7 @@ describe('KoreaderPluginService', () => {
 
       expect(koreaderRepo.resolveBookFilesByHashes).toHaveBeenCalledWith([HASH_A, HASH_B], [1], 7);
       expect(koreaderRepo.clearUnmatchedBooks).toHaveBeenCalledWith(7, [HASH_A]);
-      expect(koreaderRepo.upsertUnmatchedBooks).toHaveBeenCalledWith(7, [{ hash: HASH_B, source: 'statistics' }]);
+      expect(koreaderRepo.upsertUnmatchedBooks).toHaveBeenCalledWith(7, [{ hash: HASH_B, source: 'statistics' }], DEVICE_ID);
       expect(result.matches).toEqual([{ hash: HASH_A, bookId: 20, bookFileId: 10 }]);
       expect(result.libraryVersion).toMatch(/^[0-9a-f]{16}$/);
     });
@@ -105,9 +105,11 @@ describe('KoreaderPluginService', () => {
 
       await service.matchCheck(makeUser(), dto);
 
-      expect(koreaderRepo.upsertUnmatchedBooks).toHaveBeenCalledWith(7, [
-        { hash: HASH_B, title: 'Unmatched title', authors: 'Author One', lastOpen: 200, source: 'statistics', metadataAmbiguous: false },
-      ]);
+      expect(koreaderRepo.upsertUnmatchedBooks).toHaveBeenCalledWith(
+        7,
+        [{ hash: HASH_B, title: 'Unmatched title', authors: 'Author One', lastOpen: 200, source: 'statistics', metadataAmbiguous: false }],
+        DEVICE_ID,
+      );
     });
 
     it('keeps the strongest unmatched source and ambiguity flag for duplicate candidate metadata', async () => {
@@ -122,9 +124,11 @@ describe('KoreaderPluginService', () => {
 
       await service.matchCheck(makeUser(), dto);
 
-      expect(koreaderRepo.upsertUnmatchedBooks).toHaveBeenCalledWith(7, [
-        { hash: HASH_B, title: 'File title', authors: 'File author', lastOpen: 200, source: 'file', metadataAmbiguous: true },
-      ]);
+      expect(koreaderRepo.upsertUnmatchedBooks).toHaveBeenCalledWith(
+        7,
+        [{ hash: HASH_B, title: 'File title', authors: 'File author', lastOpen: 200, source: 'file', metadataAmbiguous: true }],
+        DEVICE_ID,
+      );
     });
 
     it('does not overwrite stronger unmatched metadata with a weaker later candidate', async () => {
@@ -139,9 +143,11 @@ describe('KoreaderPluginService', () => {
 
       await service.matchCheck(makeUser(), dto);
 
-      expect(koreaderRepo.upsertUnmatchedBooks).toHaveBeenCalledWith(7, [
-        { hash: HASH_B, title: 'Open file title', authors: 'Open file author', lastOpen: 300, source: 'current_file', metadataAmbiguous: false },
-      ]);
+      expect(koreaderRepo.upsertUnmatchedBooks).toHaveBeenCalledWith(
+        7,
+        [{ hash: HASH_B, title: 'Open file title', authors: 'Open file author', lastOpen: 300, source: 'current_file', metadataAmbiguous: false }],
+        DEVICE_ID,
+      );
     });
 
     it('changes the library version token when the accessible library set changes', async () => {

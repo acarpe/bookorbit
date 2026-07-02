@@ -246,6 +246,13 @@
       "when": 1782943263105,
       "tag": "0034_koreader-manual-hash-links",
       "breakpoints": true
+    },
+    {
+      "idx": 35,
+      "version": "7",
+      "when": 1783009954135,
+      "tag": "0035_add_koreader_unmatched_book_devices",
+      "breakpoints": true
     }
   ]
 }

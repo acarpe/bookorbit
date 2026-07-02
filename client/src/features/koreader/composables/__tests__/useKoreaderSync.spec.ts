@@ -138,7 +138,29 @@ describe('useKoreaderSync', () => {
     expect(loading.value).toBe(false)
   })
 
-  it('createCredentials makes POST with payload and refreshes status', async () => {
+  it('fetchSyncStatus does not toggle loading when called silently', async () => {
+    const status = makeSyncStatus()
+    let resolveResponse: ((value: Response) => void) | undefined
+    apiMock.mockReturnValueOnce(
+      new Promise<Response>((resolve) => {
+        resolveResponse = resolve
+      }),
+    )
+
+    const { useKoreaderSync } = await import('../useKoreaderSync')
+    const { loading, syncStatus, fetchSyncStatus } = useKoreaderSync()
+
+    const fetchPromise = fetchSyncStatus(true)
+    expect(loading.value).toBe(false)
+
+    resolveResponse?.(makeResponse(status))
+    await fetchPromise
+
+    expect(loading.value).toBe(false)
+    expect(syncStatus.value).toEqual(status)
+  })
+
+  it('createCredentials makes POST with payload and refreshes status without toggling the page loading flag', async () => {
     const payload: CreateKoreaderCredentialsPayload = {
       username: 'new-user',
       password: 'secret',
@@ -147,9 +169,11 @@ describe('useKoreaderSync', () => {
     apiMock.mockResolvedValueOnce(makeResponse({})).mockResolvedValueOnce(makeResponse(refreshedStatus))
 
     const { useKoreaderSync } = await import('../useKoreaderSync')
-    const { syncStatus, credentials, createCredentials } = useKoreaderSync()
+    const { syncStatus, credentials, loading, createCredentials } = useKoreaderSync()
 
-    await createCredentials(payload)
+    const createPromise = createCredentials(payload)
+    expect(loading.value).toBe(false)
+    await createPromise
 
     const [url, request] = apiMock.mock.calls[0] as [string, RequestInit]
     expect(url).toBe('/api/v1/koreader/credentials')
@@ -159,6 +183,7 @@ describe('useKoreaderSync', () => {
     expect(apiMock).toHaveBeenNthCalledWith(2, '/api/v1/koreader/sync-status')
     expect(syncStatus.value).toEqual(refreshedStatus)
     expect(credentials.value).toEqual(refreshedStatus.credentials)
+    expect(loading.value).toBe(false)
   })
 
   it('createCredentials throws error on non-ok response with message', async () => {
@@ -423,6 +448,76 @@ describe('useKoreaderSync', () => {
     await expect(linkUnmatchedBook('a'.repeat(32), { bookId: 55 })).rejects.toThrow('KOReader hash already matches a different book')
   })
 
+  it('dismissUnmatchedBook deletes the entry, removes it locally, and refreshes sync status without toggling the page loading flag', async () => {
+    const hash = 'a'.repeat(32)
+    const refreshedStatus = makeSyncStatus({ pluginTotals: { ...makeSyncStatus().pluginTotals, unmatchedBooks: 0 } })
+    apiMock.mockResolvedValueOnce(makeResponse({ hash })).mockResolvedValueOnce(makeResponse(refreshedStatus))
+
+    const { useKoreaderSync } = await import('../useKoreaderSync')
+    const { unmatchedBooks, syncStatus, loading, dismissUnmatchedBook } = useKoreaderSync()
+    unmatchedBooks.value = [makeUnmatchedBook({ hash }), makeUnmatchedBook({ hash: 'b'.repeat(32) })]
+
+    const dismissPromise = dismissUnmatchedBook(hash)
+    expect(loading.value).toBe(false)
+    await expect(dismissPromise).resolves.toEqual({ hash })
+
+    expect(apiMock).toHaveBeenCalledWith(`/api/v1/koreader/unmatched-books/${hash}`, { method: 'DELETE' })
+    expect(unmatchedBooks.value).toEqual([makeUnmatchedBook({ hash: 'b'.repeat(32) })])
+    expect(syncStatus.value).toEqual(refreshedStatus)
+    expect(loading.value).toBe(false)
+  })
+
+  it('dismissUnmatchedBook throws the server message on failure', async () => {
+    apiMock.mockResolvedValueOnce(makeResponse({ message: 'KOReader unmatched book not found' }, { ok: false, status: 404 }))
+
+    const { useKoreaderSync } = await import('../useKoreaderSync')
+    const { dismissUnmatchedBook } = useKoreaderSync()
+
+    await expect(dismissUnmatchedBook('a'.repeat(32))).rejects.toThrow('KOReader unmatched book not found')
+  })
+
+  it('dismissUnmatchedBook falls back to a generic message when the error body is not JSON', async () => {
+    apiMock.mockResolvedValueOnce(makeInvalidJsonResponse())
+
+    const { useKoreaderSync } = await import('../useKoreaderSync')
+    const { dismissUnmatchedBook } = useKoreaderSync()
+
+    await expect(dismissUnmatchedBook('a'.repeat(32))).rejects.toThrow('Failed to dismiss KOReader unmatched book')
+  })
+
+  it('dismissAllUnmatchedBooks deletes all entries, clears local state, and refreshes sync status', async () => {
+    const refreshedStatus = makeSyncStatus({ pluginTotals: { ...makeSyncStatus().pluginTotals, unmatchedBooks: 0 } })
+    apiMock.mockResolvedValueOnce(makeResponse({ count: 2 })).mockResolvedValueOnce(makeResponse(refreshedStatus))
+
+    const { useKoreaderSync } = await import('../useKoreaderSync')
+    const { unmatchedBooks, syncStatus, dismissAllUnmatchedBooks } = useKoreaderSync()
+    unmatchedBooks.value = [makeUnmatchedBook({ hash: 'a'.repeat(32) }), makeUnmatchedBook({ hash: 'b'.repeat(32) })]
+
+    await expect(dismissAllUnmatchedBooks()).resolves.toEqual({ count: 2 })
+
+    expect(apiMock).toHaveBeenCalledWith('/api/v1/koreader/unmatched-books', { method: 'DELETE' })
+    expect(unmatchedBooks.value).toEqual([])
+    expect(syncStatus.value).toEqual(refreshedStatus)
+  })
+
+  it('dismissAllUnmatchedBooks throws the server message on failure', async () => {
+    apiMock.mockResolvedValueOnce(makeResponse({ message: 'Something went wrong' }, { ok: false, status: 500 }))
+
+    const { useKoreaderSync } = await import('../useKoreaderSync')
+    const { dismissAllUnmatchedBooks } = useKoreaderSync()
+
+    await expect(dismissAllUnmatchedBooks()).rejects.toThrow('Something went wrong')
+  })
+
+  it('dismissAllUnmatchedBooks falls back to a generic message when the error body is not JSON', async () => {
+    apiMock.mockResolvedValueOnce(makeInvalidJsonResponse())
+
+    const { useKoreaderSync } = await import('../useKoreaderSync')
+    const { dismissAllUnmatchedBooks } = useKoreaderSync()
+
+    await expect(dismissAllUnmatchedBooks()).rejects.toThrow('Failed to dismiss all KOReader unmatched books')
+  })
+
   it('relinkManualHashLink patches the target book and refreshes status and manual links', async () => {
     const linked = { hash: 'b'.repeat(32), bookId: 88, bookFileId: 89 }
     const refreshedStatus = makeSyncStatus()
@@ -482,5 +577,39 @@ describe('useKoreaderSync', () => {
     const { unlinkManualHashLink } = useKoreaderSync()
 
     await expect(unlinkManualHashLink('b'.repeat(32))).rejects.toThrow('KOReader manual link not found')
+  })
+
+  it('removeDevice deletes the device and refreshes the sync status without toggling the page loading flag', async () => {
+    const refreshedStatus = makeSyncStatus({ devices: [] })
+    apiMock.mockResolvedValueOnce(makeResponse({ success: true })).mockResolvedValueOnce(makeResponse(refreshedStatus))
+
+    const { useKoreaderSync } = await import('../useKoreaderSync')
+    const { syncStatus, loading, removeDevice } = useKoreaderSync()
+
+    const removePromise = removeDevice('device-1')
+    expect(loading.value).toBe(false)
+    await expect(removePromise).resolves.toBeUndefined()
+
+    expect(apiMock).toHaveBeenCalledWith('/api/v1/koreader/devices/device-1', { method: 'DELETE' })
+    expect(syncStatus.value).toEqual(refreshedStatus)
+    expect(loading.value).toBe(false)
+  })
+
+  it('removeDevice throws the server message on failure', async () => {
+    apiMock.mockResolvedValueOnce(makeResponse({ message: 'KOReader device not found' }, { ok: false, status: 404 }))
+
+    const { useKoreaderSync } = await import('../useKoreaderSync')
+    const { removeDevice } = useKoreaderSync()
+
+    await expect(removeDevice('missing-device')).rejects.toThrow('KOReader device not found')
+  })
+
+  it('removeDevice falls back to a generic message when the error body is not JSON', async () => {
+    apiMock.mockResolvedValueOnce(makeInvalidJsonResponse())
+
+    const { useKoreaderSync } = await import('../useKoreaderSync')
+    const { removeDevice } = useKoreaderSync()
+
+    await expect(removeDevice('device-1')).rejects.toThrow('Failed to remove KOReader device')
   })
 })

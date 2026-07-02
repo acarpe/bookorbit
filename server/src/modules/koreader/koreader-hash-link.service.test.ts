@@ -22,6 +22,8 @@ describe('KoreaderHashLinkService', () => {
     deleteBookHashLink: ReturnType<typeof vi.fn>;
     upsertUnmatchedBooks: ReturnType<typeof vi.fn>;
     findBookFileIdByBookId: ReturnType<typeof vi.fn>;
+    dismissUnmatchedBook: ReturnType<typeof vi.fn>;
+    dismissAllUnmatchedBooks: ReturnType<typeof vi.fn>;
   };
   let mockBookService: {
     verifyBookAccess: ReturnType<typeof vi.fn>;
@@ -63,6 +65,8 @@ describe('KoreaderHashLinkService', () => {
       deleteBookHashLink: vi.fn().mockResolvedValue(null),
       upsertUnmatchedBooks: vi.fn().mockResolvedValue(undefined),
       findBookFileIdByBookId: vi.fn(),
+      dismissUnmatchedBook: vi.fn().mockResolvedValue(null),
+      dismissAllUnmatchedBooks: vi.fn().mockResolvedValue(0),
     };
 
     mockBookService = {
@@ -346,6 +350,52 @@ describe('KoreaderHashLinkService', () => {
       await expect(service.unlinkManualHashLink(user, HASH_A)).rejects.toThrow(NotFoundException);
 
       expect(mockRepo.upsertUnmatchedBooks).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('dismissUnmatchedBook', () => {
+    it('dismisses an unmatched book and returns its hash', async () => {
+      mockRepo.dismissUnmatchedBook.mockResolvedValue({ hash: HASH_A });
+
+      await expect(service.dismissUnmatchedBook(user, HASH_A)).resolves.toEqual({ hash: HASH_A });
+
+      expect(mockRepo.dismissUnmatchedBook).toHaveBeenCalledWith(7, HASH_A);
+    });
+
+    it('normalizes the hash before dismissing', async () => {
+      mockRepo.dismissUnmatchedBook.mockResolvedValue({ hash: HASH_A });
+
+      await service.dismissUnmatchedBook(user, HASH_A.toUpperCase());
+
+      expect(mockRepo.dismissUnmatchedBook).toHaveBeenCalledWith(7, HASH_A);
+    });
+
+    it('rejects an invalid hash before calling the repository', async () => {
+      await expect(service.dismissUnmatchedBook(user, 'not-a-hash')).rejects.toThrow(BadRequestException);
+
+      expect(mockRepo.dismissUnmatchedBook).not.toHaveBeenCalled();
+    });
+
+    it('rejects dismissing when no unmatched book exists for the user', async () => {
+      mockRepo.dismissUnmatchedBook.mockResolvedValue(null);
+
+      await expect(service.dismissUnmatchedBook(user, HASH_A)).rejects.toThrow(NotFoundException);
+    });
+  });
+
+  describe('dismissAllUnmatchedBooks', () => {
+    it('dismisses all unmatched books for the user and returns the count', async () => {
+      mockRepo.dismissAllUnmatchedBooks.mockResolvedValue(5);
+
+      await expect(service.dismissAllUnmatchedBooks(user)).resolves.toEqual({ count: 5 });
+
+      expect(mockRepo.dismissAllUnmatchedBooks).toHaveBeenCalledWith(7);
+    });
+
+    it('returns a zero count when there is nothing to dismiss', async () => {
+      mockRepo.dismissAllUnmatchedBooks.mockResolvedValue(0);
+
+      await expect(service.dismissAllUnmatchedBooks(user)).resolves.toEqual({ count: 0 });
     });
   });
 });

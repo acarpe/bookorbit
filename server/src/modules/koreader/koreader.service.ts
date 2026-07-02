@@ -16,6 +16,7 @@ import { AchievementEventsService, ACHIEVEMENT_EVENT_BOOK_PROGRESS_CHANGED } fro
 const BCRYPT_ROUNDS = 12;
 const SYNC_EVENT = 'koreader.sync';
 const CREDENTIALS_EVENT = 'koreader.credentials';
+const DEVICE_REMOVE_EVENT = 'koreader.device_remove';
 const DEFAULT_DEVICE = 'KOReader';
 
 @Injectable()
@@ -271,6 +272,24 @@ export class KoreaderService {
       lastSyncAt: r.lastSyncAt.toISOString(),
       lastBookTitle: r.lastBookTitle,
     }));
+  }
+
+  async removeDevice(userId: number, deviceId: string): Promise<void> {
+    const startedAt = Date.now();
+    this.logger.log(`[${DEVICE_REMOVE_EVENT}] [start] userId=${userId} deviceId=${deviceId} - remove device started`);
+
+    const deletedRows = await this.repo.removeDevice(userId, deviceId);
+
+    if (deletedRows === 0) {
+      this.logger.warn(
+        `[${DEVICE_REMOVE_EVENT}] [fail] userId=${userId} deviceId=${deviceId} durationMs=${Date.now() - startedAt} errorClass=NotFoundException error="device not found" - remove device failed`,
+      );
+      throw new NotFoundException('KOReader device not found');
+    }
+
+    this.logger.log(
+      `[${DEVICE_REMOVE_EVENT}] [end] userId=${userId} deviceId=${deviceId} durationMs=${Date.now() - startedAt} deletedRows=${deletedRows} - remove device completed`,
+    );
   }
 
   async getBookProgress(userId: number, bookId: number): Promise<KoreaderBookSyncInfo | null> {

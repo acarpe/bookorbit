@@ -99,6 +99,14 @@ export interface LinkKoreaderUnmatchedBookResult {
   bookFileId: number;
 }
 
+export interface DismissKoreaderUnmatchedBookResult {
+  hash: string;
+}
+
+export interface DismissAllKoreaderUnmatchedBooksResult {
+  count: number;
+}
+
 export interface UpdateKoreaderManualHashLinkPayload {
   bookId: number;
 }

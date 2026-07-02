@@ -25,6 +25,7 @@ function makeDb() {
     update: vi.fn(),
     delete: vi.fn(),
     execute: vi.fn(),
+    transaction: vi.fn(),
     query: {
       users: { findFirst: vi.fn() },
       koreaderUsers: { findFirst: vi.fn() },
@@ -157,15 +158,19 @@ describe('KoreaderRepository', () => {
   });
 
   describe('unmatched books and manual hash links', () => {
-    it('upserts unmatched candidates with trimmed nullable metadata', async () => {
+    it('upserts unmatched candidates with trimmed nullable metadata and no device association when deviceId is omitted', async () => {
       const onConflictDoUpdate = vi.fn().mockResolvedValue(undefined);
       const values = vi.fn().mockReturnValue({ onConflictDoUpdate });
-      db.insert.mockReturnValue({ values });
+      const txInsert = vi.fn().mockReturnValue({ values });
+      const tx = { insert: txInsert };
+      db.transaction.mockImplementation(async (handler: (client: typeof tx) => Promise<void>) => handler(tx));
 
       await repo.upsertUnmatchedBooks(7, [
         { hash: 'a'.repeat(32), title: '  Title  ', authors: '  Author  ', lastOpen: 100, source: 'file', metadataAmbiguous: true },
       ]);
 
+      expect(db.transaction).toHaveBeenCalledTimes(1);
+      expect(txInsert).toHaveBeenCalledTimes(1);
       expect(values).toHaveBeenCalledWith([
         expect.objectContaining({
           userId: 7,
@@ -196,6 +201,28 @@ describe('KoreaderRepository', () => {
       expect(sqlChunkText(conflictSet.title)).toContain('coalesce');
     });
 
+    it('also upserts a device association when a deviceId is provided', async () => {
+      const booksOnConflict = vi.fn().mockResolvedValue(undefined);
+      const booksValues = vi.fn().mockReturnValue({ onConflictDoUpdate: booksOnConflict });
+      const devicesOnConflict = vi.fn().mockResolvedValue(undefined);
+      const devicesValues = vi.fn().mockReturnValue({ onConflictDoUpdate: devicesOnConflict });
+      const txInsert = vi.fn().mockReturnValueOnce({ values: booksValues }).mockReturnValueOnce({ values: devicesValues });
+      const tx = { insert: txInsert };
+      db.transaction.mockImplementation(async (handler: (client: typeof tx) => Promise<void>) => handler(tx));
+
+      await repo.upsertUnmatchedBooks(7, [{ hash: 'a'.repeat(32), source: 'statistics' }], 'device-1');
+
+      expect(txInsert).toHaveBeenCalledTimes(2);
+      expect(devicesValues).toHaveBeenCalledWith([{ userId: 7, hash: 'a'.repeat(32), deviceId: 'device-1', lastSeenAt: expect.any(Date) }]);
+      expect(devicesOnConflict).toHaveBeenCalledWith(expect.objectContaining({ target: expect.any(Array), set: { lastSeenAt: expect.any(Date) } }));
+    });
+
+    it('does not touch device associations when no candidates are given', async () => {
+      await repo.upsertUnmatchedBooks(7, [], 'device-1');
+
+      expect(db.transaction).not.toHaveBeenCalled();
+    });
+
     it('clears unmatched books for a user and hash set', async () => {
       const where = vi.fn().mockResolvedValue(undefined);
       db.delete.mockReturnValue({ where });
@@ -210,6 +237,34 @@ describe('KoreaderRepository', () => {
       await repo.clearUnmatchedBooks(7, []);
 
       expect(db.delete).not.toHaveBeenCalled();
+    });
+
+    it('dismisses and returns a user-scoped unmatched book', async () => {
+      const chain = makeQueryChain([{ hash: 'a'.repeat(32) }]);
+      db.delete.mockReturnValue(chain);
+
+      await expect(repo.dismissUnmatchedBook(7, 'a'.repeat(32))).resolves.toEqual({ hash: 'a'.repeat(32) });
+      expect(chain.returning).toHaveBeenCalledTimes(1);
+    });
+
+    it('returns null when dismissing an unmatched book that does not exist for the user', async () => {
+      db.delete.mockReturnValue(makeQueryChain([]));
+
+      await expect(repo.dismissUnmatchedBook(7, 'a'.repeat(32))).resolves.toBeNull();
+    });
+
+    it('dismisses all visible unmatched books for a user and returns the count', async () => {
+      const chain = makeQueryChain([{ hash: 'a'.repeat(32) }, { hash: 'b'.repeat(32) }, { hash: 'c'.repeat(32) }]);
+      db.delete.mockReturnValue(chain);
+
+      await expect(repo.dismissAllUnmatchedBooks(7)).resolves.toBe(3);
+      expect(chain.returning).toHaveBeenCalledTimes(1);
+    });
+
+    it('returns zero when there are no unmatched books to dismiss', async () => {
+      db.delete.mockReturnValue(makeQueryChain([]));
+
+      await expect(repo.dismissAllUnmatchedBooks(7)).resolves.toBe(0);
     });
 
     it('lists unmatched books newest first with the requested limit', async () => {
@@ -484,6 +539,55 @@ describe('KoreaderRepository', () => {
 
       await expect(repo.getTotalSyncedBooks(42)).resolves.toBe(3);
       await expect(repo.getTotalSyncedBooks(42)).resolves.toBe(0);
+    });
+
+    it('removeDevice deletes progress/sweep/page-stat/unmatched-device-link rows and cleans up orphaned unmatched books, summing everything', async () => {
+      const returning = vi
+        .fn()
+        .mockResolvedValueOnce([{ id: 1 }, { id: 2 }]) // device progress
+        .mockResolvedValueOnce([{ deviceId: 'device-1' }]) // device sweeps
+        .mockResolvedValueOnce([{ id: 5 }]) // page stats
+        .mockResolvedValueOnce([{ hash: 'a'.repeat(32) }]) // unmatched-book device links
+        .mockResolvedValueOnce([{ hash: 'a'.repeat(32) }]); // orphaned unmatched books cleanup
+      const txDeleteBuilder = { where: vi.fn().mockReturnValue({ returning }) };
+      const txSelectBuilder = { from: vi.fn().mockReturnValue({ where: vi.fn().mockReturnValue('SUBQUERY') }) };
+      const tx = { delete: vi.fn().mockReturnValue(txDeleteBuilder), select: vi.fn().mockReturnValue(txSelectBuilder) };
+      db.transaction.mockImplementation(async (handler: (client: typeof tx) => Promise<number>) => handler(tx));
+
+      await expect(repo.removeDevice(42, 'device-1')).resolves.toBe(6);
+
+      expect(db.transaction).toHaveBeenCalledTimes(1);
+      expect(tx.delete).toHaveBeenCalledTimes(5);
+      expect(txDeleteBuilder.where).toHaveBeenCalledTimes(5);
+      expect(returning).toHaveBeenCalledTimes(5);
+      expect(tx.select).toHaveBeenCalledTimes(1);
+    });
+
+    it('removeDevice skips the orphaned unmatched-book cleanup when the device had no unmatched-book links', async () => {
+      const returning = vi
+        .fn()
+        .mockResolvedValueOnce([{ id: 1 }])
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([]); // no unmatched-book device links removed
+      const txDeleteBuilder = { where: vi.fn().mockReturnValue({ returning }) };
+      const tx = { delete: vi.fn().mockReturnValue(txDeleteBuilder), select: vi.fn() };
+      db.transaction.mockImplementation(async (handler: (client: typeof tx) => Promise<number>) => handler(tx));
+
+      await expect(repo.removeDevice(42, 'device-1')).resolves.toBe(1);
+
+      expect(tx.delete).toHaveBeenCalledTimes(4);
+      expect(tx.select).not.toHaveBeenCalled();
+    });
+
+    it('removeDevice returns zero when nothing matched the given user and device', async () => {
+      const returning = vi.fn().mockResolvedValue([]);
+      const txDeleteBuilder = { where: vi.fn().mockReturnValue({ returning }) };
+      const tx = { delete: vi.fn().mockReturnValue(txDeleteBuilder), select: vi.fn() };
+      db.transaction.mockImplementation(async (handler: (client: typeof tx) => Promise<number>) => handler(tx));
+
+      await expect(repo.removeDevice(42, 'unknown-device')).resolves.toBe(0);
+      expect(tx.select).not.toHaveBeenCalled();
     });
   });
 

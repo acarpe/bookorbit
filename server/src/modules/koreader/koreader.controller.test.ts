@@ -17,12 +17,15 @@ function makeController() {
     getCredentials: vi.fn().mockResolvedValue({ username: 'reader', syncEnabled: true, createdAt: '2026-01-01' }),
     getSyncStatus: vi.fn().mockResolvedValue({ credentials: null }),
     getDevices: vi.fn().mockResolvedValue([]),
+    removeDevice: vi.fn().mockResolvedValue(undefined),
     getBookProgress: vi.fn().mockResolvedValue(null),
     testConnection: vi.fn().mockResolvedValue(true),
   };
   const hashLinkService = {
     listUnmatchedBooks: vi.fn().mockResolvedValue([]),
     linkUnmatchedBook: vi.fn().mockResolvedValue({ hash: 'a'.repeat(32), bookId: 1, bookFileId: 2 }),
+    dismissUnmatchedBook: vi.fn().mockResolvedValue({ hash: 'a'.repeat(32) }),
+    dismissAllUnmatchedBooks: vi.fn().mockResolvedValue({ count: 3 }),
     listManualHashLinks: vi.fn().mockResolvedValue([]),
     relinkManualHashLink: vi.fn().mockResolvedValue({ hash: 'a'.repeat(32), bookId: 1, bookFileId: 2 }),
     unlinkManualHashLink: vi.fn().mockResolvedValue({ hash: 'a'.repeat(32) }),
@@ -112,6 +115,26 @@ describe('KoreaderController', () => {
     expect(koreaderService.getBookProgress).toHaveBeenCalledWith(7, 10);
   });
 
+  it('forwards device removal requests to the service', async () => {
+    const { controller, koreaderService } = makeController();
+    const user = { id: 7 } as never;
+
+    await expect(controller.removeDevice(user, 'device-1')).resolves.toEqual({ success: true });
+    expect(koreaderService.removeDevice).toHaveBeenCalledWith(7, 'device-1');
+  });
+
+  it('grants Koreader Sync permission for the device removal route', () => {
+    expect(Reflect.getMetadata(PERMISSION_KEY, KoreaderController.prototype.removeDevice)).toBe(Permission.KoreaderSync);
+  });
+
+  it('grants Koreader Sync permission for the unmatched-book dismiss route', () => {
+    expect(Reflect.getMetadata(PERMISSION_KEY, KoreaderController.prototype.dismissUnmatchedBook)).toBe(Permission.KoreaderSync);
+  });
+
+  it('grants Koreader Sync permission for the unmatched-book bulk dismiss route', () => {
+    expect(Reflect.getMetadata(PERMISSION_KEY, KoreaderController.prototype.dismissAllUnmatchedBooks)).toBe(Permission.KoreaderSync);
+  });
+
   it('forwards unmatched-book and manual hash link routes to the hash link service', async () => {
     const { controller, hashLinkService } = makeController();
     const user = { id: 7 } as never;
@@ -122,6 +145,12 @@ describe('KoreaderController', () => {
 
     await expect(controller.linkUnmatchedBook(user, hash, { bookId: 55 } as never)).resolves.toEqual({ hash, bookId: 1, bookFileId: 2 });
     expect(hashLinkService.linkUnmatchedBook).toHaveBeenCalledWith(user, hash, 55);
+
+    await expect(controller.dismissUnmatchedBook(user, hash)).resolves.toEqual({ hash });
+    expect(hashLinkService.dismissUnmatchedBook).toHaveBeenCalledWith(user, hash);
+
+    await expect(controller.dismissAllUnmatchedBooks(user)).resolves.toEqual({ count: 3 });
+    expect(hashLinkService.dismissAllUnmatchedBooks).toHaveBeenCalledWith(user);
 
     await expect(controller.listManualHashLinks(user)).resolves.toEqual([]);
     expect(hashLinkService.listManualHashLinks).toHaveBeenCalledWith(user);

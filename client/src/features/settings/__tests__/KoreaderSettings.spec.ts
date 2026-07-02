@@ -21,8 +21,11 @@ const koreaderMock = vi.hoisted(() => ({
   getSyncUrl: vi.fn<() => string>(),
   downloadPluginPackage: vi.fn<() => Promise<void>>(),
   linkUnmatchedBook: vi.fn<() => Promise<void>>(),
+  dismissUnmatchedBook: vi.fn<() => Promise<void>>(),
+  dismissAllUnmatchedBooks: vi.fn<() => Promise<{ count: number }>>(),
   relinkManualHashLink: vi.fn<() => Promise<void>>(),
   unlinkManualHashLink: vi.fn<() => Promise<void>>(),
+  removeDevice: vi.fn<() => Promise<void>>(),
 }))
 
 const searchMock = vi.hoisted(() => ({
@@ -197,8 +200,11 @@ describe('KoreaderSettings', () => {
     koreaderMock.getSyncUrl.mockReturnValue('https://bookorbit.example')
     koreaderMock.downloadPluginPackage.mockResolvedValue(undefined)
     koreaderMock.linkUnmatchedBook.mockResolvedValue(undefined)
+    koreaderMock.dismissUnmatchedBook.mockResolvedValue(undefined)
+    koreaderMock.dismissAllUnmatchedBooks.mockResolvedValue({ count: 0 })
     koreaderMock.relinkManualHashLink.mockResolvedValue(undefined)
     koreaderMock.unlinkManualHashLink.mockResolvedValue(undefined)
+    koreaderMock.removeDevice.mockResolvedValue(undefined)
     searchMock.results.value = []
     searchMock.loading.value = false
     searchMock.loadingMore.value = false
@@ -405,6 +411,139 @@ describe('KoreaderSettings', () => {
     expect(koreaderMock.linkUnmatchedBook).toHaveBeenCalledWith('a'.repeat(32), { bookId: 55 })
   })
 
+  it('confirms before dismissing an unmatched KOReader book', async () => {
+    const status = makeSyncStatus({ pluginTotals: { ...makeSyncStatus().pluginTotals, unmatchedBooks: 1 } })
+    koreaderMock.credentials.value = status.credentials
+    koreaderMock.syncStatus.value = status
+    koreaderMock.unmatchedBooks.value = [makeUnmatchedBook()]
+
+    const wrapper = mountComponent()
+    await flushPromises()
+
+    await wrapper
+      .findAll('button')
+      .find((button) => button.text() === 'Dismiss')!
+      .trigger('click')
+
+    expect(wrapper.text()).toContain('Dismiss')
+    expect(wrapper.text()).toContain('a'.repeat(32))
+
+    const dismissButtons = wrapper.findAll('button').filter((button) => button.text() === 'Dismiss')
+    await dismissButtons[dismissButtons.length - 1]!.trigger('click')
+    await flushPromises()
+
+    expect(koreaderMock.dismissUnmatchedBook).toHaveBeenCalledWith('a'.repeat(32))
+  })
+
+  it('cancels dismissing an unmatched KOReader book without calling dismissUnmatchedBook', async () => {
+    const status = makeSyncStatus({ pluginTotals: { ...makeSyncStatus().pluginTotals, unmatchedBooks: 1 } })
+    koreaderMock.credentials.value = status.credentials
+    koreaderMock.syncStatus.value = status
+    koreaderMock.unmatchedBooks.value = [makeUnmatchedBook()]
+
+    const wrapper = mountComponent()
+    await flushPromises()
+
+    await wrapper
+      .findAll('button')
+      .find((button) => button.text() === 'Dismiss')!
+      .trigger('click')
+    await buttonByText(wrapper, 'Cancel')!.trigger('click')
+
+    expect(koreaderMock.dismissUnmatchedBook).not.toHaveBeenCalled()
+  })
+
+  it('keeps the confirm dialog open and reports an error when dismissing an unmatched book fails', async () => {
+    const status = makeSyncStatus({ pluginTotals: { ...makeSyncStatus().pluginTotals, unmatchedBooks: 1 } })
+    koreaderMock.credentials.value = status.credentials
+    koreaderMock.syncStatus.value = status
+    koreaderMock.unmatchedBooks.value = [makeUnmatchedBook()]
+    koreaderMock.dismissUnmatchedBook.mockRejectedValueOnce(new Error('Failed to dismiss KOReader unmatched book'))
+
+    const wrapper = mountComponent()
+    await flushPromises()
+
+    await wrapper
+      .findAll('button')
+      .find((button) => button.text() === 'Dismiss')!
+      .trigger('click')
+    const dismissButtons = wrapper.findAll('button').filter((button) => button.text() === 'Dismiss')
+    await dismissButtons[dismissButtons.length - 1]!.trigger('click')
+    await flushPromises()
+
+    expect(koreaderMock.dismissUnmatchedBook).toHaveBeenCalledWith('a'.repeat(32))
+    expect(wrapper.text()).toContain('a'.repeat(32))
+  })
+
+  it('does not show a Dismiss all button when there are no unmatched books', async () => {
+    const status = makeSyncStatus()
+    koreaderMock.credentials.value = status.credentials
+    koreaderMock.syncStatus.value = status
+    koreaderMock.unmatchedBooks.value = []
+
+    const wrapper = mountComponent()
+    await flushPromises()
+
+    expect(buttonByText(wrapper, 'Dismiss all')).toBeUndefined()
+  })
+
+  it('confirms before dismissing all unmatched KOReader books', async () => {
+    const status = makeSyncStatus({ pluginTotals: { ...makeSyncStatus().pluginTotals, unmatchedBooks: 2 } })
+    koreaderMock.credentials.value = status.credentials
+    koreaderMock.syncStatus.value = status
+    koreaderMock.unmatchedBooks.value = [makeUnmatchedBook({ hash: 'a'.repeat(32) }), makeUnmatchedBook({ hash: 'c'.repeat(32) })]
+    koreaderMock.dismissAllUnmatchedBooks.mockResolvedValue({ count: 2 })
+
+    const wrapper = mountComponent()
+    await flushPromises()
+
+    await buttonByText(wrapper, 'Dismiss all')!.trigger('click')
+
+    expect(wrapper.text()).toContain('Dismiss all 2 unmatched books?')
+    expect(wrapper.text()).toContain('clears your entire unmatched books list')
+
+    const dismissAllButtons = wrapper.findAll('button').filter((button) => button.text() === 'Dismiss all')
+    await dismissAllButtons[dismissAllButtons.length - 1]!.trigger('click')
+    await flushPromises()
+
+    expect(koreaderMock.dismissAllUnmatchedBooks).toHaveBeenCalledTimes(1)
+  })
+
+  it('cancels dismissing all unmatched KOReader books without calling dismissAllUnmatchedBooks', async () => {
+    const status = makeSyncStatus({ pluginTotals: { ...makeSyncStatus().pluginTotals, unmatchedBooks: 1 } })
+    koreaderMock.credentials.value = status.credentials
+    koreaderMock.syncStatus.value = status
+    koreaderMock.unmatchedBooks.value = [makeUnmatchedBook()]
+
+    const wrapper = mountComponent()
+    await flushPromises()
+
+    await buttonByText(wrapper, 'Dismiss all')!.trigger('click')
+    await buttonByText(wrapper, 'Cancel')!.trigger('click')
+
+    expect(koreaderMock.dismissAllUnmatchedBooks).not.toHaveBeenCalled()
+    expect(wrapper.text()).not.toContain('clears your entire unmatched books list')
+  })
+
+  it('keeps the confirm dialog open and reports an error when dismissing all unmatched books fails', async () => {
+    const status = makeSyncStatus({ pluginTotals: { ...makeSyncStatus().pluginTotals, unmatchedBooks: 1 } })
+    koreaderMock.credentials.value = status.credentials
+    koreaderMock.syncStatus.value = status
+    koreaderMock.unmatchedBooks.value = [makeUnmatchedBook()]
+    koreaderMock.dismissAllUnmatchedBooks.mockRejectedValueOnce(new Error('Failed to dismiss all KOReader unmatched books'))
+
+    const wrapper = mountComponent()
+    await flushPromises()
+
+    await buttonByText(wrapper, 'Dismiss all')!.trigger('click')
+    const dismissAllButtons = wrapper.findAll('button').filter((button) => button.text() === 'Dismiss all')
+    await dismissAllButtons[dismissAllButtons.length - 1]!.trigger('click')
+    await flushPromises()
+
+    expect(koreaderMock.dismissAllUnmatchedBooks).toHaveBeenCalledTimes(1)
+    expect(wrapper.text()).toContain('clears your entire unmatched books list')
+  })
+
   it('loads more BookOrbit search results from the link dialog', async () => {
     const status = makeSyncStatus({ pluginTotals: { ...makeSyncStatus().pluginTotals, unmatchedBooks: 1 } })
     koreaderMock.credentials.value = status.credentials
@@ -465,6 +604,62 @@ describe('KoreaderSettings', () => {
     await flushPromises()
 
     expect(koreaderMock.unlinkManualHashLink).toHaveBeenCalledWith('b'.repeat(32))
+  })
+
+  it('confirms before removing a device', async () => {
+    const status = makeSyncStatus()
+    koreaderMock.credentials.value = status.credentials
+    koreaderMock.syncStatus.value = status
+
+    const wrapper = mountComponent()
+    await flushPromises()
+
+    await buttonByText(wrapper, 'Remove')!.trigger('click')
+
+    expect(wrapper.text()).toContain('Remove Kobo Libra 2?')
+    expect(wrapper.text()).toContain("permanently deletes this device's synced progress, reading activity, and any unmatched-book entries")
+
+    const removeButtons = wrapper.findAll('button').filter((button) => button.text() === 'Remove')
+    await removeButtons[removeButtons.length - 1]!.trigger('click')
+    await flushPromises()
+
+    expect(koreaderMock.removeDevice).toHaveBeenCalledWith('device-1')
+    expect(wrapper.text()).not.toContain('Remove Kobo Libra 2?')
+  })
+
+  it('cancels removing a device without calling removeDevice', async () => {
+    const status = makeSyncStatus()
+    koreaderMock.credentials.value = status.credentials
+    koreaderMock.syncStatus.value = status
+
+    const wrapper = mountComponent()
+    await flushPromises()
+
+    await buttonByText(wrapper, 'Remove')!.trigger('click')
+    expect(wrapper.text()).toContain('Remove Kobo Libra 2?')
+
+    await buttonByText(wrapper, 'Cancel')!.trigger('click')
+
+    expect(koreaderMock.removeDevice).not.toHaveBeenCalled()
+    expect(wrapper.text()).not.toContain('Remove Kobo Libra 2?')
+  })
+
+  it('keeps the confirm dialog open and reports an error when removing a device fails', async () => {
+    const status = makeSyncStatus()
+    koreaderMock.credentials.value = status.credentials
+    koreaderMock.syncStatus.value = status
+    koreaderMock.removeDevice.mockRejectedValueOnce(new Error('Failed to remove KOReader device'))
+
+    const wrapper = mountComponent()
+    await flushPromises()
+
+    await buttonByText(wrapper, 'Remove')!.trigger('click')
+    const removeButtons = wrapper.findAll('button').filter((button) => button.text() === 'Remove')
+    await removeButtons[removeButtons.length - 1]!.trigger('click')
+    await flushPromises()
+
+    expect(koreaderMock.removeDevice).toHaveBeenCalledWith('device-1')
+    expect(wrapper.text()).toContain('Remove Kobo Libra 2?')
   })
 
   it('renders hash-only unmatched rows with a distinguishable fallback label', async () => {

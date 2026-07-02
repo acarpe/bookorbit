@@ -23,7 +23,7 @@ import {
   X,
 } from '@lucide/vue'
 import { toast } from 'vue-sonner'
-import type { BookCard, KoreaderManualHashLink, KoreaderUnmatchedBook } from '@bookorbit/types'
+import type { BookCard, KoreaderDeviceInfo, KoreaderManualHashLink, KoreaderUnmatchedBook } from '@bookorbit/types'
 import SettingsPageHeader from './SettingsPageHeader.vue'
 import ToggleSwitch from '@/components/ui/ToggleSwitch.vue'
 import { copyToClipboard } from '@/lib/clipboard'
@@ -49,8 +49,11 @@ const {
   getSyncUrl,
   downloadPluginPackage,
   linkUnmatchedBook,
+  dismissUnmatchedBook,
+  dismissAllUnmatchedBooks,
   relinkManualHashLink,
   unlinkManualHashLink,
+  removeDevice,
 } = useKoreaderSync()
 
 const error = ref<string | null>(null)
@@ -69,6 +72,12 @@ const linkingBookId = ref<number | null>(null)
 const pendingLinkTarget = ref<BookCard | null>(null)
 const unlinkConfirmLink = ref<KoreaderManualHashLink | null>(null)
 const unlinkingHash = ref<string | null>(null)
+const removeDeviceConfirmTarget = ref<KoreaderDeviceInfo | null>(null)
+const removingDeviceId = ref<string | null>(null)
+const dismissConfirmBook = ref<KoreaderUnmatchedBook | null>(null)
+const dismissingHash = ref<string | null>(null)
+const dismissAllConfirmOpen = ref(false)
+const dismissingAll = ref(false)
 const unmatchedPage = ref(1)
 const unmatchedPageSize = 6
 const {
@@ -311,7 +320,7 @@ async function handleCopyUrl() {
 
 async function handleRefresh() {
   try {
-    await fetchSyncStatus()
+    await fetchSyncStatus(true)
     if (credentials.value) await Promise.all([fetchUnmatchedBooks(), fetchManualHashLinks()])
     toast.success('Sync status refreshed')
   } catch {
@@ -352,6 +361,51 @@ function handleOpenLink(book: KoreaderUnmatchedBook) {
   pendingLinkTarget.value = null
   clearLinkSearch()
   linkSearchQuery.value = book.title ?? ''
+}
+
+function handleOpenDismiss(book: KoreaderUnmatchedBook) {
+  dismissConfirmBook.value = book
+}
+
+function handleCloseDismiss() {
+  dismissConfirmBook.value = null
+  dismissingHash.value = null
+}
+
+async function handleDismissUnmatchedBook() {
+  if (!dismissConfirmBook.value) return
+  dismissingHash.value = dismissConfirmBook.value.hash
+  try {
+    await dismissUnmatchedBook(dismissConfirmBook.value.hash)
+    toast.success('Unmatched book dismissed')
+    handleCloseDismiss()
+  } catch (e) {
+    toast.error(e instanceof Error ? e.message : 'Failed to dismiss unmatched book')
+  } finally {
+    dismissingHash.value = null
+  }
+}
+
+function handleOpenDismissAll() {
+  dismissAllConfirmOpen.value = true
+}
+
+function handleCloseDismissAll() {
+  dismissAllConfirmOpen.value = false
+}
+
+async function handleDismissAllUnmatchedBooks() {
+  dismissingAll.value = true
+  try {
+    const result = await dismissAllUnmatchedBooks()
+    toast.success(`Dismissed ${formatCount(result.count, 'unmatched book')}`)
+    dismissAllConfirmOpen.value = false
+    unmatchedPage.value = 1
+  } catch (e) {
+    toast.error(e instanceof Error ? e.message : 'Failed to dismiss all unmatched books')
+  } finally {
+    dismissingAll.value = false
+  }
 }
 
 function handleOpenRelink(link: KoreaderManualHashLink) {
@@ -423,6 +477,29 @@ async function handleUnlinkManualLink() {
     toast.error(e instanceof Error ? e.message : 'Failed to unlink KOReader book')
   } finally {
     unlinkingHash.value = null
+  }
+}
+
+function handleOpenRemoveDevice(device: KoreaderDeviceInfo) {
+  removeDeviceConfirmTarget.value = device
+}
+
+function handleCloseRemoveDevice() {
+  removeDeviceConfirmTarget.value = null
+  removingDeviceId.value = null
+}
+
+async function handleRemoveDevice() {
+  if (!removeDeviceConfirmTarget.value) return
+  removingDeviceId.value = removeDeviceConfirmTarget.value.deviceId
+  try {
+    await removeDevice(removeDeviceConfirmTarget.value.deviceId)
+    toast.success('Device removed')
+    handleCloseRemoveDevice()
+  } catch (e) {
+    toast.error(e instanceof Error ? e.message : 'Failed to remove device')
+  } finally {
+    removingDeviceId.value = null
   }
 }
 
@@ -647,6 +724,13 @@ async function handleDownloadPlugin() {
                   </p>
                 </div>
               </div>
+              <button
+                class="flex items-center gap-1.5 rounded-md border border-destructive/30 px-3 py-2 text-xs font-medium text-destructive hover:bg-destructive/10 transition-colors shrink-0"
+                @click="handleOpenRemoveDevice(device)"
+              >
+                <Trash2 :size="12" />
+                Remove
+              </button>
             </div>
           </div>
         </div>
@@ -736,10 +820,21 @@ async function handleDownloadPlugin() {
       <div class="mb-8">
         <div class="flex items-center justify-between gap-3 mb-3">
           <p class="settings-group-label mb-0">Unmatched KOReader Books</p>
-          <button class="settings-btn-outline" :disabled="unmatchedLoading" @click="handleRefreshUnmatched">
-            <RefreshCw :size="12" />
-            Refresh
-          </button>
+          <div class="flex items-center gap-2">
+            <button
+              v-if="unmatchedBooks.length > 0"
+              class="flex items-center gap-1.5 rounded-md border border-destructive/30 px-3 py-2 text-xs font-medium text-destructive hover:bg-destructive/10 transition-colors"
+              :disabled="unmatchedLoading"
+              @click="handleOpenDismissAll"
+            >
+              <Trash2 :size="12" />
+              Dismiss all
+            </button>
+            <button class="settings-btn-outline" :disabled="unmatchedLoading" @click="handleRefreshUnmatched">
+              <RefreshCw :size="12" />
+              Refresh
+            </button>
+          </div>
         </div>
         <div class="border border-border rounded-lg overflow-hidden shadow-xs divide-y divide-border">
           <div v-if="unmatchedLoading" class="px-4 py-5 bg-card text-sm text-muted-foreground md:px-5">Loading unmatched books...</div>
@@ -767,10 +862,19 @@ async function handleDownloadPlugin() {
                     </p>
                   </div>
                 </div>
-                <button class="settings-btn-primary self-start md:self-auto" @click="handleOpenLink(book)">
-                  <Link2 :size="12" />
-                  Link
-                </button>
+                <div class="flex gap-2 self-start md:self-auto">
+                  <button class="settings-btn-primary" @click="handleOpenLink(book)">
+                    <Link2 :size="12" />
+                    Link
+                  </button>
+                  <button
+                    class="flex items-center gap-1.5 rounded-md border border-destructive/30 px-3 py-2 text-xs font-medium text-destructive hover:bg-destructive/10 transition-colors"
+                    @click="handleOpenDismiss(book)"
+                  >
+                    <Trash2 :size="12" />
+                    Dismiss
+                  </button>
+                </div>
               </div>
             </div>
             <div
@@ -974,6 +1078,101 @@ async function handleDownloadPlugin() {
             @click="handleUnlinkManualLink"
           >
             {{ unlinkingHash === unlinkConfirmLink.hash ? 'Unlinking...' : 'Unlink' }}
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <div
+      v-if="removeDeviceConfirmTarget"
+      class="fixed inset-0 z-[70] flex items-end justify-center md:items-center md:px-4"
+      @click.self="handleCloseRemoveDevice"
+    >
+      <button class="absolute inset-0 bg-black/45" @click="handleCloseRemoveDevice" />
+      <div class="relative w-full rounded-t-lg border border-border bg-card p-4 shadow-xl md:max-w-md md:rounded-lg md:p-5">
+        <p class="text-base font-semibold text-foreground">Remove {{ removeDeviceConfirmTarget.device }}?</p>
+        <p class="mt-1 text-sm text-muted-foreground">
+          This permanently deletes this device's synced progress, reading activity, and any unmatched-book entries no longer reported by another
+          device. If the device syncs again later, it will reappear as a new entry.
+        </p>
+        <div class="mt-4 flex items-center justify-end gap-2">
+          <button
+            class="rounded-md border border-border px-3 py-2 text-sm text-foreground hover:bg-muted transition-colors"
+            @click="handleCloseRemoveDevice"
+          >
+            Cancel
+          </button>
+          <button
+            class="rounded-md bg-destructive px-3 py-2 text-sm font-medium text-destructive-foreground hover:bg-destructive/90 disabled:opacity-60"
+            :disabled="removingDeviceId !== null"
+            @click="handleRemoveDevice"
+          >
+            {{ removingDeviceId === removeDeviceConfirmTarget.deviceId ? 'Removing...' : 'Remove' }}
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <div
+      v-if="dismissConfirmBook"
+      class="fixed inset-0 z-[70] flex items-end justify-center md:items-center md:px-4"
+      @click.self="handleCloseDismiss"
+    >
+      <button class="absolute inset-0 bg-black/45" @click="handleCloseDismiss" />
+      <div class="relative w-full rounded-t-lg border border-border bg-card p-4 shadow-xl md:max-w-md md:rounded-lg md:p-5">
+        <p class="text-base font-semibold text-foreground">Dismiss {{ unmatchedBookTitle(dismissConfirmBook) }}?</p>
+        <p class="mt-1 text-sm text-muted-foreground">
+          This removes it from your unmatched books list. If any device reports this hash again, it will reappear as a new entry.
+        </p>
+        <div class="mt-4 rounded-md border border-border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
+          <p class="font-mono text-foreground/75 truncate">{{ dismissConfirmBook.hash }}</p>
+        </div>
+        <div class="mt-4 flex items-center justify-end gap-2">
+          <button
+            class="rounded-md border border-border px-3 py-2 text-sm text-foreground hover:bg-muted transition-colors"
+            @click="handleCloseDismiss"
+          >
+            Cancel
+          </button>
+          <button
+            class="rounded-md bg-destructive px-3 py-2 text-sm font-medium text-destructive-foreground hover:bg-destructive/90 disabled:opacity-60"
+            :disabled="dismissingHash !== null"
+            @click="handleDismissUnmatchedBook"
+          >
+            {{ dismissingHash === dismissConfirmBook.hash ? 'Dismissing...' : 'Dismiss' }}
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <div
+      v-if="dismissAllConfirmOpen"
+      class="fixed inset-0 z-[70] flex items-end justify-center md:items-center md:px-4"
+      @click.self="handleCloseDismissAll"
+    >
+      <button class="absolute inset-0 bg-black/45" @click="handleCloseDismissAll" />
+      <div class="relative w-full rounded-t-lg border border-border bg-card p-4 shadow-xl md:max-w-md md:rounded-lg md:p-5">
+        <p class="text-base font-semibold text-foreground">Dismiss all {{ formatCount(unmatchedBooks.length, 'unmatched book') }}?</p>
+        <div class="mt-2 flex items-start gap-2 rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+          <AlertTriangle :size="14" class="mt-0.5 shrink-0" />
+          <p>
+            This clears your entire unmatched books list, not just the current page. If any device reports one of these hashes again, it will reappear
+            as a new entry.
+          </p>
+        </div>
+        <div class="mt-4 flex items-center justify-end gap-2">
+          <button
+            class="rounded-md border border-border px-3 py-2 text-sm text-foreground hover:bg-muted transition-colors"
+            @click="handleCloseDismissAll"
+          >
+            Cancel
+          </button>
+          <button
+            class="rounded-md bg-destructive px-3 py-2 text-sm font-medium text-destructive-foreground hover:bg-destructive/90 disabled:opacity-60"
+            :disabled="dismissingAll"
+            @click="handleDismissAllUnmatchedBooks"
+          >
+            {{ dismissingAll ? 'Dismissing...' : 'Dismiss all' }}
           </button>
         </div>
       </div>

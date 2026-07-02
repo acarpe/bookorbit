@@ -69,7 +69,7 @@ export class KoreaderPluginService {
     const unmatchedCandidates = this.buildUnmatchedCandidates(hashes, matchedHashes, dto);
     await Promise.all([
       this.koreaderRepo.clearUnmatchedBooks(user.id, matchedHashes),
-      this.koreaderRepo.upsertUnmatchedBooks(user.id, unmatchedCandidates),
+      this.koreaderRepo.upsertUnmatchedBooks(user.id, unmatchedCandidates, dto.deviceId),
     ]);
 
     const matches = [...resolved.entries()].map(([hash, match]) => ({

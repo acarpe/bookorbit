@@ -115,6 +115,13 @@ export class KoreaderController {
   }
 
   @RequirePermission(Permission.KoreaderSync)
+  @Delete('devices/:deviceId')
+  async removeDevice(@CurrentUser() user: RequestUser, @Param('deviceId') deviceId: string) {
+    await this.koreaderService.removeDevice(user.id, deviceId);
+    return { success: true };
+  }
+
+  @RequirePermission(Permission.KoreaderSync)
   @Get('unmatched-books')
   listUnmatchedBooks(@CurrentUser() user: RequestUser) {
     return this.hashLinkService.listUnmatchedBooks(user);
@@ -124,6 +131,18 @@ export class KoreaderController {
   @Post('unmatched-books/:hash/link')
   linkUnmatchedBook(@CurrentUser() user: RequestUser, @Param('hash') hash: string, @Body() dto: LinkKoreaderUnmatchedBookDto) {
     return this.hashLinkService.linkUnmatchedBook(user, hash, dto.bookId);
+  }
+
+  @RequirePermission(Permission.KoreaderSync)
+  @Delete('unmatched-books/:hash')
+  dismissUnmatchedBook(@CurrentUser() user: RequestUser, @Param('hash') hash: string) {
+    return this.hashLinkService.dismissUnmatchedBook(user, hash);
+  }
+
+  @RequirePermission(Permission.KoreaderSync)
+  @Delete('unmatched-books')
+  dismissAllUnmatchedBooks(@CurrentUser() user: RequestUser) {
+    return this.hashLinkService.dismissAllUnmatchedBooks(user);
   }
 
   @RequirePermission(Permission.KoreaderSync)

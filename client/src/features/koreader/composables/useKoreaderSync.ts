@@ -2,6 +2,8 @@ import { ref } from 'vue'
 import { api } from '@/lib/api'
 import type {
   CreateKoreaderCredentialsPayload,
+  DismissAllKoreaderUnmatchedBooksResult,
+  DismissKoreaderUnmatchedBookResult,
   KoreaderCredentials,
   KoreaderManualHashLink,
   KoreaderSyncStatus,
@@ -22,15 +24,15 @@ const unmatchedLoading = ref(false)
 const manualLinksLoading = ref(false)
 
 export function useKoreaderSync() {
-  async function fetchSyncStatus(): Promise<void> {
-    loading.value = true
+  async function fetchSyncStatus(silent = false): Promise<void> {
+    if (!silent) loading.value = true
     try {
       const res = await api('/api/v1/koreader/sync-status')
       if (!res.ok) throw new Error('Failed to fetch sync status')
       syncStatus.value = await res.json()
       credentials.value = syncStatus.value!.credentials
     } finally {
-      loading.value = false
+      if (!silent) loading.value = false
     }
   }
 
@@ -44,7 +46,7 @@ export function useKoreaderSync() {
       const body = await res.json().catch(() => ({}))
       throw new Error(body.message || 'Failed to create credentials')
     }
-    await fetchSyncStatus()
+    await fetchSyncStatus(true)
   }
 
   async function updateCredentials(payload: UpdateKoreaderCredentialsPayload): Promise<void> {
@@ -57,7 +59,7 @@ export function useKoreaderSync() {
       const body = await res.json().catch(() => ({}))
       throw new Error(body.message || 'Failed to update credentials')
     }
-    await fetchSyncStatus()
+    await fetchSyncStatus(true)
   }
 
   async function deleteCredentials(): Promise<void> {
@@ -135,7 +137,31 @@ export function useKoreaderSync() {
     }
     const result: LinkKoreaderUnmatchedBookResult = await res.json()
     unmatchedBooks.value = unmatchedBooks.value.filter((book) => book.hash !== result.hash)
-    await Promise.all([fetchSyncStatus(), fetchManualHashLinks()])
+    await Promise.all([fetchSyncStatus(true), fetchManualHashLinks()])
+    return result
+  }
+
+  async function dismissUnmatchedBook(hash: string): Promise<DismissKoreaderUnmatchedBookResult> {
+    const res = await api(`/api/v1/koreader/unmatched-books/${hash}`, { method: 'DELETE' })
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}))
+      throw new Error(body.message || 'Failed to dismiss KOReader unmatched book')
+    }
+    const result: DismissKoreaderUnmatchedBookResult = await res.json()
+    unmatchedBooks.value = unmatchedBooks.value.filter((book) => book.hash !== result.hash)
+    await fetchSyncStatus(true)
+    return result
+  }
+
+  async function dismissAllUnmatchedBooks(): Promise<DismissAllKoreaderUnmatchedBooksResult> {
+    const res = await api('/api/v1/koreader/unmatched-books', { method: 'DELETE' })
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}))
+      throw new Error(body.message || 'Failed to dismiss all KOReader unmatched books')
+    }
+    const result: DismissAllKoreaderUnmatchedBooksResult = await res.json()
+    unmatchedBooks.value = []
+    await fetchSyncStatus(true)
     return result
   }
 
@@ -150,7 +176,7 @@ export function useKoreaderSync() {
       throw new Error(body.message || 'Failed to update KOReader manual link')
     }
     const result: LinkKoreaderUnmatchedBookResult = await res.json()
-    await Promise.all([fetchSyncStatus(), fetchManualHashLinks()])
+    await Promise.all([fetchSyncStatus(true), fetchManualHashLinks()])
     return result
   }
 
@@ -162,8 +188,17 @@ export function useKoreaderSync() {
     }
     const result: UnlinkKoreaderManualHashLinkResult = await res.json()
     manualHashLinks.value = manualHashLinks.value.filter((link) => link.hash !== result.hash)
-    await Promise.all([fetchSyncStatus(), fetchUnmatchedBooks()])
+    await Promise.all([fetchSyncStatus(true), fetchUnmatchedBooks()])
     return result
+  }
+
+  async function removeDevice(deviceId: string): Promise<void> {
+    const res = await api(`/api/v1/koreader/devices/${deviceId}`, { method: 'DELETE' })
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}))
+      throw new Error(body.message || 'Failed to remove KOReader device')
+    }
+    await fetchSyncStatus(true)
   }
 
   return {
@@ -184,8 +219,11 @@ export function useKoreaderSync() {
     getSyncUrl,
     downloadPluginPackage,
     linkUnmatchedBook,
+    dismissUnmatchedBook,
+    dismissAllUnmatchedBooks,
     relinkManualHashLink,
     unlinkManualHashLink,
+    removeDevice,
   }
 }
 

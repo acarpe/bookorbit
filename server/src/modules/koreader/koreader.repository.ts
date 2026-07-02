@@ -1,5 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { and, desc, eq, inArray, sql } from 'drizzle-orm';
+import { and, desc, eq, inArray, notExists, sql } from 'drizzle-orm';
 import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
 
 import { DB } from '../../db';
@@ -163,63 +163,80 @@ export class KoreaderRepository {
     return result;
   }
 
-  async upsertUnmatchedBooks(userId: number, candidates: KoreaderUnmatchedCandidate[]): Promise<void> {
+  async upsertUnmatchedBooks(userId: number, candidates: KoreaderUnmatchedCandidate[], deviceId?: string): Promise<void> {
     if (candidates.length === 0) return;
 
     const now = new Date();
     const incomingSourceRank = sql<number>`case excluded.source when 'current_file' then 2 when 'file' then 1 else 0 end`;
     const storedSourceRank = sql<number>`case ${schema.koreaderUnmatchedBooks.source} when 'current_file' then 2 when 'file' then 1 else 0 end`;
-    await this.db
-      .insert(schema.koreaderUnmatchedBooks)
-      .values(
-        candidates.map((candidate) => ({
-          userId,
-          hash: candidate.hash,
-          title: candidate.title?.trim() || null,
-          authors: candidate.authors?.trim() || null,
-          lastOpen: candidate.lastOpen ?? null,
-          source: candidate.source ?? 'statistics',
-          metadataAmbiguous: candidate.metadataAmbiguous ?? false,
-          lastSeenAt: now,
-        })),
-      )
-      .onConflictDoUpdate({
-        target: [schema.koreaderUnmatchedBooks.userId, schema.koreaderUnmatchedBooks.hash],
-        set: {
-          title: sql`
-            case
-              when ${incomingSourceRank} >= ${storedSourceRank} then coalesce(excluded.title, ${schema.koreaderUnmatchedBooks.title})
-              else coalesce(${schema.koreaderUnmatchedBooks.title}, excluded.title)
-            end
-          `,
-          authors: sql`
-            case
-              when ${incomingSourceRank} >= ${storedSourceRank} then coalesce(excluded.authors, ${schema.koreaderUnmatchedBooks.authors})
-              else coalesce(${schema.koreaderUnmatchedBooks.authors}, excluded.authors)
-            end
-          `,
-          lastOpen: sql`
-            case
-              when excluded.last_open is null then ${schema.koreaderUnmatchedBooks.lastOpen}
-              when ${schema.koreaderUnmatchedBooks.lastOpen} is null then excluded.last_open
-              else greatest(excluded.last_open, ${schema.koreaderUnmatchedBooks.lastOpen})
-            end
-          `,
-          source: sql`
-            case
-              when ${incomingSourceRank} >= ${storedSourceRank} then excluded.source
-              else ${schema.koreaderUnmatchedBooks.source}
-            end
-          `,
-          metadataAmbiguous: sql`
-            case
-              when ${incomingSourceRank} >= ${storedSourceRank} then excluded.metadata_ambiguous
-              else ${schema.koreaderUnmatchedBooks.metadataAmbiguous}
-            end
-          `,
-          lastSeenAt: now,
-        },
-      });
+
+    await this.db.transaction(async (tx) => {
+      await tx
+        .insert(schema.koreaderUnmatchedBooks)
+        .values(
+          candidates.map((candidate) => ({
+            userId,
+            hash: candidate.hash,
+            title: candidate.title?.trim() || null,
+            authors: candidate.authors?.trim() || null,
+            lastOpen: candidate.lastOpen ?? null,
+            source: candidate.source ?? 'statistics',
+            metadataAmbiguous: candidate.metadataAmbiguous ?? false,
+            lastSeenAt: now,
+          })),
+        )
+        .onConflictDoUpdate({
+          target: [schema.koreaderUnmatchedBooks.userId, schema.koreaderUnmatchedBooks.hash],
+          set: {
+            title: sql`
+              case
+                when ${incomingSourceRank} >= ${storedSourceRank} then coalesce(excluded.title, ${schema.koreaderUnmatchedBooks.title})
+                else coalesce(${schema.koreaderUnmatchedBooks.title}, excluded.title)
+              end
+            `,
+            authors: sql`
+              case
+                when ${incomingSourceRank} >= ${storedSourceRank} then coalesce(excluded.authors, ${schema.koreaderUnmatchedBooks.authors})
+                else coalesce(${schema.koreaderUnmatchedBooks.authors}, excluded.authors)
+              end
+            `,
+            lastOpen: sql`
+              case
+                when excluded.last_open is null then ${schema.koreaderUnmatchedBooks.lastOpen}
+                when ${schema.koreaderUnmatchedBooks.lastOpen} is null then excluded.last_open
+                else greatest(excluded.last_open, ${schema.koreaderUnmatchedBooks.lastOpen})
+              end
+            `,
+            source: sql`
+              case
+                when ${incomingSourceRank} >= ${storedSourceRank} then excluded.source
+                else ${schema.koreaderUnmatchedBooks.source}
+              end
+            `,
+            metadataAmbiguous: sql`
+              case
+                when ${incomingSourceRank} >= ${storedSourceRank} then excluded.metadata_ambiguous
+                else ${schema.koreaderUnmatchedBooks.metadataAmbiguous}
+              end
+            `,
+            lastSeenAt: now,
+          },
+        });
+
+      if (!deviceId) return;
+
+      await tx
+        .insert(schema.koreaderUnmatchedBookDevices)
+        .values(candidates.map((candidate) => ({ userId, hash: candidate.hash, deviceId, lastSeenAt: now })))
+        .onConflictDoUpdate({
+          target: [
+            schema.koreaderUnmatchedBookDevices.userId,
+            schema.koreaderUnmatchedBookDevices.hash,
+            schema.koreaderUnmatchedBookDevices.deviceId,
+          ],
+          set: { lastSeenAt: now },
+        });
+    });
   }
 
   async clearUnmatchedBooks(userId: number, hashes: string[]): Promise<void> {
@@ -227,6 +244,33 @@ export class KoreaderRepository {
     await this.db
       .delete(schema.koreaderUnmatchedBooks)
       .where(and(eq(schema.koreaderUnmatchedBooks.userId, userId), inArray(schema.koreaderUnmatchedBooks.hash, hashes)));
+  }
+
+  async dismissUnmatchedBook(userId: number, hash: string) {
+    // The koreader_unmatched_book_devices FK is ON DELETE CASCADE, so removing this row also
+    // clears any device associations for it - no separate cleanup needed here.
+    const [row] = await this.db
+      .delete(schema.koreaderUnmatchedBooks)
+      .where(and(eq(schema.koreaderUnmatchedBooks.userId, userId), eq(schema.koreaderUnmatchedBooks.hash, hash)))
+      .returning({ hash: schema.koreaderUnmatchedBooks.hash });
+    return row ?? null;
+  }
+
+  async dismissAllUnmatchedBooks(userId: number): Promise<number> {
+    // Scoped to the same source/ambiguity filter as listUnmatchedBooks so this only clears what
+    // the "Unmatched Books" list actually shows the user - not internal statistics-only or
+    // ambiguous candidates that were never surfaced.
+    const rows = await this.db
+      .delete(schema.koreaderUnmatchedBooks)
+      .where(
+        and(
+          eq(schema.koreaderUnmatchedBooks.userId, userId),
+          inArray(schema.koreaderUnmatchedBooks.source, ['current_file', 'file']),
+          eq(schema.koreaderUnmatchedBooks.metadataAmbiguous, false),
+        ),
+      )
+      .returning({ hash: schema.koreaderUnmatchedBooks.hash });
+    return rows.length;
   }
 
   async listUnmatchedBooks(userId: number, limit: number) {
@@ -504,6 +548,60 @@ export class KoreaderRepository {
       lastSyncAt: new Date(r.last_sync_at),
       lastBookTitle: r.last_book_title ?? null,
     }));
+  }
+
+  async removeDevice(userId: number, deviceId: string): Promise<number> {
+    return this.db.transaction(async (tx) => {
+      const [deletedProgress, deletedSweep, deletedPageStats, deletedUnmatchedDeviceLinks] = await Promise.all([
+        tx
+          .delete(schema.koreaderDeviceProgress)
+          .where(and(eq(schema.koreaderDeviceProgress.userId, userId), eq(schema.koreaderDeviceProgress.deviceId, deviceId)))
+          .returning({ id: schema.koreaderDeviceProgress.id }),
+        tx
+          .delete(schema.koreaderDeviceSweeps)
+          .where(and(eq(schema.koreaderDeviceSweeps.userId, userId), eq(schema.koreaderDeviceSweeps.deviceId, deviceId)))
+          .returning({ deviceId: schema.koreaderDeviceSweeps.deviceId }),
+        tx
+          .delete(schema.koreaderPageStats)
+          .where(and(eq(schema.koreaderPageStats.userId, userId), eq(schema.koreaderPageStats.deviceId, deviceId)))
+          .returning({ id: schema.koreaderPageStats.id }),
+        tx
+          .delete(schema.koreaderUnmatchedBookDevices)
+          .where(and(eq(schema.koreaderUnmatchedBookDevices.userId, userId), eq(schema.koreaderUnmatchedBookDevices.deviceId, deviceId)))
+          .returning({ hash: schema.koreaderUnmatchedBookDevices.hash }),
+      ]);
+
+      // Only drop unmatched-book rows this device orphaned - a hash still reported by another
+      // device must stay visible until that device is removed (or the hash is matched/linked).
+      const affectedHashes = [...new Set(deletedUnmatchedDeviceLinks.map((row) => row.hash))];
+      let deletedUnmatchedBooks: { hash: string }[] = [];
+      if (affectedHashes.length > 0) {
+        deletedUnmatchedBooks = await tx
+          .delete(schema.koreaderUnmatchedBooks)
+          .where(
+            and(
+              eq(schema.koreaderUnmatchedBooks.userId, userId),
+              inArray(schema.koreaderUnmatchedBooks.hash, affectedHashes),
+              notExists(
+                tx
+                  .select({ one: sql`1` })
+                  .from(schema.koreaderUnmatchedBookDevices)
+                  .where(
+                    and(
+                      eq(schema.koreaderUnmatchedBookDevices.userId, userId),
+                      eq(schema.koreaderUnmatchedBookDevices.hash, schema.koreaderUnmatchedBooks.hash),
+                    ),
+                  ),
+              ),
+            ),
+          )
+          .returning({ hash: schema.koreaderUnmatchedBooks.hash });
+      }
+
+      return (
+        deletedProgress.length + deletedSweep.length + deletedPageStats.length + deletedUnmatchedDeviceLinks.length + deletedUnmatchedBooks.length
+      );
+    });
   }
 
   async getTotalSyncedBooks(userId: number): Promise<number> {

@@ -64,6 +64,7 @@ describe('KoreaderService', () => {
     getBookProgressForDashboard: ReturnType<typeof vi.fn>;
     getChapters: ReturnType<typeof vi.fn>;
     getLastFileWriteTime: ReturnType<typeof vi.fn>;
+    removeDevice: ReturnType<typeof vi.fn>;
   };
   let mockChapterService: {
     parseChapterIndexFromProgress: ReturnType<typeof vi.fn>;
@@ -126,6 +127,7 @@ describe('KoreaderService', () => {
       getBookProgressForDashboard: vi.fn(),
       getChapters: vi.fn(),
       getLastFileWriteTime: vi.fn(),
+      removeDevice: vi.fn(),
     };
 
     mockChapterService = {
@@ -726,6 +728,23 @@ describe('KoreaderService', () => {
           lastBookTitle: null,
         },
       ]);
+    });
+  });
+
+  describe('removeDevice', () => {
+    it('delegates deletion to the repository when rows were removed', async () => {
+      mockRepo.removeDevice.mockResolvedValue(3);
+
+      await service.removeDevice(7, 'device-1');
+
+      expect(mockRepo.removeDevice).toHaveBeenCalledWith(7, 'device-1');
+    });
+
+    it('throws NotFoundException when no rows matched the given device', async () => {
+      mockRepo.removeDevice.mockResolvedValue(0);
+
+      await expect(service.removeDevice(7, 'missing-device')).rejects.toThrow(NotFoundException);
+      expect(mockRepo.removeDevice).toHaveBeenCalledWith(7, 'missing-device');
     });
   });
 

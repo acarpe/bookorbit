@@ -3,6 +3,7 @@ import {
   bigint,
   boolean,
   check,
+  foreignKey,
   index,
   integer,
   pgTable,
@@ -158,6 +159,34 @@ export const koreaderUnmatchedBooks = pgTable(
 
 export type KoreaderUnmatchedBook = typeof koreaderUnmatchedBooks.$inferSelect;
 export type NewKoreaderUnmatchedBook = typeof koreaderUnmatchedBooks.$inferInsert;
+
+// Tracks which devices have reported a given unmatched hash. Modeled as a proper many-to-many
+// join (rather than a single "last device" column) so a hash shared across multiple devices
+// isn't incorrectly dropped when only one of those devices is removed.
+export const koreaderUnmatchedBookDevices = pgTable(
+  'koreader_unmatched_book_devices',
+  {
+    userId: integer('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    hash: varchar('hash', { length: 32 }).notNull(),
+    deviceId: varchar('device_id', { length: 100 }).notNull(),
+    lastSeenAt: timestamp('last_seen_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.userId, t.hash, t.deviceId] }),
+    index('koreader_unmatched_book_devices_user_device_idx').on(t.userId, t.deviceId),
+    foreignKey({
+      columns: [t.userId, t.hash],
+      foreignColumns: [koreaderUnmatchedBooks.userId, koreaderUnmatchedBooks.hash],
+      name: 'koreader_unmatched_book_devices_user_hash_fk',
+    }).onDelete('cascade'),
+    check('koreader_unmatched_book_devices_hash_chk', sql`${t.hash} ~ '^[0-9a-f]{32}$'`),
+  ],
+);
+
+export type KoreaderUnmatchedBookDevice = typeof koreaderUnmatchedBookDevices.$inferSelect;
+export type NewKoreaderUnmatchedBookDevice = typeof koreaderUnmatchedBookDevices.$inferInsert;
 
 export const bookFileChapters = pgTable(
   'book_file_chapters',

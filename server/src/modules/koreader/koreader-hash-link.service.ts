@@ -1,6 +1,8 @@
 import { BadRequestException, ConflictException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 
 import type {
+  DismissAllKoreaderUnmatchedBooksResult,
+  DismissKoreaderUnmatchedBookResult,
   KoreaderManualHashLink,
   KoreaderUnmatchedBook,
   LinkKoreaderUnmatchedBookResult,
@@ -16,6 +18,8 @@ const MANUAL_HASH_LINK_LIMIT = 100;
 const HASH_LINK_CREATE_EVENT = 'koreader.hash_link_create';
 const HASH_LINK_UPDATE_EVENT = 'koreader.hash_link_update';
 const HASH_LINK_DELETE_EVENT = 'koreader.hash_link_delete';
+const UNMATCHED_BOOK_DISMISS_EVENT = 'koreader.unmatched_book_dismiss';
+const UNMATCHED_BOOK_DISMISS_ALL_EVENT = 'koreader.unmatched_book_dismiss_all';
 
 /**
  * Manages the KOReader "unmatched book" queue and the manual hash links used
@@ -170,6 +174,34 @@ export class KoreaderHashLinkService {
       `[${HASH_LINK_DELETE_EVENT}] [end] userId=${user.id} hash=${normalizedHash.slice(0, 8)} durationMs=${Date.now() - startedAtMs} restoredAsUnmatched=${restoredAsUnmatched} - hash link delete completed`,
     );
     return { hash: normalizedHash };
+  }
+
+  async dismissUnmatchedBook(user: RequestUser, hash: string): Promise<DismissKoreaderUnmatchedBookResult> {
+    const startedAtMs = Date.now();
+    const normalizedHash = this.normalizeKoreaderHash(hash);
+    this.logger.log(
+      `[${UNMATCHED_BOOK_DISMISS_EVENT}] [start] userId=${user.id} hash=${normalizedHash.slice(0, 8)} - unmatched book dismiss started`,
+    );
+
+    const deleted = await this.repo.dismissUnmatchedBook(user.id, normalizedHash);
+    if (!deleted) throw new NotFoundException('KOReader unmatched book not found');
+
+    this.logger.log(
+      `[${UNMATCHED_BOOK_DISMISS_EVENT}] [end] userId=${user.id} hash=${normalizedHash.slice(0, 8)} durationMs=${Date.now() - startedAtMs} - unmatched book dismiss completed`,
+    );
+    return { hash: normalizedHash };
+  }
+
+  async dismissAllUnmatchedBooks(user: RequestUser): Promise<DismissAllKoreaderUnmatchedBooksResult> {
+    const startedAtMs = Date.now();
+    this.logger.log(`[${UNMATCHED_BOOK_DISMISS_ALL_EVENT}] [start] userId=${user.id} - unmatched book bulk dismiss started`);
+
+    const count = await this.repo.dismissAllUnmatchedBooks(user.id);
+
+    this.logger.log(
+      `[${UNMATCHED_BOOK_DISMISS_ALL_EVENT}] [end] userId=${user.id} durationMs=${Date.now() - startedAtMs} count=${count} - unmatched book bulk dismiss completed`,
+    );
+    return { count };
   }
 
   private normalizeKoreaderHash(hash: string): string {
