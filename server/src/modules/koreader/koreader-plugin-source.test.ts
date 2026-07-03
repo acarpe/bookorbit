@@ -66,6 +66,28 @@ describe('KOReader plugin update source wiring', () => {
     expect(syncSettingsBlock).not.toContain('text = _("Sync all books now")');
   });
 
+  it('reconciles remote progress before manual book sync uploads progress', async () => {
+    const main = await readPluginFile('main.lua');
+    const bookSync = await readPluginFile('bookorbit_book_sync.lua');
+
+    expect(main).toContain('function BookOrbit:reconcileProgressBeforeBookSync(digest, on_done)');
+    expect(main).toContain('client:getProgress(digest)');
+    expect(main).toContain('local local_timestamp = self.last_page_turn_timestamp or 0');
+    expect(main).toContain('cancel_callback = function()');
+    expect(main).toContain('on_done(remote_newer)');
+    expect(main).toContain('self:reconcileProgressBeforeBookSync(snap.digest, run_book_sync)');
+    expect(main).toContain('local latest_snap = BookOrbitBookSync.capture(self)');
+    expect(main).toContain('skip_progress = skip_progress');
+    expect(main).toContain('event = "BookOrbitPullProgress"');
+    expect(main).not.toContain('text = _("Pull progress now")');
+    expect(main).toContain('self.onPageUpdate = self._onPageUpdate\n    if self.settings.auto_sync then');
+    expect(main).toContain('if self.settings.auto_sync and (self.periodic_push_scheduled');
+
+    expect(bookSync).toContain('skip_progress = opts.skip_progress == true');
+    expect(bookSync).toContain('if ctx.skip_progress then');
+    expect(bookSync).toContain('Progress was not changed.');
+  });
+
   it('keeps book action downloads compact without duplicating download options', async () => {
     const catalog = await readPluginFile('bookorbit_catalog.lua');
     const download = await readPluginFile('bookorbit_catalog_download.lua');
@@ -81,11 +103,12 @@ describe('KOReader plugin update source wiring', () => {
     expect(detailActionsBlock).toContain('text = _("Download")');
     expect(detailActionsBlock).toContain('self:downloadDefaultFile(detail, supported_files[1])');
     expect(detailActionsBlock).toContain('self:showFileChoices(detail)');
-    expect(detailActionsBlock).not.toContain('text = _("Download options")');
-    expect(detailActionsBlock).not.toContain('self:showDownloadOptions(detail)');
-    expect(detailHeaderBlock).toContain('if #supported_files == 1 then');
-    expect(detailHeaderBlock).toContain('self:downloadDefaultFile(detail, supported_files[1])');
-    expect(detailHeaderBlock).toContain('self:showFileChoices(detail)');
+    expect(detailActionsBlock).toContain('text = _("Download options")');
+    expect(detailActionsBlock).toContain('self:showDownloadOptions(detail)');
+    expect(detailHeaderBlock).not.toContain('if #supported_files == 1 then');
+    expect(detailHeaderBlock).not.toContain('self:downloadDefaultFile(detail, supported_files[1])');
+    expect(detailHeaderBlock).not.toContain('self:showFileChoices(detail)');
+    expect(detailHeaderBlock).toContain('self:showDownloadOptions(detail)');
     expect(download).toContain('function Catalog:downloadDefaultFile(detail, file)');
   });
 

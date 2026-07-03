@@ -8,7 +8,7 @@ Syncs your KOReader reading life into BookOrbit:
 - Highlights and notes, two ways: device highlights appear in the BookOrbit web reader as native highlights, and highlights, note edits and deletions made in BookOrbit come back to the device.
 - Book status (reading / complete / abandoned) and star ratings, with newest-change-wins conflict handling.
 
-The open book is captured from live memory when it is closed, on suspend, and via "Sync this book now", so highlights and status made mid-session sync without reopening the book. The full-library sweep ("Sync all books now") is manual-only.
+The open book is captured from live memory when it is closed, on suspend, and via "Sync this book now", so highlights and status made mid-session sync without reopening the book. Manual book sync checks BookOrbit for newer progress before uploading local progress, so a second device does not overwrite a first device's newer location. The full-library sweep ("Sync all books now") is manual-only.
 
 Only books that BookOrbit already knows are synced. Matching uses the same partial-MD5 file hash KOReader uses internally, which BookOrbit's scanner computes for every file. Books on the device that are not in any BookOrbit library are skipped and re-checked automatically when your library changes.
 
@@ -54,7 +54,7 @@ Plugin 0.4 exchanges highlights instead of only uploading them (server 0.4+; aga
 ## How syncing works
 
 - With "Auto sync this book" on: progress is pulled when a book opens (with conflict prompts), pushed every N page turns (10 seconds after you stop turning pages, 25 second debounce, silently skipped when offline), and the whole book (progress, highlights, status, rating, reading time) is snapshotted from live memory and uploaded when the book is closed and on suspend.
-- "Sync this book now" (menu item or gesture) does the same per-book snapshot on demand, including a forced statistics flush, so a highlight made seconds ago syncs immediately. If the book is not in any BookOrbit library it tells you so.
+- "Sync this book now" (menu item or gesture) first checks BookOrbit for newer progress, applies or prompts according to your progress-sync settings, then does the same per-book snapshot on demand, including a forced statistics flush. If another device has newer progress and you decline it, highlights, status, rating and reading time still sync, but local progress is not pushed over the newer server value. If the book is not in any BookOrbit library it tells you so.
 - "Sync all books now" runs the full-library sweep: match new books, upload reading time for every matched book, then highlights, statuses and bulk progress. It never runs automatically. If a book is open when it starts, that book's sidecar and statistics are flushed first, so the sweep sees current data.
 - Everything is incremental: page-stat events are uploaded past a per-book watermark that only advances after the server acknowledges them, sidecars are only parsed when their modification time changed, and unmatched books are only re-checked when BookOrbit's library actually changed. An interrupted sync resumes where it left off; resends are server-side no-ops.
 - Local plugin state lives in `settings/bookorbit_sync_state.lua` next to your other KOReader settings. Deleting it is safe: the next sync re-uploads everything and the server deduplicates.

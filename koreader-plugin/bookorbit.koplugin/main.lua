@@ -867,6 +867,110 @@ function BookOrbit:syncToProgress(progress)
     end
 end
 
+local function hasUsableRemoteProgress(progress)
+    return progress ~= nil and progress ~= ""
+end
+
+function BookOrbit:remoteProgressIsNewer(body, local_percentage)
+    local local_timestamp = self.last_page_turn_timestamp or 0
+    if body.timestamp ~= nil then
+        if local_timestamp > 0 then
+            return body.timestamp > local_timestamp
+        end
+        return body.percentage > local_percentage
+    end
+    return body.percentage > local_percentage
+end
+
+function BookOrbit:applyRemoteProgress(body, on_done)
+    self:syncToProgress(body.progress)
+    if on_done then
+        UIManager:scheduleIn(0.1, function()
+            on_done(false)
+        end)
+    end
+end
+
+function BookOrbit:reconcileProgressBeforeBookSync(digest, on_done)
+    if not self.ui or not self.ui.document then
+        UIManager:show(InfoMessage:new{ text = _("Open a book to sync it."), timeout = 2 })
+        return
+    end
+    if self:getDocumentDigest() ~= digest then
+        UIManager:show(InfoMessage:new{ text = _("The open book changed. Start the sync again."), timeout = 3 })
+        return
+    end
+
+    local client = self:newClient()
+    local body, err = client:getProgress(digest)
+    self.pull_timestamp = UIManager:getElapsedTimeSinceBoot()
+
+    if not body then
+        logger.dbg("BookOrbit: progress check before book sync failed:", err)
+        UIManager:show(InfoMessage:new{ text = _("Could not check latest progress. Syncing book data without changing progress."), timeout = 4 })
+        on_done(true)
+        return
+    end
+
+    if not body.percentage then
+        on_done(false)
+        return
+    end
+
+    if body.device == Device.model and body.device_id == self.device_id then
+        on_done(false)
+        return
+    end
+
+    body.percentage = Math.roundPercent(body.percentage)
+    local local_progress = self:getLastProgress()
+    local local_percentage = self:getLastPercent()
+
+    if local_percentage == body.percentage or body.progress == local_progress then
+        on_done(false)
+        return
+    end
+
+    local remote_newer = self:remoteProgressIsNewer(body, local_percentage)
+    if not hasUsableRemoteProgress(body.progress) then
+        if remote_newer then
+            UIManager:show(InfoMessage:new{
+                text = _("BookOrbit has newer progress but no exact location. Syncing book data without changing progress."),
+                timeout = 4,
+            })
+            on_done(true)
+        else
+            on_done(false)
+        end
+        return
+    end
+
+    local strategy = remote_newer and self.settings.sync_forward or self.settings.sync_backward
+    if strategy == SYNC_STRATEGY.SILENT then
+        self:applyRemoteProgress(body, on_done)
+    elseif strategy == SYNC_STRATEGY.PROMPT then
+        local template = remote_newer and _("Sync to latest location %1% from device '%2' before uploading this book?")
+            or _("Sync to previous location %1% from device '%2' before uploading this book?")
+        UIManager:show(ConfirmBox:new{
+            text = T(template, Math.round(body.percentage * 100), body.device),
+            ok_callback = function()
+                self:applyRemoteProgress(body, on_done)
+            end,
+            cancel_callback = function()
+                on_done(remote_newer)
+            end,
+        })
+    elseif remote_newer then
+        UIManager:show(InfoMessage:new{
+            text = _("BookOrbit has newer progress. Syncing book data without changing progress."),
+            timeout = 4,
+        })
+        on_done(true)
+    else
+        on_done(false)
+    end
+end
+
 function BookOrbit:updateProgress(ensure_networking, interactive, on_suspend)
     if not self:isLoggedIn() then
         if interactive then promptLogin() end
@@ -1041,9 +1145,21 @@ function BookOrbit:onBookOrbitSyncBook()
     end
 
     local api_opts = self:apiOpts()
+    local run_book_sync = function(skip_progress)
+        local latest_snap = BookOrbitBookSync.capture(self)
+        if not latest_snap then
+            UIManager:show(InfoMessage:new{ text = _("Could not read this book's data."), timeout = 2 })
+            return
+        end
+        if latest_snap.digest ~= snap.digest then
+            UIManager:show(InfoMessage:new{ text = _("The open book changed. Start the sync again."), timeout = 3 })
+            return
+        end
+        BookOrbitBookSync.run{ api = api_opts, snap = latest_snap, reason = "manual", interactive = true, plugin = self,
+            annotation_sync = self.settings.annotation_sync, skip_progress = skip_progress }
+    end
     local run = function()
-        BookOrbitBookSync.run{ api = api_opts, snap = snap, reason = "manual", interactive = true, plugin = self,
-            annotation_sync = self.settings.annotation_sync }
+        self:reconcileProgressBeforeBookSync(snap.digest, run_book_sync)
     end
     if NetworkMgr:willRerunWhenOnline(run) then
         return
@@ -1086,8 +1202,8 @@ function BookOrbit:_onPageUpdate(page)
         self.page_update_counter = self.page_update_counter + 1
         -- A pending periodic push is re-delayed on every page turn so it
         -- only fires once the reader is actually idle.
-        if self.periodic_push_scheduled
-                or (self.settings.pages_before_update or 0) > 0 and self.page_update_counter >= self.settings.pages_before_update then
+        if self.settings.auto_sync and (self.periodic_push_scheduled
+                or (self.settings.pages_before_update or 0) > 0 and self.page_update_counter >= self.settings.pages_before_update) then
             self:schedulePeriodicPush()
         end
     end
@@ -1197,16 +1313,15 @@ function BookOrbit:onBookOrbitToggleAutoSync(toggle, from_menu)
 end
 
 function BookOrbit:registerEvents()
+    self.onPageUpdate = self._onPageUpdate
     if self.settings.auto_sync then
         self.onCloseDocument = self._onCloseDocument
-        self.onPageUpdate = self._onPageUpdate
         self.onResume = self._onResume
         self.onSuspend = self._onSuspend
         self.onNetworkConnected = self._onNetworkConnected
         self.onNetworkDisconnecting = self._onNetworkDisconnecting
     else
         self.onCloseDocument = nil
-        self.onPageUpdate = nil
         self.onResume = nil
         self.onSuspend = nil
         self.onNetworkConnected = nil

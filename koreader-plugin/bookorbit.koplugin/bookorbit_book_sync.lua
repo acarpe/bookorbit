@@ -151,6 +151,9 @@ local function finish(ctx, err)
         if ctx.interactive then
             local text = T(_("BookOrbit: book synced. %1 reading events, %2 highlights up, %3 applied."),
                 ctx.counts.page_stats, ctx.counts.annotations, ctx.counts.ann_applied or 0)
+            if ctx.skip_progress then
+                text = text .. "\n" .. _("Progress was not changed.")
+            end
             if ctx.had_errors then
                 text = text .. "\n" .. _("Some uploads failed and will retry on the next sync.")
             end
@@ -403,6 +406,10 @@ stepProgress = function(ctx)
     local book = ctx.state:getBook(ctx.snap.digest)
     if not book then return finish(ctx, "unmatched") end
 
+    if ctx.skip_progress then
+        return finish(ctx)
+    end
+
     local pct = ctx.snap.percentage
     if type(pct) ~= "number" then
         return finish(ctx)
@@ -463,6 +470,7 @@ function BookOrbitBookSync.run(opts)
         on_finish = opts.on_finish,
         counts = { page_stats = 0, annotations = 0, ann_applied = 0 },
         had_errors = false,
+        skip_progress = opts.skip_progress == true,
     }
 
     ctx.state:rememberFile(snap.file, snap.digest)
