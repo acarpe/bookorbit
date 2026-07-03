@@ -1,4 +1,9 @@
+import type { SQL } from 'drizzle-orm';
+import { PgDialect } from 'drizzle-orm/pg-core';
+
 import { UserStatisticsRepository } from './user-statistics.repository';
+
+const dialect = new PgDialect();
 
 function makeChain(result: unknown, fields?: Record<string, unknown>) {
   const chain: Record<string, unknown> = {};
@@ -105,6 +110,21 @@ describe('UserStatisticsRepository', () => {
     ]);
     await expect(repo.getCompletionTimeline(5, false, [2], 365)).resolves.toEqual([{ year: 2026, month: 4, count: 2 }]);
     await expect(repo.getMonthlyCompletions(5, false, [2], 365)).resolves.toEqual([{ year: 2026, month: 4, count: 2 }]);
+  });
+
+  it('builds peak reading hour buckets in the provided timezone', async () => {
+    const db = makeDb([[{ hour: 23, format: 'EPUB', source: 'kobo', readingSeconds: 1800, eventsCount: 1 }]]);
+    const repo = new UserStatisticsRepository(db as never);
+    vi.spyOn(repo as any, 'getAccessibleLibraryIds').mockResolvedValue([2]);
+
+    await expect(repo.getPeakReadingHours(5, false, [2], 30, 'Australia/Brisbane')).resolves.toEqual([
+      { hour: 23, format: 'EPUB', source: 'kobo', readingSeconds: 1800, eventsCount: 1 },
+    ]);
+
+    const fields = db.select.mock.calls[0]?.[0] as { hour?: SQL } | undefined;
+    const hourQuery = dialect.sqlToQuery(fields?.hour as SQL);
+    expect(hourQuery.sql).toContain('"reading_sessions"."started_at" AT TIME ZONE $1');
+    expect(hourQuery.params).toEqual(['Australia/Brisbane']);
   });
 
   it('returns per-source daily reading seconds for the heatmap tooltip', async () => {

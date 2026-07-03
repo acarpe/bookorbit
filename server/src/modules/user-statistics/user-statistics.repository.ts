@@ -171,11 +171,13 @@ export class UserStatisticsRepository {
     isSuperuser: boolean,
     filterLibraryIds?: number[],
     days = 365,
+    timeZone = 'UTC',
   ): Promise<{ hour: number; format: string; source: ReadingSessionSource | null; readingSeconds: number; eventsCount: number }[]> {
     const accessible = await this.getAccessibleLibraryIds(userId, isSuperuser);
     const libraryFilter = this.libraryFilter(this.intersectLibraryIds(accessible, filterLibraryIds));
     const since = this.sinceDateForDays(days);
-    const hourExpr = sql<number>`extract(hour from ${readingSessions.startedAt})::int`;
+    const resolvedTimeZone = resolveTimeZone(timeZone, 'UTC');
+    const hourExpr = sql<number>`extract(hour from (${readingSessions.startedAt} AT TIME ZONE ${resolvedTimeZone}))::int`;
     const formatExpr = sql<string>`upper(coalesce(${bookFiles.format}, 'UNKNOWN'))`;
 
     return this.db

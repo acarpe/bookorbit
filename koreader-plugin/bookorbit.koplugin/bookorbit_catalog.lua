@@ -1781,6 +1781,14 @@ function BookOrbitCatalog:showBookActionSheet(detail, opts)
         UIManager:close(dialog)
         callback()
     end
+    local download_options_button = #supported_files > 0 and {
+        text = _("Download options"),
+        callback = function()
+            closeThen(function()
+                self:showDownloadOptions(detail)
+            end)
+        end,
+    } or nil
 
     if include_details or allow_select then
         local details_button = include_details and {
@@ -1839,6 +1847,10 @@ function BookOrbitCatalog:showBookActionSheet(detail, opts)
         else
             addRow(download_button)
         end
+    end
+
+    if download_options_button then
+        addRow(download_options_button)
     end
 
     addRow({
@@ -2917,11 +2929,7 @@ function BookOrbitCatalog:buildDetailHeader(detail, width, height)
             enabled = #supported_files > 0,
             text_font_size = 16,
             callback = function()
-                if #supported_files == 1 then
-                    self:downloadDefaultFile(detail, supported_files[1])
-                else
-                    self:showFileChoices(detail)
-                end
+                self:showDownloadOptions(detail)
             end,
         }
         table.insert(buttons_row, self.detail_download_button)
