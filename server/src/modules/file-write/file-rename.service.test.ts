@@ -239,6 +239,197 @@ describe('FileRenameService', () => {
     );
   });
 
+  it('renames every colliding audio track with PartNN suffixes including the primary track', async () => {
+    const { service, renameRepo } = makeService();
+    renameRepo.findBookRenameData.mockResolvedValue(
+      makeRenameData({
+        organizationMode: 'book_per_folder',
+        fileNamingPattern: 'Clayton M. Christensen/How Will You Measure Your Life_ (2012)/{title} - {authors}',
+        file: {
+          id: 10,
+          absolutePath: '/library/Clayton M. Christensen/How Will You Measure Your Life_ (2012)/How.Will.You.Measure.Your.Life-Part01.mp3',
+          relPath: 'Clayton M. Christensen/How Will You Measure Your Life_ (2012)/How.Will.You.Measure.Your.Life-Part01.mp3',
+          format: 'mp3',
+          role: 'content',
+        },
+        bookFolderPath: '/library/Clayton M. Christensen/How Will You Measure Your Life_ (2012)',
+        metadata: {
+          title: 'How Will You Measure Your Life_',
+          publishedYear: 2012,
+        },
+        authors: ['Clayton M. Christensen'],
+      }),
+    );
+    renameRepo.findAllBookFiles.mockResolvedValue([
+      {
+        id: 10,
+        absolutePath: '/library/Clayton M. Christensen/How Will You Measure Your Life_ (2012)/How.Will.You.Measure.Your.Life-Part01.mp3',
+        relPath: 'Clayton M. Christensen/How Will You Measure Your Life_ (2012)/How.Will.You.Measure.Your.Life-Part01.mp3',
+        role: 'content',
+        format: 'mp3',
+        sortOrder: 0,
+      },
+      {
+        id: 11,
+        absolutePath: '/library/Clayton M. Christensen/How Will You Measure Your Life_ (2012)/How.Will.You.Measure.Your.Life-Part02.mp3',
+        relPath: 'Clayton M. Christensen/How Will You Measure Your Life_ (2012)/How.Will.You.Measure.Your.Life-Part02.mp3',
+        role: 'content',
+        format: 'mp3',
+        sortOrder: 1,
+      },
+      {
+        id: 12,
+        absolutePath: '/library/Clayton M. Christensen/How Will You Measure Your Life_ (2012)/How.Will.You.Measure.Your.Life-Part03.mp3',
+        relPath: 'Clayton M. Christensen/How Will You Measure Your Life_ (2012)/How.Will.You.Measure.Your.Life-Part03.mp3',
+        role: 'content',
+        format: 'mp3',
+        sortOrder: 2,
+      },
+      {
+        id: 13,
+        absolutePath: '/library/Clayton M. Christensen/How Will You Measure Your Life_ (2012)/How.Will.You.Measure.Your.Life-Cover.jpg',
+        relPath: 'Clayton M. Christensen/How Will You Measure Your Life_ (2012)/How.Will.You.Measure.Your.Life-Cover.jpg',
+        role: 'cover',
+        format: 'jpg',
+        sortOrder: null,
+      },
+    ]);
+
+    const result = await service.performRename(521, 1);
+
+    const targetDir = '/library/Clayton M. Christensen/How Will You Measure Your Life_ (2012)';
+    expect(result).toEqual(
+      expect.objectContaining({
+        status: 'success',
+        oldPath: `${targetDir}/How.Will.You.Measure.Your.Life-Part01.mp3`,
+        newPath: `${targetDir}/How Will You Measure Your Life_ - Clayton M. Christensen-Part01.mp3`,
+      }),
+    );
+    expect(renameRepo.applyFolderRename).toHaveBeenCalledWith(
+      521,
+      [
+        {
+          id: 10,
+          absolutePath: `${targetDir}/How Will You Measure Your Life_ - Clayton M. Christensen-Part01.mp3`,
+          relPath:
+            'Clayton M. Christensen/How Will You Measure Your Life_ (2012)/How Will You Measure Your Life_ - Clayton M. Christensen-Part01.mp3',
+        },
+        {
+          id: 11,
+          absolutePath: `${targetDir}/How Will You Measure Your Life_ - Clayton M. Christensen-Part02.mp3`,
+          relPath:
+            'Clayton M. Christensen/How Will You Measure Your Life_ (2012)/How Will You Measure Your Life_ - Clayton M. Christensen-Part02.mp3',
+        },
+        {
+          id: 12,
+          absolutePath: `${targetDir}/How Will You Measure Your Life_ - Clayton M. Christensen-Part03.mp3`,
+          relPath:
+            'Clayton M. Christensen/How Will You Measure Your Life_ (2012)/How Will You Measure Your Life_ - Clayton M. Christensen-Part03.mp3',
+        },
+        {
+          id: 13,
+          absolutePath: `${targetDir}/How.Will.You.Measure.Your.Life-Cover.jpg`,
+          relPath: 'Clayton M. Christensen/How Will You Measure Your Life_ (2012)/How.Will.You.Measure.Your.Life-Cover.jpg',
+        },
+      ],
+      targetDir,
+    );
+    expect(mockRename).toHaveBeenCalledTimes(3);
+    expect(mockRename).toHaveBeenNthCalledWith(
+      1,
+      `${targetDir}/How.Will.You.Measure.Your.Life-Part01.mp3`,
+      `${targetDir}/How Will You Measure Your Life_ - Clayton M. Christensen-Part01.mp3`,
+    );
+    expect(mockRename).toHaveBeenNthCalledWith(
+      2,
+      `${targetDir}/How.Will.You.Measure.Your.Life-Part02.mp3`,
+      `${targetDir}/How Will You Measure Your Life_ - Clayton M. Christensen-Part02.mp3`,
+    );
+    expect(mockRename).toHaveBeenNthCalledWith(
+      3,
+      `${targetDir}/How.Will.You.Measure.Your.Life-Part03.mp3`,
+      `${targetDir}/How Will You Measure Your Life_ - Clayton M. Christensen-Part03.mp3`,
+    );
+  });
+
+  it('uses sortOrder rather than database id when numbering colliding audio tracks', async () => {
+    const { service, renameRepo } = makeService();
+    renameRepo.findBookRenameData.mockResolvedValue(
+      makeRenameData({
+        file: {
+          id: 20,
+          absolutePath: '/library/audio/track-01.mp3',
+          relPath: 'audio/track-01.mp3',
+          format: 'mp3',
+          role: 'content',
+        },
+        fileNamingPattern: '{authors}/{title}',
+        bookFolderPath: '/library/audio/track-01.mp3',
+      }),
+    );
+    renameRepo.findAllBookFiles.mockResolvedValue([
+      { id: 10, absolutePath: '/library/audio/track-02.mp3', relPath: 'audio/track-02.mp3', role: 'content', format: 'mp3', sortOrder: 1 },
+      { id: 20, absolutePath: '/library/audio/track-01.mp3', relPath: 'audio/track-01.mp3', role: 'content', format: 'mp3', sortOrder: 0 },
+      { id: 30, absolutePath: '/library/audio/track-03.mp3', relPath: 'audio/track-03.mp3', role: 'content', format: 'mp3', sortOrder: 2 },
+    ]);
+
+    const result = await service.performRename(5, 12);
+
+    expect(result).toEqual(
+      expect.objectContaining({
+        status: 'success',
+        newPath: '/library/Frank Herbert/Dune-Part01.mp3',
+      }),
+    );
+    expect(renameRepo.applyFolderRename).toHaveBeenCalledWith(
+      5,
+      [
+        { id: 10, absolutePath: '/library/Frank Herbert/Dune-Part02.mp3', relPath: 'Frank Herbert/Dune-Part02.mp3' },
+        { id: 20, absolutePath: '/library/Frank Herbert/Dune-Part01.mp3', relPath: 'Frank Herbert/Dune-Part01.mp3' },
+        { id: 30, absolutePath: '/library/Frank Herbert/Dune-Part03.mp3', relPath: 'Frank Herbert/Dune-Part03.mp3' },
+      ],
+      '/library/Frank Herbert/Dune-Part01.mp3',
+    );
+  });
+
+  it('leaves multi-track audio filenames alone when the naming pattern already makes targets unique', async () => {
+    const { service, renameRepo } = makeService();
+    renameRepo.findBookRenameData.mockResolvedValue(
+      makeRenameData({
+        file: {
+          id: 10,
+          absolutePath: '/library/audio/track-01.mp3',
+          relPath: 'audio/track-01.mp3',
+          format: 'mp3',
+          role: 'content',
+        },
+        fileNamingPattern: '{authors}/{originalFilename}',
+        bookFolderPath: '/library/audio/track-01.mp3',
+      }),
+    );
+    renameRepo.findAllBookFiles.mockResolvedValue([
+      { id: 10, absolutePath: '/library/audio/track-01.mp3', relPath: 'audio/track-01.mp3', role: 'content', format: 'mp3', sortOrder: 0 },
+      { id: 11, absolutePath: '/library/audio/track-02.mp3', relPath: 'audio/track-02.mp3', role: 'content', format: 'mp3', sortOrder: 1 },
+    ]);
+
+    const result = await service.performRename(5, 12);
+
+    expect(result).toEqual(
+      expect.objectContaining({
+        status: 'success',
+        newPath: '/library/Frank Herbert/track-01.mp3',
+      }),
+    );
+    expect(renameRepo.applyFolderRename).toHaveBeenCalledWith(
+      5,
+      [
+        { id: 10, absolutePath: '/library/Frank Herbert/track-01.mp3', relPath: 'Frank Herbert/track-01.mp3' },
+        { id: 11, absolutePath: '/library/Frank Herbert/track-02.mp3', relPath: 'Frank Herbert/track-02.mp3' },
+      ],
+      '/library/Frank Herbert/track-01.mp3',
+    );
+  });
+
   it('sanitizes token-derived rename destinations when cross-platform mode is enabled', async () => {
     const { service, renameRepo, appSettings } = makeService();
     appSettings.isCrossPlatformPathSanitizationEnabled.mockResolvedValue(true);
@@ -493,6 +684,77 @@ describe('FileRenameService', () => {
       }),
     );
     expect(notificationService.notify).toHaveBeenCalledWith(expect.objectContaining({ type: NotificationType.FileRenameFailed }));
+    expect(mockRename).not.toHaveBeenCalled();
+  });
+
+  it('skips when a generated audio part target already exists on disk', async () => {
+    const { service, renameRepo } = makeService();
+    renameRepo.findBookRenameData.mockResolvedValue(
+      makeRenameData({
+        file: {
+          id: 10,
+          absolutePath: '/library/audio/track-01.mp3',
+          relPath: 'audio/track-01.mp3',
+          format: 'mp3',
+          role: 'content',
+        },
+        fileNamingPattern: '{authors}/{title}',
+        bookFolderPath: '/library/audio/track-01.mp3',
+      }),
+    );
+    renameRepo.findAllBookFiles.mockResolvedValue([
+      { id: 10, absolutePath: '/library/audio/track-01.mp3', relPath: 'audio/track-01.mp3', role: 'content', format: 'mp3', sortOrder: 0 },
+      { id: 11, absolutePath: '/library/audio/track-02.mp3', relPath: 'audio/track-02.mp3', role: 'content', format: 'mp3', sortOrder: 1 },
+    ]);
+    mockAccess.mockImplementation((path: any) => {
+      if (path.toString() === '/library/Frank Herbert/Dune-Part02.mp3') return Promise.resolve(undefined);
+      return Promise.reject(Object.assign(new Error('missing'), { code: 'ENOENT' }));
+    });
+
+    const result = await service.performRename(5, 12);
+
+    expect(result).toEqual(
+      expect.objectContaining({
+        status: 'skipped',
+        reason: 'target path already exists on disk',
+        newPath: '/library/Frank Herbert/Dune-Part01.mp3',
+      }),
+    );
+    expect(renameRepo.applyFolderRename).not.toHaveBeenCalled();
+    expect(mockRename).not.toHaveBeenCalled();
+  });
+
+  it('skips when a generated audio part target is taken by another book', async () => {
+    const { service, renameRepo } = makeService();
+    renameRepo.findBookRenameData.mockResolvedValue(
+      makeRenameData({
+        file: {
+          id: 10,
+          absolutePath: '/library/audio/track-01.mp3',
+          relPath: 'audio/track-01.mp3',
+          format: 'mp3',
+          role: 'content',
+        },
+        fileNamingPattern: '{authors}/{title}',
+        bookFolderPath: '/library/audio/track-01.mp3',
+      }),
+    );
+    renameRepo.findAllBookFiles.mockResolvedValue([
+      { id: 10, absolutePath: '/library/audio/track-01.mp3', relPath: 'audio/track-01.mp3', role: 'content', format: 'mp3', sortOrder: 0 },
+      { id: 11, absolutePath: '/library/audio/track-02.mp3', relPath: 'audio/track-02.mp3', role: 'content', format: 'mp3', sortOrder: 1 },
+    ]);
+    renameRepo.checkPathTakenByOtherBook.mockImplementation((path: string) => Promise.resolve(path === '/library/Frank Herbert/Dune-Part02.mp3'));
+
+    const result = await service.performRename(5, 12);
+
+    expect(result).toEqual(
+      expect.objectContaining({
+        status: 'skipped',
+        reason: 'collision',
+        newPath: '/library/Frank Herbert/Dune-Part01.mp3',
+      }),
+    );
+    expect(renameRepo.applyFolderRename).not.toHaveBeenCalled();
     expect(mockRename).not.toHaveBeenCalled();
   });
 

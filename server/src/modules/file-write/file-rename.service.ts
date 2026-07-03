@@ -4,7 +4,7 @@ import { access, mkdir, readdir, rename as fsRename, rmdir } from 'fs/promises';
 import { basename, dirname, extname, join, relative } from 'path';
 
 import type { FileRenameResult } from '@bookorbit/types';
-import { NotificationType, resolveUploadPath } from '@bookorbit/types';
+import { isAudioFormat, NotificationType, resolveUploadPath } from '@bookorbit/types';
 import { sanitizeLogValue } from '../../common/utils/log-sanitize.utils';
 import { AppSettingsService } from '../app-settings/app-settings.service';
 import { NotificationService } from '../notification/notification.service';
@@ -18,6 +18,8 @@ const FILE_RENAME_ROLLBACK_EVENT = 'file.rename_rollback';
 const DEFAULT_RENAME_DEBOUNCE_MS = 3_000;
 
 export const RENAME_RELEVANT_FIELDS = new Set(['title', 'authors', 'seriesName', 'seriesIndex', 'publishedYear'] as const);
+
+type RenameBookFile = Awaited<ReturnType<FileRenameRepository['findAllBookFiles']>>[number];
 
 @Injectable()
 export class FileRenameService implements OnModuleDestroy {
@@ -114,22 +116,18 @@ export class FileRenameService implements OnModuleDestroy {
     }
 
     const currentAbsolutePath = data.file.absolutePath;
-    const newAbsolutePath = join(data.libraryFolderPath, resolvedRelPath);
+    const baseNewAbsolutePath = join(data.libraryFolderPath, resolvedRelPath);
     const currentFolderPath = data.bookFolderPath;
-    const newFolderPath = dirname(newAbsolutePath);
+    const baseNewFolderPath = dirname(baseNewAbsolutePath);
     const isBookPerFolder = data.organizationMode === 'book_per_folder';
 
     const allFiles = await this.renameRepo.findAllBookFiles(bookId);
     const fileTargets = new Map<number, string>();
-    const usedPaths = new Set<string>();
     const bookHasOwnFolder = isBookPerFolder && currentFolderPath !== currentAbsolutePath;
-
-    let hasInternalCollision = false;
 
     for (const file of allFiles) {
       if (file.id === data.file.id) {
-        fileTargets.set(file.id, newAbsolutePath);
-        usedPaths.add(newAbsolutePath.toLowerCase());
+        fileTargets.set(file.id, baseNewAbsolutePath);
       } else if (file.role === 'content') {
         const fileExt = extname(file.absolutePath);
         const fileFormat = (file.format ?? fileExt.slice(1)).toLowerCase();
@@ -143,43 +141,40 @@ export class FileRenameService implements OnModuleDestroy {
           if (isBookPerFolder) {
             const relToOldFolder = bookHasOwnFolder ? relative(currentFolderPath, file.absolutePath) : basename(file.absolutePath);
             const oldSubDir = dirname(relToOldFolder);
-            targetAbs = join(newFolderPath, oldSubDir, basename(resolvedAbs));
+            targetAbs = join(baseNewFolderPath, oldSubDir, basename(resolvedAbs));
           } else {
             targetAbs = resolvedAbs;
           }
         } else {
           const relToOldFolder = bookHasOwnFolder ? relative(currentFolderPath, file.absolutePath) : basename(file.absolutePath);
-          targetAbs = join(isBookPerFolder ? newFolderPath : dirname(newAbsolutePath), relToOldFolder);
+          targetAbs = join(isBookPerFolder ? baseNewFolderPath : dirname(baseNewAbsolutePath), relToOldFolder);
         }
 
-        if (usedPaths.has(targetAbs.toLowerCase())) {
-          hasInternalCollision = true;
-        }
-        usedPaths.add(targetAbs.toLowerCase());
         fileTargets.set(file.id, targetAbs);
       } else {
         const relToOldFolder = bookHasOwnFolder ? relative(currentFolderPath, file.absolutePath) : basename(file.absolutePath);
-        const targetAbs = join(isBookPerFolder ? newFolderPath : dirname(newAbsolutePath), relToOldFolder);
+        const targetAbs = join(isBookPerFolder ? baseNewFolderPath : dirname(baseNewAbsolutePath), relToOldFolder);
 
-        if (usedPaths.has(targetAbs.toLowerCase())) {
-          hasInternalCollision = true;
-        }
-        usedPaths.add(targetAbs.toLowerCase());
         fileTargets.set(file.id, targetAbs);
       }
     }
 
-    if (hasInternalCollision) {
+    this.applyMultiTrackAudioPartSuffixes(fileTargets, allFiles, data.file.id);
+
+    if (this.hasInternalCollision(fileTargets)) {
       fileTargets.clear();
-      fileTargets.set(data.file.id, newAbsolutePath);
+      fileTargets.set(data.file.id, baseNewAbsolutePath);
       for (const file of allFiles) {
         if (file.id !== data.file.id) {
           const relToOldFolder = bookHasOwnFolder ? relative(currentFolderPath, file.absolutePath) : basename(file.absolutePath);
-          const targetDir = isBookPerFolder ? newFolderPath : dirname(newAbsolutePath);
+          const targetDir = isBookPerFolder ? baseNewFolderPath : dirname(baseNewAbsolutePath);
           fileTargets.set(file.id, join(targetDir, relToOldFolder));
         }
       }
     }
+
+    const newAbsolutePath = fileTargets.get(data.file.id) ?? baseNewAbsolutePath;
+    const newFolderPath = dirname(newAbsolutePath);
 
     let pathUnchanged = newAbsolutePath === currentAbsolutePath;
     if (pathUnchanged) {
@@ -424,6 +419,58 @@ export class FileRenameService implements OnModuleDestroy {
     }
   }
 
+  private applyMultiTrackAudioPartSuffixes(fileTargets: Map<number, string>, allFiles: RenameBookFile[], primaryFileId: number): void {
+    const audioFiles = allFiles.filter((file) => this.isAudioContentFile(file, primaryFileId));
+    if (audioFiles.length < 2) return;
+
+    const audioFilesByTarget = new Map<string, RenameBookFile[]>();
+    for (const file of audioFiles) {
+      const targetPath = fileTargets.get(file.id);
+      if (!targetPath) continue;
+
+      const key = targetPath.toLowerCase();
+      const existing = audioFilesByTarget.get(key);
+      if (existing) {
+        existing.push(file);
+      } else {
+        audioFilesByTarget.set(key, [file]);
+      }
+    }
+
+    const collidingGroups = [...audioFilesByTarget.values()].filter((group) => group.length > 1);
+    if (collidingGroups.length === 0) return;
+
+    const trackNumbersByFileId = new Map<number, number>();
+    [...audioFiles].sort(compareAudioTrackFiles).forEach((file, index) => {
+      trackNumbersByFileId.set(file.id, index + 1);
+    });
+
+    for (const group of collidingGroups) {
+      for (const file of group) {
+        const targetPath = fileTargets.get(file.id);
+        const trackNumber = trackNumbersByFileId.get(file.id);
+        if (!targetPath || !trackNumber) continue;
+
+        fileTargets.set(file.id, appendPartSuffix(targetPath, trackNumber));
+      }
+    }
+  }
+
+  private isAudioContentFile(file: RenameBookFile, primaryFileId: number): boolean {
+    const format = (file.format ?? extname(file.absolutePath).slice(1)).toLowerCase();
+    return Boolean(format && isAudioFormat(format) && (file.role === 'content' || file.id === primaryFileId));
+  }
+
+  private hasInternalCollision(fileTargets: Map<number, string>): boolean {
+    const seen = new Set<string>();
+    for (const targetPath of fileTargets.values()) {
+      const key = targetPath.toLowerCase();
+      if (seen.has(key)) return true;
+      seen.add(key);
+    }
+    return false;
+  }
+
   private foldersAreNested(pathA: string, pathB: string): boolean {
     const normA = (pathA.endsWith('/') ? pathA : pathA + '/').toLowerCase();
     const normB = (pathB.endsWith('/') ? pathB : pathB + '/').toLowerCase();
@@ -517,4 +564,16 @@ function resolvePositiveInteger(value: unknown, fallback: number): number {
   const numeric = typeof value === 'number' ? value : Number(value);
   if (!Number.isFinite(numeric) || numeric < 1) return fallback;
   return Math.floor(numeric);
+}
+
+function compareAudioTrackFiles(a: RenameBookFile, b: RenameBookFile): number {
+  const aSortOrder = a.sortOrder ?? Number.MAX_SAFE_INTEGER;
+  const bSortOrder = b.sortOrder ?? Number.MAX_SAFE_INTEGER;
+  return aSortOrder - bSortOrder || a.id - b.id;
+}
+
+function appendPartSuffix(targetPath: string, trackNumber: number): string {
+  const extension = extname(targetPath);
+  const stem = basename(targetPath, extension);
+  return join(dirname(targetPath), `${stem}-Part${String(trackNumber).padStart(2, '0')}${extension}`);
 }
