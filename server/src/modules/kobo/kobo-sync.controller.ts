@@ -31,6 +31,7 @@ import { KoboReadingStateService } from './services/kobo-reading-state.service';
 import { KoboProxyService } from './services/kobo-proxy.service';
 import { KOBO_STORE_RESOURCES } from './kobo-store-resources';
 import { KoboBookIdentityService } from './services/kobo-book-identity.service';
+import { KoboSyncHistoryService } from './services/kobo-sync-history.service';
 
 function readHeaderValue(value: string | string[] | undefined): string | undefined {
   return Array.isArray(value) ? value[0] : value;
@@ -85,6 +86,7 @@ export class KoboSyncController {
     private readonly readingStateService: KoboReadingStateService,
     private readonly proxyService: KoboProxyService,
     private readonly bookIdentityService: KoboBookIdentityService,
+    private readonly historyService: KoboSyncHistoryService,
   ) {}
 
   @Get('v1/initialization')
@@ -113,9 +115,32 @@ export class KoboSyncController {
     @Req() req: FastifyRequest,
     @Res() reply: FastifyReply,
   ) {
+    const startedAt = Date.now();
     this.logger.log(`librarySync: userId=${user.id} syncToken=${incomingToken ?? 'none'}`);
     const baseUrl = buildBaseUrl(req);
-    const { entitlements, hasMore, syncToken } = await this.syncService.getDelta(user.id, device.deviceToken, baseUrl);
+    let result: { entitlements: unknown[]; hasMore: boolean; syncToken: string };
+    try {
+      result = await this.syncService.getDelta(user.id, device.deviceToken, baseUrl);
+    } catch (error: unknown) {
+      await this.historyService.recordFailure(
+        {
+          userId: user.id,
+          deviceId: device.deviceId,
+          event: 'library_sync',
+          durationMs: Date.now() - startedAt,
+        },
+        error,
+      );
+      throw error;
+    }
+    const { entitlements, hasMore, syncToken } = result;
+    await this.historyService.recordSuccess({
+      userId: user.id,
+      deviceId: device.deviceId,
+      event: 'library_sync',
+      durationMs: Date.now() - startedAt,
+      counts: { entitlements: entitlements.length, hasMore },
+    });
     reply.header('x-kobo-sync', hasMore ? 'continue' : '');
     reply.header('x-kobo-synctoken', syncToken);
     reply.send(entitlements);
@@ -196,17 +221,38 @@ export class KoboSyncController {
   ) {
     const id = await this.bookIdentityService.resolveBookIdByEntitlementId(user.id, bookId);
     if (id === null) return this.proxyService.forward(req, reply, device.deviceToken);
-    const settings = await this.settingsService.getSettings(user.id);
-    const states = body.ReadingStates as Record<string, unknown>[] | undefined;
-    const statePayload = states?.[0] ?? body;
-    const result = await this.readingStateService.upsertState(
-      user.id,
-      id,
-      statePayload,
-      settings.readingThreshold,
-      settings.finishedThreshold,
-      settings.twoWayProgressSync,
-    );
-    reply.send(result);
+    const startedAt = Date.now();
+    try {
+      const settings = await this.settingsService.getSettings(user.id);
+      const states = body.ReadingStates as Record<string, unknown>[] | undefined;
+      const statePayload = states?.[0] ?? body;
+      const result = await this.readingStateService.upsertState(
+        user.id,
+        id,
+        statePayload,
+        settings.readingThreshold,
+        settings.finishedThreshold,
+        settings.twoWayProgressSync,
+      );
+      await this.historyService.recordSuccess({
+        userId: user.id,
+        deviceId: device.deviceId,
+        event: 'progress_update',
+        durationMs: Date.now() - startedAt,
+        counts: await this.historyService.countsForBook(user.id, id, { progressUpdates: 1, twoWayProgressSync: settings.twoWayProgressSync }),
+      });
+      reply.send(result);
+    } catch (error: unknown) {
+      await this.historyService.recordFailure(
+        {
+          userId: user.id,
+          deviceId: device.deviceId,
+          event: 'progress_update',
+          durationMs: Date.now() - startedAt,
+        },
+        error,
+      );
+      throw error;
+    }
   }
 }

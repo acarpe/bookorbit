@@ -253,6 +253,13 @@
       "when": 1783009954135,
       "tag": "0035_add_koreader_unmatched_book_devices",
       "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "7",
+      "when": 1783034396046,
+      "tag": "0036_kobo-sync-history",
+      "breakpoints": true
     }
   ]
 }

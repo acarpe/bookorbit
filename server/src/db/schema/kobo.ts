@@ -137,6 +137,34 @@ export const koboReadingStates = pgTable(
   (t) => [unique().on(t.userId, t.bookId)],
 );
 
+export const koboSyncHistory = pgTable(
+  'kobo_sync_history',
+  {
+    id: serial('id').primaryKey(),
+    userId: integer('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    deviceId: integer('device_id').references(() => koboDevices.id, { onDelete: 'set null' }),
+    event: varchar('event', { length: 32 }).notNull(),
+    status: varchar('status', { length: 16 }).notNull(),
+    counts: jsonb('counts').notNull().default({}),
+    durationMs: integer('duration_ms').notNull(),
+    errorClass: varchar('error_class', { length: 128 }),
+    error: varchar('error', { length: 500 }),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [
+    index('kobo_sync_history_user_created_idx').on(t.userId, t.createdAt),
+    index('kobo_sync_history_device_created_idx').on(t.deviceId, t.createdAt),
+    check(
+      'kobo_sync_history_event_chk',
+      sql`${t.event} in ('library_sync', 'book_download', 'progress_update', 'annotations_pull', 'annotations_push')`,
+    ),
+    check('kobo_sync_history_status_chk', sql`${t.status} in ('success', 'failed')`),
+    check('kobo_sync_history_duration_nonnegative_chk', sql`${t.durationMs} >= 0`),
+  ],
+);
+
 export type KoboDevice = typeof koboDevices.$inferSelect;
 export type NewKoboDevice = typeof koboDevices.$inferInsert;
 
@@ -145,3 +173,5 @@ export type KoboLibrarySnapshot = typeof koboLibrarySnapshots.$inferSelect;
 export type KoboSnapshotBook = typeof koboSnapshotBooks.$inferSelect;
 export type KoboBookEntitlement = typeof koboBookEntitlements.$inferSelect;
 export type KoboReadingState = typeof koboReadingStates.$inferSelect;
+export type KoboSyncHistory = typeof koboSyncHistory.$inferSelect;
+export type NewKoboSyncHistory = typeof koboSyncHistory.$inferInsert;
