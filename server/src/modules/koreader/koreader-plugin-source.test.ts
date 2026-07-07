@@ -10,20 +10,21 @@ async function readPluginFile(name: string): Promise<string> {
 
 describe('KOReader plugin update source wiring', () => {
   it('keeps update status on the first BookOrbit menu page and groups advanced settings', async () => {
-    const main = await readPluginFile('main.lua');
-    const dashboardIndex = main.indexOf('text = _("Open dashboard")');
-    const updateRowIndex = main.indexOf('return self:updateCheckMenuText()');
-    const lastSyncIndex = main.indexOf('return T(_("Last sync: %1")');
-    const syncThisIndex = main.indexOf('text = _("Sync this book now")');
-    const syncAllIndex = main.indexOf('text = _("Sync all books now")');
-    const autoSyncIndex = main.indexOf('text = _("Auto sync this book")');
-    const twoWayIndex = main.indexOf('text = _("Two-way highlight sync")');
-    const syncSettingsIndex = main.indexOf('text = _("Sync settings")');
-    const accountIndex = main.indexOf('text = _("Account & setup")');
-    const syncSettingsBlock = main.slice(syncSettingsIndex, accountIndex);
-    const autoSyncBlock = main.slice(autoSyncIndex, syncSettingsIndex);
+    const menu = await readPluginFile('bookorbit_main_menu.lua');
+    const updater = await readPluginFile('bookorbit_updater.lua');
+    const dashboardIndex = menu.indexOf('text = _("Open dashboard")');
+    const updateRowIndex = menu.indexOf('return self:updateCheckMenuText()');
+    const lastSyncIndex = menu.indexOf('return T(_("Last sync: %1")');
+    const syncThisIndex = menu.indexOf('text = _("Sync this book now")');
+    const syncAllIndex = menu.indexOf('text = _("Sync all books now")');
+    const autoSyncIndex = menu.indexOf('text = _("Auto sync this book")');
+    const twoWayIndex = menu.indexOf('text = _("Two-way highlight sync")');
+    const syncSettingsIndex = menu.indexOf('text = _("Sync settings")');
+    const accountIndex = menu.indexOf('text = _("Account & setup")');
+    const syncSettingsBlock = menu.slice(syncSettingsIndex, accountIndex);
+    const autoSyncBlock = menu.slice(autoSyncIndex, syncSettingsIndex);
 
-    expect(main).toContain('function BookOrbit:updateCheckMenuText()');
+    expect(updater).toContain('function UpdateCheck:updateCheckMenuText()');
     expect(dashboardIndex).toBeGreaterThan(0);
     expect(updateRowIndex).toBeGreaterThan(dashboardIndex);
     expect(updateRowIndex).toBeLessThan(lastSyncIndex);
@@ -39,47 +40,49 @@ describe('KOReader plugin update source wiring', () => {
     expect(syncSettingsBlock).toContain('return T(_("Sync to a newer state (%1)"), getNameStrategy(self.settings.sync_forward))');
     expect(syncSettingsBlock).toContain('return T(_("Sync to an older state (%1)"), getNameStrategy(self.settings.sync_backward))');
     expect(
-      main
-        .slice(main.indexOf('return T(_("Periodically sync every # pages (%1)")'), main.indexOf('return T(_("Sync to a newer state (%1)")'))
+      menu
+        .slice(menu.indexOf('return T(_("Periodically sync every # pages (%1)")'), menu.indexOf('return T(_("Sync to a newer state (%1)")'))
         .includes('separator = true'),
     ).toBe(false);
 
-    expect(main.indexOf('keep_menu_open = true,\n                callback = function()\n                    self:checkForUpdate()')).toBeGreaterThan(
+    expect(menu.indexOf('keep_menu_open = true,\n                callback = function()\n                    self:checkForUpdate()')).toBeGreaterThan(
       0,
     );
-    expect(main).toContain('return T(_("Plugin update available: v%1 -> v%2"), PLUGIN_VERSION, self.settings.update_latest_version)');
-    expect(main).toContain('return T(_("Installed plugin: v%1 (Check for update)"), PLUGIN_VERSION)');
-    expect(main).toContain('return T(_("Installed plugin: v%1 (Login required)"), PLUGIN_VERSION)');
-    expect(main).not.toContain('return T(_("Installed plugin: v%1"), PLUGIN_VERSION)');
+    expect(updater).toContain('return T(_("Plugin update available: v%1 -> v%2"), PLUGIN_VERSION, self.settings.update_latest_version)');
+    expect(updater).toContain('return T(_("Installed plugin: v%1 (Check for update)"), PLUGIN_VERSION)');
+    expect(updater).toContain('return T(_("Installed plugin: v%1 (Login required)"), PLUGIN_VERSION)');
+    expect(updater).not.toContain('return T(_("Installed plugin: v%1"), PLUGIN_VERSION)');
   });
 
   it('keeps manual sync actions above advanced sync settings', async () => {
-    const main = await readPluginFile('main.lua');
-    const syncSettingsBlock = main.slice(
-      main.indexOf('return T(_("Periodically sync every # pages (%1)")'),
-      main.indexOf('text = _("Account & setup")'),
+    const menu = await readPluginFile('bookorbit_main_menu.lua');
+    const syncSettingsBlock = menu.slice(
+      menu.indexOf('return T(_("Periodically sync every # pages (%1)")'),
+      menu.indexOf('text = _("Account & setup")'),
     );
 
-    expect(main.indexOf('text = _("Sync this book now")')).toBeLessThan(main.indexOf('text = _("Sync settings")'));
-    expect(main.indexOf('text = _("Sync all books now")')).toBeLessThan(main.indexOf('text = _("Sync settings")'));
+    expect(menu.indexOf('text = _("Sync this book now")')).toBeLessThan(menu.indexOf('text = _("Sync settings")'));
+    expect(menu.indexOf('text = _("Sync all books now")')).toBeLessThan(menu.indexOf('text = _("Sync settings")'));
     expect(syncSettingsBlock).not.toContain('text = _("Sync this book now")');
     expect(syncSettingsBlock).not.toContain('text = _("Sync all books now")');
   });
 
   it('reconciles remote progress before manual book sync uploads progress', async () => {
     const main = await readPluginFile('main.lua');
+    const menu = await readPluginFile('bookorbit_main_menu.lua');
+    const progress = await readPluginFile('bookorbit_progress_sync.lua');
     const bookSync = await readPluginFile('bookorbit_book_sync.lua');
 
-    expect(main).toContain('function BookOrbit:reconcileProgressBeforeBookSync(digest, on_done)');
-    expect(main).toContain('client:getProgress(digest)');
-    expect(main).toContain('local local_timestamp = self.last_page_turn_timestamp or 0');
-    expect(main).toContain('cancel_callback = function()');
-    expect(main).toContain('on_done(remote_newer)');
+    expect(progress).toContain('function ProgressSync:reconcileProgressBeforeBookSync(digest, on_done)');
+    expect(progress).toContain('client:getProgress(digest)');
+    expect(progress).toContain('local local_timestamp = self.last_page_turn_timestamp or 0');
+    expect(progress).toContain('cancel_callback = function()');
+    expect(progress).toContain('on_done(remote_newer)');
     expect(main).toContain('self:reconcileProgressBeforeBookSync(snap.digest, run_book_sync)');
     expect(main).toContain('local latest_snap = BookOrbitBookSync.capture(self)');
     expect(main).toContain('skip_progress = skip_progress');
     expect(main).toContain('event = "BookOrbitPullProgress"');
-    expect(main).not.toContain('text = _("Pull progress now")');
+    expect(menu).not.toContain('text = _("Pull progress now")');
     expect(main).toContain('self.onPageUpdate = self._onPageUpdate\n    if self.settings.auto_sync then');
     expect(main).toContain('if self.settings.auto_sync and (self.periodic_push_scheduled');
 
@@ -89,15 +92,15 @@ describe('KOReader plugin update source wiring', () => {
   });
 
   it('keeps book action downloads compact without duplicating download options', async () => {
-    const catalog = await readPluginFile('bookorbit_catalog.lua');
+    const detail = await readPluginFile('bookorbit_catalog_detail.lua');
     const download = await readPluginFile('bookorbit_catalog_download.lua');
-    const detailActionsBlock = catalog.slice(
-      catalog.indexOf('function BookOrbitCatalog:showBookActionSheet(detail, opts)'),
-      catalog.indexOf('function BookOrbitCatalog:showDetailActions()'),
+    const detailActionsBlock = detail.slice(
+      detail.indexOf('function CatalogDetail:showBookActionSheet(detail, opts)'),
+      detail.indexOf('function CatalogDetail:showDetailActions()'),
     );
-    const detailHeaderBlock = catalog.slice(
-      catalog.indexOf('function BookOrbitCatalog:buildDetailHeader'),
-      catalog.indexOf('function BookOrbitCatalog:updateDetailItems'),
+    const detailHeaderBlock = detail.slice(
+      detail.indexOf('function CatalogDetail:buildDetailButtons'),
+      detail.indexOf('function CatalogDetail:updateDetailItems'),
     );
 
     expect(detailActionsBlock).toContain('text = _("Download")');
@@ -114,13 +117,14 @@ describe('KOReader plugin update source wiring', () => {
 
   it('throttles automatic update prompts and does not interrupt the catalog browser', async () => {
     const main = await readPluginFile('main.lua');
+    const updater = await readPluginFile('bookorbit_updater.lua');
 
-    expect(main).toContain('local UPDATE_CHECK_INTERVAL = 24 * 60 * 60');
+    expect(updater).toContain('local UPDATE_CHECK_INTERVAL = 24 * 60 * 60');
     expect(main).toContain('update_check_last_at = 0');
-    expect(main).toContain('function BookOrbit:maybeCheckForUpdate(interactive)');
-    expect(main).toContain('self:handleUpdateVersionResponse(body, interactive, interactive or self.catalog_browser == nil)');
-    expect(main).toContain('if not prompt_allowed then');
-    expect(main).toContain('self.settings.update_dismissed_version = plugin_latest');
+    expect(updater).toContain('function UpdateCheck:maybeCheckForUpdate(interactive)');
+    expect(updater).toContain('self:handleUpdateVersionResponse(body, interactive, interactive or self.catalog_browser == nil)');
+    expect(updater).toContain('if not prompt_allowed then');
+    expect(updater).toContain('self.settings.update_dismissed_version = plugin_latest');
   });
 
   it('runs a throttled update check after successful full-library sweeps', async () => {
@@ -134,14 +138,16 @@ describe('KOReader plugin update source wiring', () => {
 
   it('wires bulk catalog downloads through a dedicated mixin and selection UI hooks', async () => {
     const catalog = await readPluginFile('bookorbit_catalog.lua');
+    const detail = await readPluginFile('bookorbit_catalog_detail.lua');
     const bulk = await readPluginFile('bookorbit_catalog_bulk_download.lua');
     const download = await readPluginFile('bookorbit_catalog_download.lua');
+    const menu = await readPluginFile('bookorbit_main_menu.lua');
     const main = await readPluginFile('main.lua');
     const widgets = await readPluginFile('bookorbit_catalog_widgets.lua');
     const downloadIcon = await readPluginFile('assets/bookorbit.download.svg');
     const refreshTapBlock = catalog.slice(
       catalog.indexOf('function BookOrbitCatalog:onRefreshButtonTap()'),
-      catalog.indexOf('function BookOrbitCatalog:loadBookDetail'),
+      catalog.indexOf('function BookOrbitCatalog:dashboardMode()'),
     );
 
     expect(catalog).toContain('local CatalogBulkDownload = require("bookorbit_catalog_bulk_download")');
@@ -159,8 +165,8 @@ describe('KOReader plugin update source wiring', () => {
     expect(catalog).toContain('text = titles_label');
     expect(catalog).toContain('self:showBulkSelectionActions()');
     expect(catalog).toContain('function BookOrbitCatalog:onMenuHoldSelect(item)');
-    expect(catalog).toContain('function BookOrbitCatalog:showBookActionSheet(detail, opts)');
-    expect(catalog).toContain('function BookOrbitCatalog:showBookActionSheetForEntry(item)');
+    expect(detail).toContain('function CatalogDetail:showBookActionSheet(detail, opts)');
+    expect(detail).toContain('function CatalogDetail:showBookActionSheetForEntry(item)');
     expect(catalog).toContain('function BookOrbitCatalog:isBulkSelectionActive()');
     expect(catalog).toContain('self:bulkHandleContextChange(self.current_context)');
     expect(catalog).toContain('function BookOrbitCatalog:titleBarSearchIcon()');
@@ -179,7 +185,7 @@ describe('KOReader plugin update source wiring', () => {
     expect(refreshTapBlock).toContain('self:bulkExitSelectionMode()');
     expect(refreshTapBlock).not.toContain('self:bulkClearSelectedBooks(true)');
     expect(catalog).toContain('self:showBookActionSheetForEntry(item)');
-    expect(catalog).toContain('allow_select = item.kind == "book" and self:bookMode()');
+    expect(detail).toContain('allow_select = item.kind == "book" and self:bookMode()');
     expect(catalog).toContain('text = _("Close BookOrbit")');
     expect(catalog).not.toContain('"appbar.download"');
     expect(catalog).not.toContain('close_callback = function() self:onClose() end');
@@ -202,8 +208,8 @@ describe('KOReader plugin update source wiring', () => {
     expect(download).toContain('local on_catalog_page = (self.bookMode and self:bookMode())');
     expect(download).toContain('elseif self.updateItems and on_catalog_page then');
 
-    expect(main).toContain('text = _("Close BookOrbit")');
-    expect(main).toContain('catalog:onCloseAllMenus()');
+    expect(menu).toContain('text = _("Close BookOrbit")');
+    expect(menu).toContain('catalog:onCloseAllMenus()');
     expect(main).toContain('path = self.path');
     expect(main).toContain('catalog_mosaic_show_titles = false');
 
