@@ -65,6 +65,7 @@ local DETAIL_CACHE_MAX_BOOKS = 80
 -- Shared spacing scale for the detail page. INSET is the left/right content
 -- margin every section aligns to; the gaps are the only vertical rhythm used.
 local DETAIL_INSET = Screen:scaleBySize(16)
+local DETAIL_RELATED_SHELF_INSET = Screen:scaleBySize(12)
 local DETAIL_GAP_XS = Screen:scaleBySize(4)
 local DETAIL_GAP_S = Screen:scaleBySize(8)
 local DETAIL_GAP_M = Screen:scaleBySize(14)
@@ -398,7 +399,7 @@ function CatalogDetail:showBookActionSheet(detail, opts)
             end,
         } or nil
         local download_button = {
-            text = _("Download"),
+            text = self:downloadButtonLabel(supported_files),
             enabled = show_download,
             callback = function()
                 closeThen(function()
@@ -638,6 +639,33 @@ function CatalogDetail:supportedFiles(detail)
         end
     end
     return files
+end
+
+function CatalogDetail:nextDownloadFile(supported_files)
+    for _, file in ipairs(supported_files or {}) do
+        if file.role == "primary" and not self:onDeviceFilePath(file) then
+            return file
+        end
+    end
+    for _, file in ipairs(supported_files or {}) do
+        if not self:onDeviceFilePath(file) then
+            return file
+        end
+    end
+    for _, file in ipairs(supported_files or {}) do
+        if file.role == "primary" then
+            return file
+        end
+    end
+    return (supported_files or {})[1]
+end
+
+function CatalogDetail:downloadButtonLabel(supported_files)
+    if #(supported_files or {}) == 0 then return _("No supported format") end
+    local file = self:nextDownloadFile(supported_files)
+    local format = cleanInlineText(file and file.format)
+    if not format then return _("Download") end
+    return T(_("Download (%1)"), string.upper(format))
 end
 
 function CatalogDetail:fileLabel(file, show_support)
@@ -918,25 +946,38 @@ function CatalogDetail:buildDetailRating(detail, width)
     return row
 end
 
-function CatalogDetail:buildDetailPills(detail, width)
-    local items = self:detailPillItems(detail)
+function CatalogDetail:buildDetailPillRow(items, width, title, more_button_key)
     if #items == 0 then return nil end
 
     local max_pill_w = math.floor(width * 0.45)
     local row = HorizontalGroup:new{ align = "center" }
     local used = 0
     local shown = 0
-    for idx, text in ipairs(items) do
+    if more_button_key then self[more_button_key] = nil end
+
+    for i = 1, #items do
+        local text = items[i]
         local pill = DetailPillWidget:new{
             text = text,
             height = DETAIL_PILL_HEIGHT,
             max_width = max_pill_w,
             callback = function()
-                self:showFullList(_("Genres & Tags"), items)
+                self:showFullList(title, items)
             end,
         }
         local pill_w = pill:getSize().w
-        if shown > 0 and used + DETAIL_GAP_S + pill_w > width then break end
+        local remaining_after = #items - shown - 1
+        local more_w = 0
+        if remaining_after > 0 then
+            more_w = DetailPillWidget:new{
+                text = T(_("+%1"), remaining_after),
+                height = DETAIL_PILL_HEIGHT,
+                max_width = max_pill_w,
+            }:getSize().w
+        end
+        local gap_w = shown > 0 and DETAIL_GAP_S or 0
+        local reserve_w = remaining_after > 0 and (DETAIL_GAP_S + more_w) or 0
+        if shown > 0 and used + gap_w + pill_w + reserve_w > width then break end
         if shown > 0 then
             table.insert(row, HorizontalSpan:new{ width = DETAIL_GAP_S })
             used = used + DETAIL_GAP_S
@@ -946,23 +987,30 @@ function CatalogDetail:buildDetailPills(detail, width)
         shown = shown + 1
     end
     local remaining = #items - shown
-    self.detail_more_pills_button = nil
     if remaining > 0 then
         local more = DetailPillWidget:new{
             text = T(_("+%1"), remaining),
             height = DETAIL_PILL_HEIGHT,
             max_width = max_pill_w,
             callback = function()
-                self:showFullList(_("Genres & Tags"), items)
+                self:showFullList(title, items)
             end,
         }
-        self.detail_more_pills_button = more
         if shown == 0 or used + DETAIL_GAP_S + more:getSize().w <= width then
             if shown > 0 then table.insert(row, HorizontalSpan:new{ width = DETAIL_GAP_S }) end
             table.insert(row, more)
+            if more_button_key then self[more_button_key] = more end
         end
     end
     return row
+end
+
+function CatalogDetail:buildDetailPills(detail, width)
+    return self:buildDetailPillRow(
+        self:detailPillItems(detail),
+        width,
+        _("Genres & Tags"),
+        "detail_more_pills_button")
 end
 
 -- Progress line with the read status as a tappable caption on the right:
@@ -1016,7 +1064,7 @@ function CatalogDetail:buildDetailButtons(detail, width)
         return self.detail_read_button
     end
     self.detail_download_button = Button:new{
-        text = _("Download"),
+        text = self:downloadButtonLabel(supported_files),
         width = width,
         height = DETAIL_BUTTON_HEIGHT,
         enabled = #supported_files > 0,
@@ -1040,6 +1088,7 @@ function CatalogDetail:buildDetailHeader(detail, width)
     self.detail_status_button = nil
     self.detail_read_button = nil
     self.detail_download_button = nil
+    self.detail_more_pills_button = nil
 
     local title_face = Font:getFace("cfont", 21)
     local top = VerticalGroup:new{ align = "left" }
@@ -1178,9 +1227,11 @@ function CatalogDetail:buildDetailRelatedSection(section, width, height)
         }, {}
     end
 
-    local content_w = width - 2 * DETAIL_INSET
+    local content_w = width - 2 * DETAIL_RELATED_SHELF_INSET
     local gap = Screen:scaleBySize(10)
-    local nav_w = Screen:scaleBySize(24)
+    local nav_w = Screen:scaleBySize(20)
+    local nav_gap = Screen:scaleBySize(4)
+    local nav_gutter_w = nav_w + nav_gap
     local slots = 4
 
     local rows = 1
@@ -1192,7 +1243,7 @@ function CatalogDetail:buildDetailRelatedSection(section, width, height)
     local function metrics(row_count)
         local page_size = slots * row_count
         local has_nav = #books > page_size
-        local covers_w = has_nav and content_w - 2 * (nav_w + gap) or content_w
+        local covers_w = math.max(1, content_w - 2 * nav_gutter_w)
         local card_w = math.floor((covers_w - (slots - 1) * gap) / slots)
         local card_h = CatalogWidgets.detailRelatedCardHeight(card_w)
         return {
@@ -1236,7 +1287,9 @@ function CatalogDetail:buildDetailRelatedSection(section, width, height)
             dimen = Geom:new{ w = nav_w, h = layout.total_h },
             prev_button,
         })
-        table.insert(row, HorizontalSpan:new{ width = gap })
+        table.insert(row, HorizontalSpan:new{ width = nav_gap })
+    else
+        table.insert(row, HorizontalSpan:new{ width = nav_gutter_w })
     end
 
     local grid = VerticalGroup:new{ align = "left" }
@@ -1275,7 +1328,7 @@ function CatalogDetail:buildDetailRelatedSection(section, width, height)
     table.insert(row, grid)
 
     if layout.has_nav then
-        table.insert(row, HorizontalSpan:new{ width = gap })
+        table.insert(row, HorizontalSpan:new{ width = nav_gap })
         next_button = Button:new{
             icon = "chevron.right",
             icon_width = Screen:scaleBySize(16),
@@ -1294,15 +1347,17 @@ function CatalogDetail:buildDetailRelatedSection(section, width, height)
         })
         table.insert(focus_rows[1], 1, prev_button)
         table.insert(focus_rows[1], next_button)
+    else
+        table.insert(row, HorizontalSpan:new{ width = nav_gutter_w })
     end
 
     return HorizontalGroup:new{
-        HorizontalSpan:new{ width = DETAIL_INSET },
+        HorizontalSpan:new{ width = DETAIL_RELATED_SHELF_INSET },
         LeftContainer:new{
             dimen = Geom:new{ w = content_w, h = layout.total_h },
             row,
         },
-        HorizontalSpan:new{ width = DETAIL_INSET },
+        HorizontalSpan:new{ width = DETAIL_RELATED_SHELF_INSET },
     }, focus_rows
 end
 
