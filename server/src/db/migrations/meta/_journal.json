@@ -281,6 +281,20 @@
       "when": 1783458659132,
       "tag": "0039_add_sync_to_kobo_smart_scopes",
       "breakpoints": true
+    },
+    {
+      "idx": 40,
+      "version": "7",
+      "when": 1783465177576,
+      "tag": "0040_add_readwise_tables",
+      "breakpoints": true
+    },
+    {
+      "idx": 41,
+      "version": "7",
+      "when": 1783469412249,
+      "tag": "0041_readwise_annotation_user_id_id_index",
+      "breakpoints": true
     }
   ]
 }
