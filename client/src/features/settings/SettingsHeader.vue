@@ -58,6 +58,10 @@ const sections = computed<Section[]>(() => {
     result.push({ label: 'Readwise', routeName: 'settings-readwise' })
   }
 
+  if (su || perms.includes(Permission.StorygraphSync)) {
+    result.push({ label: 'StoryGraph', routeName: 'settings-storygraph' })
+  }
+
   if (su || perms.includes('manage_users') || perms.includes('manage_app_settings')) {
     result.push({ label: 'Admin', routeName: 'settings-admin' })
   }

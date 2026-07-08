@@ -49,4 +49,5 @@ export * from "./reading-session-source-bucket";
 export * from "./annotation";
 export * from "./hardcover";
 export * from "./readwise";
+export * from "./storygraph";
 export * from "./path";

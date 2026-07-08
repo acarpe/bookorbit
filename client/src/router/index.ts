@@ -74,6 +74,8 @@ function resolveLegacyIntegrationsRoute(tab: unknown): string {
       return 'settings-hardcover'
     case 'readwise':
       return 'settings-readwise'
+    case 'storygraph':
+      return 'settings-storygraph'
     case 'kobo':
     default:
       return 'settings-kobo'
@@ -153,6 +155,12 @@ export const routes: RouteRecordRaw[] = [
             name: 'settings-readwise',
             component: () => import('@/features/readwise/components/ReadwiseSettings.vue'),
             meta: { maxWidth: 'max-w-3xl', title: 'Readwise' },
+          },
+          {
+            path: 'storygraph',
+            name: 'settings-storygraph',
+            component: () => import('@/features/storygraph/components/StorygraphSettings.vue'),
+            meta: { maxWidth: 'max-w-3xl', title: 'StoryGraph' },
           },
           {
             path: 'email',

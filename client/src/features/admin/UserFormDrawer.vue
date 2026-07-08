@@ -43,6 +43,7 @@ const PERMISSION_GROUPS: { label: string; permissions: Permission[] }[] = [
       Permission.KoreaderSync,
       Permission.HardcoverSync,
       Permission.ReadwiseSync,
+      Permission.StorygraphSync,
       Permission.OpdsAccess,
       Permission.BookDockAccess,
     ],
@@ -116,6 +117,7 @@ function applyPreset(preset: 'standard' | 'admin' | 'clear') {
       Permission.KoreaderSync,
       Permission.HardcoverSync,
       Permission.ReadwiseSync,
+      Permission.StorygraphSync,
       Permission.OpdsAccess,
       Permission.BookDockAccess,
     ])
