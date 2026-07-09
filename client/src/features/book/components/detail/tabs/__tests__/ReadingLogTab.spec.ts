@@ -19,6 +19,13 @@ vi.mock('vue-echarts', () => ({
   default: { name: 'VChart', template: '<div />' },
 }))
 
+vi.mock('@/components/ui/dropdown-menu', () => ({
+  DropdownMenu: { template: '<div><slot /></div>' },
+  DropdownMenuContent: { template: '<div><slot /></div>' },
+  DropdownMenuItem: { template: '<button type="button"><slot /></button>' },
+  DropdownMenuTrigger: { template: '<div><slot /></div>' },
+}))
+
 import ReadingLogTab from '../ReadingLogTab.vue'
 import ResetReadingStateDialog from '@/features/book/components/ResetReadingStateDialog.vue'
 
@@ -109,7 +116,7 @@ describe('ReadingLogTab', () => {
     expect(wrapper.text()).toContain('This year')
   })
 
-  it('renders the hero and chart empty states when there is no data', async () => {
+  it('renders the reading summary and chart empty states when there is no data', async () => {
     const wrapper = mount(ReadingLogTab, { props: { book: makeBook() }, global: { plugins: [createPinia()] } })
     await flushPromises()
 
@@ -215,7 +222,7 @@ describe('ReadingLogTab', () => {
     await flushPromises()
 
     const allTimeBtn = wrapper.findAll('button').find((b) => b.text() === 'All time')
-    expect(allTimeBtn?.classes()).toContain('bg-primary')
+    expect(allTimeBtn?.classes()).toContain('bg-card')
   })
 
   it('inactive quick filter buttons do not have primary styling', async () => {
@@ -223,7 +230,7 @@ describe('ReadingLogTab', () => {
     await flushPromises()
 
     const last30Btn = wrapper.findAll('button').find((b) => b.text() === 'Last 30 days')
-    expect(last30Btn?.classes()).not.toContain('bg-primary')
+    expect(last30Btn?.classes()).not.toContain('bg-card')
   })
 
   it('opens the reset dialog and reloads the reading log after a successful reset', async () => {
