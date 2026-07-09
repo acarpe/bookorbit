@@ -30,6 +30,10 @@ export type UserBookStatus = {
   updatedAt: string;
 };
 
+export type ResetBookReadingStateResponse = {
+  readStatus: UserBookStatus;
+};
+
 export type BookFileRef = {
   id: number;
   format: string | null;

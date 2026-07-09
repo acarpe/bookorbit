@@ -9,7 +9,7 @@ import {
   Library,
   Headphones,
   Lock,
-  MoreHorizontal,
+  MoreVertical,
   Pencil,
   RotateCcw,
   Send,
@@ -40,7 +40,9 @@ import { usePermissions } from '@/features/auth/composables/usePermissions'
 import { useDeleteBook } from '@/features/book/composables/useDeleteBook'
 import { useMetadataLocks } from '@/features/book/composables/useMetadataLocks'
 import { usePersonalNote, PERSONAL_NOTE_MAX_LENGTH } from '@/features/book/composables/usePersonalNote'
+import { useResetReadingState } from '@/features/book/composables/useResetReadingState'
 import DeleteBookDialog from '@/features/book/components/DeleteBookDialog.vue'
+import ResetReadingStateDialog from '@/features/book/components/ResetReadingStateDialog.vue'
 import SendBookDialog from '@/features/email/components/SendBookDialog.vue'
 import AddToCollectionSheet from '@/features/collection/components/AddToCollectionSheet.vue'
 import MetadataScoreBadge from '@/features/metadata-score/components/MetadataScoreBadge.vue'
@@ -287,6 +289,15 @@ const isRatingLocked = computed(() => isLocked('rating'))
 const canViewKobo = computed(() => hasPermission('kobo_sync'))
 const canViewKoreader = computed(() => hasPermission('koreader_sync'))
 const canEditMetadata = computed(() => hasPermission('library_edit_metadata'))
+const resetReadingStateBookId = computed(() => props.book.id)
+const {
+  open: resetReadingStateDialogOpen,
+  resetting: resettingReadingState,
+  error: resetReadingStateError,
+  openDialog: openResetReadingStateDialog,
+  closeDialog: closeResetReadingStateDialog,
+  resetReadingState,
+} = useResetReadingState(resetReadingStateBookId)
 
 const coverSeed = computed(() => props.book.title ?? props.book.folderPath.split('/').pop() ?? String(props.book.id))
 const coverPlaceholderTitle = computed(() => props.book.title ?? props.book.folderPath.split('/').pop() ?? null)
@@ -903,6 +914,20 @@ function handleSendFromMenu() {
   showSendDialog.value = true
 }
 
+function handleOpenResetReadingState() {
+  moreMenuOpen.value = false
+  mobileMoreMenuOpen.value = false
+  openResetReadingStateDialog()
+}
+
+async function handleResetReadingState() {
+  const result = await resetReadingState()
+  if (!result) return
+
+  await loadSupplemental()
+  emit('saved', { ...props.book, readStatus: result.readStatus })
+}
+
 function handleCoverLoad(ratio: number | null) {
   coverLoaded.value = true
   coverFailed.value = false
@@ -1345,24 +1370,34 @@ watch(
       >
         <Library class="size-3.5" />
       </button>
+      <button
+        v-if="hasPermission('email_send')"
+        class="flex items-center justify-center h-9 w-9 rounded-md border border-input bg-background hover:bg-muted transition-colors"
+        aria-label="Send via Email"
+        @click="handleSendFromMenu"
+      >
+        <Send class="size-3.5" />
+      </button>
       <Popover
-        v-if="hasPermission('library_delete_books') || hasPermission('email_send')"
+        v-if="canEditMetadata || hasPermission('library_delete_books')"
         :open="mobileMoreMenuOpen"
         @update:open="(v) => (mobileMoreMenuOpen = v)"
       >
         <PopoverTrigger as-child>
-          <button class="flex items-center justify-center h-9 w-9 rounded-md border border-input bg-background hover:bg-muted transition-colors">
-            <MoreHorizontal class="size-3.5" />
+          <button
+            class="flex items-center justify-center h-9 w-9 rounded-md border border-destructive/30 bg-background text-destructive hover:bg-destructive/10 transition-colors"
+          >
+            <MoreVertical class="size-3.5" />
           </button>
         </PopoverTrigger>
         <PopoverContent class="w-44 p-1" align="end">
           <button
-            v-if="hasPermission('email_send')"
-            class="flex w-full items-center gap-2 px-2 py-1.5 rounded text-sm text-foreground hover:bg-muted transition-colors"
-            @click="handleSendFromMenu"
+            v-if="canEditMetadata"
+            class="flex w-full items-center gap-2 px-2 py-1.5 rounded text-sm text-destructive hover:bg-destructive/10 transition-colors"
+            @click="handleOpenResetReadingState"
           >
-            <Send class="size-3.5" />
-            Send via Email
+            <RotateCcw class="size-3.5" />
+            Reset reading state
           </button>
           <button
             v-if="hasPermission('library_delete_books')"
@@ -1498,26 +1533,30 @@ watch(
             >
               <Library class="size-3.5" />
             </button>
-            <Popover
-              v-if="hasPermission('library_delete_books') || hasPermission('email_send')"
-              :open="moreMenuOpen"
-              @update:open="(v) => (moreMenuOpen = v)"
+            <button
+              v-if="hasPermission('email_send')"
+              class="flex flex-1 items-center justify-center h-9 rounded-md border border-input bg-background text-sm hover:bg-muted transition-colors"
+              aria-label="Send via Email"
+              @click="handleSendFromMenu"
             >
+              <Send class="size-3.5" />
+            </button>
+            <Popover v-if="canEditMetadata || hasPermission('library_delete_books')" :open="moreMenuOpen" @update:open="(v) => (moreMenuOpen = v)">
               <PopoverTrigger as-child>
                 <button
-                  class="flex flex-1 items-center justify-center h-9 rounded-md border border-input bg-background text-sm hover:bg-muted transition-colors"
+                  class="flex flex-1 items-center justify-center h-9 rounded-md border border-destructive/30 bg-background text-destructive hover:bg-destructive/10 transition-colors"
                 >
-                  <MoreHorizontal class="size-3.5" />
+                  <MoreVertical class="size-3.5" />
                 </button>
               </PopoverTrigger>
-              <PopoverContent class="w-40 p-1" align="end">
+              <PopoverContent class="w-44 p-1" align="end">
                 <button
-                  v-if="hasPermission('email_send')"
-                  class="flex w-full items-center gap-2 px-2 py-1.5 rounded text-sm text-foreground hover:bg-muted transition-colors"
-                  @click="handleSendFromMenu"
+                  v-if="canEditMetadata"
+                  class="flex w-full items-center gap-2 px-2 py-1.5 rounded text-sm text-destructive hover:bg-destructive/10 transition-colors"
+                  @click="handleOpenResetReadingState"
                 >
-                  <Send class="size-3.5" />
-                  Send via Email
+                  <RotateCcw class="size-3.5" />
+                  Reset reading state
                 </button>
                 <button
                   v-if="hasPermission('library_delete_books')"
@@ -1525,7 +1564,7 @@ watch(
                   @click="handleDeleteFromMenu"
                 >
                   <Trash2 class="size-3.5" />
-                  Delete
+                  Delete book
                 </button>
               </PopoverContent>
             </Popover>
@@ -2170,6 +2209,14 @@ watch(
   />
 
   <DeleteBookDialog :open="deleteBookId !== null" :deleting="deletingBook" @confirm="confirmDelete" @cancel="cancelDelete" />
+
+  <ResetReadingStateDialog
+    :open="resetReadingStateDialogOpen"
+    :resetting="resettingReadingState"
+    :error="resetReadingStateError"
+    @close="closeResetReadingStateDialog"
+    @confirm="handleResetReadingState"
+  />
 
   <!-- Cover lightbox -->
   <DialogRoot :open="coverLightboxOpen" @update:open="coverLightboxOpen = $event">

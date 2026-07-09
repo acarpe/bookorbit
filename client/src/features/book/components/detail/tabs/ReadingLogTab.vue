@@ -1,7 +1,11 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import type { BookDetail, UserBookStatus } from '@bookorbit/types'
+import { RotateCcw } from '@lucide/vue'
+import { Permission, type BookDetail, type UserBookStatus } from '@bookorbit/types'
+import { usePermissions } from '@/features/auth/composables/usePermissions'
 import { useBookReadingLog, type AddReadingSessionPayload } from '@/features/book/composables/useBookReadingLog'
+import { useResetReadingState } from '@/features/book/composables/useResetReadingState'
+import ResetReadingStateDialog from '@/features/book/components/ResetReadingStateDialog.vue'
 import ReadingLogHero from './ReadingLogHero.vue'
 import ReadingLogSourceSplit from './ReadingLogSourceSplit.vue'
 import ReadingLogJourneyChart from './ReadingLogJourneyChart.vue'
@@ -29,11 +33,23 @@ const {
   hasMore,
   deleteSession,
   addSession,
+  reload,
   exportAll,
   loadMore,
   setSort,
   setFilters,
 } = useBookReadingLog(bookIdRef)
+
+const { hasPermission } = usePermissions()
+const canResetReadingState = computed(() => hasPermission(Permission.LibraryEditMetadata))
+const {
+  open: resetDialogOpen,
+  resetting: resettingReadingState,
+  error: resetReadingStateError,
+  openDialog: openResetReadingStateDialog,
+  closeDialog: closeResetReadingStateDialog,
+  resetReadingState,
+} = useResetReadingState(bookIdRef)
 
 type QuickFilter = 'all' | 'last30' | 'last90' | 'thisYear'
 const activeQuick = ref<QuickFilter>('all')
@@ -81,6 +97,17 @@ async function handleDeleteSession(sessionId: number) {
 
 function handleHeroSaved(readStatus: UserBookStatus) {
   emit('saved', { ...props.book, readStatus })
+}
+
+function handleOpenResetReadingState() {
+  openResetReadingStateDialog()
+}
+
+async function handleResetReadingState() {
+  const result = await resetReadingState()
+  if (!result) return
+  await reload()
+  emit('saved', { ...props.book, readStatus: result.readStatus })
 }
 
 const addDialogOpen = ref(false)
@@ -155,6 +182,14 @@ const quickFilters: { label: string; value: QuickFilter }[] = [
         </select>
 
         <ReadingLogExportMenu :book-title="bookTitle" :total="total" :export-all="exportAll" />
+        <button
+          v-if="canResetReadingState"
+          class="inline-flex h-8 items-center gap-1.5 rounded-md border border-destructive/30 px-2.5 text-sm font-medium text-destructive transition-colors hover:bg-destructive/10"
+          @click="handleOpenResetReadingState"
+        >
+          <RotateCcw class="size-3.5" />
+          Reset reading state
+        </button>
       </div>
     </div>
 
@@ -188,6 +223,14 @@ const quickFilters: { label: string; value: QuickFilter }[] = [
       :error="addError"
       @close="handleCloseAddSession"
       @submit="handleAddSessionSubmit"
+    />
+
+    <ResetReadingStateDialog
+      :open="resetDialogOpen"
+      :resetting="resettingReadingState"
+      :error="resetReadingStateError"
+      @close="closeResetReadingStateDialog"
+      @confirm="handleResetReadingState"
     />
   </div>
 </template>

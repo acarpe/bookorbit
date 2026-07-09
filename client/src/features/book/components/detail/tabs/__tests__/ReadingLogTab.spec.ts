@@ -4,10 +4,15 @@ import { createPinia } from 'pinia'
 
 const mocks = vi.hoisted(() => ({
   api: vi.fn<(input: RequestInfo | URL, init?: RequestInit) => Promise<Response>>(),
+  hasPermission: vi.fn<(...args: unknown[]) => boolean>(),
 }))
 
 vi.mock('@/lib/api', () => ({
   api: mocks.api,
+}))
+
+vi.mock('@/features/auth/composables/usePermissions', () => ({
+  usePermissions: () => ({ hasPermission: mocks.hasPermission }),
 }))
 
 vi.mock('vue-echarts', () => ({
@@ -15,6 +20,7 @@ vi.mock('vue-echarts', () => ({
 }))
 
 import ReadingLogTab from '../ReadingLogTab.vue'
+import ResetReadingStateDialog from '@/features/book/components/ResetReadingStateDialog.vue'
 
 function makeBook(overrides = {}) {
   return {
@@ -89,6 +95,8 @@ describe('ReadingLogTab', () => {
   beforeEach(() => {
     mocks.api.mockReset()
     mocks.api.mockResolvedValue(makeListResponse())
+    mocks.hasPermission.mockReset()
+    mocks.hasPermission.mockReturnValue(true)
   })
 
   it('renders quick filter buttons', async () => {
@@ -216,5 +224,61 @@ describe('ReadingLogTab', () => {
 
     const last30Btn = wrapper.findAll('button').find((b) => b.text() === 'Last 30 days')
     expect(last30Btn?.classes()).not.toContain('bg-primary')
+  })
+
+  it('opens the reset dialog and reloads the reading log after a successful reset', async () => {
+    const wrapper = mount(ReadingLogTab, { props: { book: makeBook() }, global: { plugins: [createPinia()] } })
+    await flushPromises()
+
+    const resetButton = wrapper.findAll('button').find((button) => button.text() === 'Reset reading state')
+    expect(resetButton).toBeDefined()
+    await resetButton!.trigger('click')
+
+    const dialog = wrapper.findComponent(ResetReadingStateDialog)
+    expect(dialog.props('open')).toBe(true)
+
+    mocks.api.mockReset()
+    mocks.api
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          readStatus: {
+            status: 'unread',
+            source: 'manual',
+            startedAt: null,
+            finishedAt: null,
+            updatedAt: '2026-07-09T12:00:00.000Z',
+          },
+        }),
+      } as Response)
+      .mockResolvedValueOnce(makeListResponse())
+
+    dialog.vm.$emit('confirm')
+    await flushPromises()
+
+    expect(mocks.api).toHaveBeenNthCalledWith(1, '/api/v1/books/10/reset-reading-state', { method: 'POST' })
+    expect(mocks.api).toHaveBeenNthCalledWith(2, expect.stringContaining('/api/v1/books/10/sessions?'))
+    expect(wrapper.emitted('saved')).toEqual([
+      [
+        expect.objectContaining({
+          readStatus: {
+            status: 'unread',
+            source: 'manual',
+            startedAt: null,
+            finishedAt: null,
+            updatedAt: '2026-07-09T12:00:00.000Z',
+          },
+        }),
+      ],
+    ])
+  })
+
+  it('hides the reset action without metadata-edit permission', async () => {
+    mocks.hasPermission.mockReturnValue(false)
+    const wrapper = mount(ReadingLogTab, { props: { book: makeBook() }, global: { plugins: [createPinia()] } })
+    await flushPromises()
+
+    expect(wrapper.findAll('button').some((button) => button.text() === 'Reset reading state')).toBe(false)
   })
 })
