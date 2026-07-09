@@ -614,7 +614,7 @@ describe('UserService.updateSeriesCollapsePreferences', () => {
 
     expect(userRepo.update).toHaveBeenCalledWith(1, {
       settings: {
-        seriesCollapsePreferences: { global: true, libraries: {}, collections: {} },
+        seriesCollapsePreferences: { global: true, libraries: {}, collections: {}, smartScopes: {} },
       },
     });
   });
@@ -631,7 +631,7 @@ describe('UserService.updateSeriesCollapsePreferences', () => {
 
     expect(userRepo.update).toHaveBeenCalledWith(1, {
       settings: {
-        seriesCollapsePreferences: { global: true, libraries: { '3': true }, collections: { '7': false } },
+        seriesCollapsePreferences: { global: true, libraries: { '3': true }, collections: { '7': false }, smartScopes: {} },
       },
     });
   });
@@ -648,7 +648,7 @@ describe('UserService.updateSeriesCollapsePreferences', () => {
 
     expect(userRepo.update).toHaveBeenCalledWith(1, {
       settings: {
-        seriesCollapsePreferences: { global: false, libraries: { '1': true, '2': false }, collections: {} },
+        seriesCollapsePreferences: { global: false, libraries: { '1': true, '2': false }, collections: {}, smartScopes: {} },
       },
     });
   });
@@ -665,7 +665,7 @@ describe('UserService.updateSeriesCollapsePreferences', () => {
 
     expect(userRepo.update).toHaveBeenCalledWith(1, {
       settings: {
-        seriesCollapsePreferences: { global: true, libraries: {}, collections: { '5': false, '9': true } },
+        seriesCollapsePreferences: { global: true, libraries: {}, collections: { '5': false, '9': true }, smartScopes: {} },
       },
     });
   });
@@ -688,5 +688,22 @@ describe('UserService.updateSeriesCollapsePreferences', () => {
         }),
       }),
     );
+  });
+
+  it('merges smart scope overrides and removes null entries', async () => {
+    userRepo.findByIdWithPermissions.mockResolvedValue({
+      id: 1,
+      settings: {
+        seriesCollapsePreferences: { global: false, libraries: {}, collections: {}, smartScopes: { '3': false, '8': true } },
+      },
+    });
+
+    await service.updateSeriesCollapsePreferences(1, { smartScopes: { '3': true, '8': null } });
+
+    expect(userRepo.update).toHaveBeenCalledWith(1, {
+      settings: {
+        seriesCollapsePreferences: { global: false, libraries: {}, collections: {}, smartScopes: { '3': true } },
+      },
+    });
   });
 });

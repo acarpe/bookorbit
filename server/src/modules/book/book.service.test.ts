@@ -2673,6 +2673,21 @@ describe('BookService', () => {
       expect(bookRepo.findJumpBucketsCollapsed).not.toHaveBeenCalled();
     });
 
+    it('executeJumpBucketsQuery keeps collapseSeries for a series presence filter', async () => {
+      const { service, bookRepo } = makeService();
+      bookRepo.findJumpBucketsCollapsed.mockResolvedValue({ buckets: [], total: 0 });
+
+      await service.executeJumpBucketsQuery(9, undefined, {
+        sort: [{ field: 'title', dir: 'asc' }],
+        pagination: { page: 0, size: 50 },
+        collapseSeries: true,
+        filter: { type: 'group', join: 'AND', rules: [{ type: 'rule', field: 'series', operator: 'isNotEmpty' }] },
+      } as never);
+
+      expect(bookRepo.findJumpBucketsCollapsed).toHaveBeenCalled();
+      expect(bookRepo.findJumpBuckets).not.toHaveBeenCalled();
+    });
+
     it('queryForLibrary uses normal findCards when collapseSeries is false', async () => {
       const { service, queryBuilder, bookRepo } = makeService();
       queryBuilder.buildWhere.mockReturnValue('WHERE' as never);
@@ -4204,7 +4219,7 @@ describe('BookService', () => {
 
     it('returns results from findCardsCollapsed when collapseSeries is true', async () => {
       const { service, bookRepo, queryBuilder } = makeService();
-      const hasSeriesFilterSpy = vi.spyOn(BookQueryBuilder, 'hasSeriesFilter').mockReturnValue(false);
+      const hasSeriesSelectionFilterSpy = vi.spyOn(BookQueryBuilder, 'hasSeriesSelectionFilter').mockReturnValue(false);
       const query: BookQuery = {
         pagination: { page: 1, size: 25 },
         sort: [{ field: 'title', dir: 'asc' }],
@@ -4215,7 +4230,7 @@ describe('BookService', () => {
 
       const result = await service.executeBooksQuery(12, 'where' as never, query);
 
-      expect(hasSeriesFilterSpy).toHaveBeenCalledWith(undefined);
+      expect(hasSeriesSelectionFilterSpy).toHaveBeenCalledWith(undefined);
       expect(bookRepo.findCardsCollapsed).toHaveBeenCalledWith({
         where: 'where',
         sort: query.sort,
@@ -4226,6 +4241,28 @@ describe('BookService', () => {
       expect(bookRepo.findCards).not.toHaveBeenCalled();
       expect(queryBuilder.buildOrderBy).not.toHaveBeenCalled();
       expect(result).toEqual({ items: [], total: 0, page: 1, size: 25 });
+    });
+
+    it('returns collapsed results when the filter only requires a series', async () => {
+      const { service, bookRepo } = makeService();
+      bookRepo.findCardsCollapsed.mockResolvedValue(emptyCardQueryResult);
+      const filter = {
+        type: 'group' as const,
+        join: 'AND' as const,
+        rules: [{ type: 'rule' as const, field: 'series' as const, operator: 'isNotEmpty' as const }],
+      };
+
+      await service.executeBooksQuery(12, 'where' as never, {
+        pagination: { page: 0, size: 50 },
+        sort: [{ field: 'title', dir: 'asc' }],
+        filter,
+        collapseSeries: true,
+      });
+
+      expect(bookRepo.findCardsCollapsed).toHaveBeenCalledWith(
+        expect.objectContaining({ where: 'where', sort: [{ field: 'title', dir: 'asc' }], userId: 12 }),
+      );
+      expect(bookRepo.findCards).not.toHaveBeenCalled();
     });
 
     it('does not call logger.warn when query completes fast', async () => {
@@ -4269,7 +4306,7 @@ describe('BookService', () => {
       const { service, bookRepo } = makeService();
       const warnSpy = vi.spyOn((service as unknown as { logger: Logger }).logger, 'warn').mockImplementation(() => undefined);
       vi.spyOn(Date, 'now').mockReturnValueOnce(0).mockReturnValueOnce(600);
-      vi.spyOn(BookQueryBuilder, 'hasSeriesFilter').mockReturnValue(false);
+      vi.spyOn(BookQueryBuilder, 'hasSeriesSelectionFilter').mockReturnValue(false);
       bookRepo.findCardsCollapsed.mockResolvedValue(emptyCardQueryResult);
 
       await service.executeBooksQuery(12, undefined, {

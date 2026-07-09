@@ -1032,7 +1032,7 @@ export class BookService {
   async executeBooksQuery(userId: number, where: SQL | undefined, query: BookQuery): Promise<BooksPage> {
     const start = Date.now();
     const { page, size } = query.pagination;
-    const shouldCollapse = query.collapseSeries === true && !BookQueryBuilder.hasSeriesFilter(query.filter);
+    const shouldCollapse = query.collapseSeries === true && !BookQueryBuilder.hasSeriesSelectionFilter(query.filter);
 
     if (shouldCollapse) {
       const { rows, authorRows, fileRows, genreRows, tagRows, progressRows, statusRows, narratorRows, seriesMembershipRows, total } =
@@ -1124,7 +1124,7 @@ export class BookService {
     const event = 'book.jump_buckets';
     const kind = jumpBucketKindForSort(query.sort);
     const primaryField = (query.sort[0] ?? { field: 'title', dir: 'asc' }).field;
-    const shouldCollapse = query.collapseSeries === true && !BookQueryBuilder.hasSeriesFilter(query.filter);
+    const shouldCollapse = query.collapseSeries === true && !BookQueryBuilder.hasSeriesSelectionFilter(query.filter);
     const bucketExpr = shouldCollapse ? collapsedJumpBucketExpr(primaryField) : flatJumpBucketExpr(primaryField);
     if (!kind || !bucketExpr) throw new BadRequestException('jump buckets are not available for this sort');
 

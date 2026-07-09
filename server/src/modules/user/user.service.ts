@@ -335,11 +335,17 @@ export class UserService {
   async updateSeriesCollapsePreferences(userId: number, dto: UpdateSeriesCollapsePreferencesDto): Promise<void> {
     const existing = await this.userRepo.findByIdWithPermissions(userId);
     if (!existing) throw new NotFoundException('User not found');
-    const currentPrefs = (existing.settings as UserSettings)?.seriesCollapsePreferences ?? { global: false, libraries: {}, collections: {} };
+    const currentPrefs = (existing.settings as UserSettings)?.seriesCollapsePreferences ?? {
+      global: false,
+      libraries: {},
+      collections: {},
+      smartScopes: {},
+    };
     const merged = {
       global: dto.global !== undefined ? dto.global : currentPrefs.global,
       libraries: { ...currentPrefs.libraries, ...(dto.libraries ?? {}) },
       collections: { ...currentPrefs.collections, ...(dto.collections ?? {}) },
+      smartScopes: { ...(currentPrefs.smartScopes ?? {}), ...(dto.smartScopes ?? {}) },
     };
 
     // Remove entries set to null (deletion of overrides)
@@ -348,6 +354,9 @@ export class UserService {
     }
     for (const [k, v] of Object.entries(merged.collections)) {
       if (v === null) delete merged.collections[k];
+    }
+    for (const [k, v] of Object.entries(merged.smartScopes)) {
+      if (v === null) delete merged.smartScopes[k];
     }
 
     await this.userRepo.update(userId, { settings: { seriesCollapsePreferences: merged } });

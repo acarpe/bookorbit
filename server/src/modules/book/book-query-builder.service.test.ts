@@ -1399,13 +1399,13 @@ describe('seriesStatusRuleToSql', () => {
   });
 });
 
-describe('BookQueryBuilder.hasSeriesFilter', () => {
+describe('BookQueryBuilder.hasSeriesSelectionFilter', () => {
   it('returns false for undefined', () => {
-    expect(BookQueryBuilder.hasSeriesFilter(undefined)).toBe(false);
+    expect(BookQueryBuilder.hasSeriesSelectionFilter(undefined)).toBe(false);
   });
 
   it('returns false for a group with no rules', () => {
-    expect(BookQueryBuilder.hasSeriesFilter({ type: 'group', join: 'AND', rules: [] })).toBe(false);
+    expect(BookQueryBuilder.hasSeriesSelectionFilter({ type: 'group', join: 'AND', rules: [] })).toBe(false);
   });
 
   it('returns false when no series rule is present', () => {
@@ -1417,12 +1417,17 @@ describe('BookQueryBuilder.hasSeriesFilter', () => {
         { type: 'rule' as const, field: 'author' as never, operator: 'contains' as never, value: 'Frank' },
       ],
     };
-    expect(BookQueryBuilder.hasSeriesFilter(node)).toBe(false);
+    expect(BookQueryBuilder.hasSeriesSelectionFilter(node)).toBe(false);
   });
 
-  it('returns true for a direct series rule', () => {
+  it('returns true for a direct series selection rule', () => {
     const node = { type: 'rule' as const, field: 'series' as never, operator: 'contains' as never, value: 'Dune' };
-    expect(BookQueryBuilder.hasSeriesFilter(node)).toBe(true);
+    expect(BookQueryBuilder.hasSeriesSelectionFilter(node)).toBe(true);
+  });
+
+  it.each(['isEmpty', 'isNotEmpty'] as const)('returns false for a series presence rule: %s', (operator) => {
+    const node = { type: 'rule' as const, field: 'series' as never, operator };
+    expect(BookQueryBuilder.hasSeriesSelectionFilter(node)).toBe(false);
   });
 
   it('returns true when series rule is inside a nested group', () => {
@@ -1432,7 +1437,7 @@ describe('BookQueryBuilder.hasSeriesFilter', () => {
       rules: [{ type: 'rule' as const, field: 'series' as never, operator: 'equals' as never, value: 'Mistborn' }],
     };
     const outer = { type: 'group' as const, join: 'AND' as const, rules: [inner] };
-    expect(BookQueryBuilder.hasSeriesFilter(outer)).toBe(true);
+    expect(BookQueryBuilder.hasSeriesSelectionFilter(outer)).toBe(true);
   });
 
   it('returns true when series rule is alongside other rules in a group', () => {
@@ -1444,7 +1449,7 @@ describe('BookQueryBuilder.hasSeriesFilter', () => {
         { type: 'rule' as const, field: 'series' as never, operator: 'equals' as never, value: 'Stormlight' },
       ],
     };
-    expect(BookQueryBuilder.hasSeriesFilter(node)).toBe(true);
+    expect(BookQueryBuilder.hasSeriesSelectionFilter(node)).toBe(true);
   });
 });
 

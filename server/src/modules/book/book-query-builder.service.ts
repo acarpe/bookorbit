@@ -913,10 +913,10 @@ export class BookQueryBuilder {
     }
   }
 
-  static hasSeriesFilter(node: GroupRule | Rule | undefined): boolean {
+  static hasSeriesSelectionFilter(node: GroupRule | Rule | undefined): boolean {
     if (!node) return false;
-    if (node.type === 'rule') return node.field === 'series';
-    return node.rules.some((r) => BookQueryBuilder.hasSeriesFilter(r));
+    if (node.type === 'rule') return node.field === 'series' && node.operator !== 'isEmpty' && node.operator !== 'isNotEmpty';
+    return node.rules.some((r) => BookQueryBuilder.hasSeriesSelectionFilter(r));
   }
 
   static buildCollapseOrderBy(sort: SortSpec[], userId: number): string {
