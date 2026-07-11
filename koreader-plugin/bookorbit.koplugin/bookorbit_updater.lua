@@ -154,7 +154,9 @@ function UpdateCheck:checkForUpdate()
         return
     end
     NetworkMgr:runWhenConnected(function()
-        self:doCheckForUpdate()
+        self:runInSyncCoroutine(function()
+            self:doCheckForUpdate()
+        end)
     end)
 end
 
