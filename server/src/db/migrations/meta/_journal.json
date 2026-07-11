@@ -337,6 +337,13 @@
       "when": 1783791670862,
       "tag": "0047_accent-insensitive-search-indexes",
       "breakpoints": true
+    },
+    {
+      "idx": 48,
+      "version": "7",
+      "when": 1783800042730,
+      "tag": "0048_preserve-bigint-inodes",
+      "breakpoints": true
     }
   ]
 }
