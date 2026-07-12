@@ -104,11 +104,7 @@ export type AudioMetadata = {
 };
 
 export type BookFileWriteDisabledReason =
-  | "library_disabled"
-  | "no_primary_file"
-  | "format_not_supported"
-  | "format_disabled"
-  | "file_exceeds_size_limit";
+  "library_disabled" | "no_primary_file" | "format_not_supported" | "format_disabled" | "file_exceeds_size_limit";
 
 export type BookFileWriteStatus = {
   enabled: boolean;

@@ -96,14 +96,7 @@ export interface BookDockFinalizeResult {
 }
 
 export type BookDockFinalizePreviewStatus =
-  | "ready"
-  | "duplicate"
-  | "destination_conflict"
-  | "missing_destination"
-  | "invalid_target"
-  | "access_denied"
-  | "invalid_format"
-  | "error";
+  "ready" | "duplicate" | "destination_conflict" | "missing_destination" | "invalid_target" | "access_denied" | "invalid_format" | "error";
 
 export interface BookDockFinalizePreviewItem {
   fileId: number;

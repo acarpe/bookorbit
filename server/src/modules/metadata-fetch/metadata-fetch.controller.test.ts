@@ -29,6 +29,7 @@ describe('MetadataFetchController', () => {
     { key: MetadataProviderKey.OPEN_LIBRARY, label: 'OpenLibrary', identifiable: false },
     { key: MetadataProviderKey.AUDIBLE, label: 'Audible', identifiable: true },
     { key: MetadataProviderKey.AUDNEXUS, label: 'AudNexus', identifiable: false },
+    { key: MetadataProviderKey.LIBROFM, label: 'Libro.fm', identifiable: true },
     { key: MetadataProviderKey.KOBO, label: 'Kobo', identifiable: true },
   ];
 
@@ -243,6 +244,16 @@ describe('MetadataFetchController', () => {
     );
   });
 
+  it('infers audiobook search when Libro.fm is requested', async () => {
+    providerConfig.getConfig.mockResolvedValue(makeProviderConfig({ librofm: { enabled: true } }));
+    service.search.mockReturnValue(of({ provider: MetadataProviderKey.LIBROFM, providerId: '9781427201438', title: 'Dune' }));
+
+    const stream = await controller.stream({ title: 'Dune', providers: [MetadataProviderKey.LIBROFM] }, user);
+    await firstValueFrom(stream.pipe(toArray()));
+
+    expect(service.search).toHaveBeenCalledWith(expect.objectContaining({ title: 'Dune', isAudiobook: true }), [MetadataProviderKey.LIBROFM]);
+  });
+
   it('infers audiobook search when the effective provider set is only audiobook providers', async () => {
     service.getStoredProviderContext.mockResolvedValue({ libraryId: 5, providerIds: {} });
     pipeline.getEffectiveProviderKeys.mockResolvedValue([MetadataProviderKey.AUDIBLE]);
@@ -378,6 +389,7 @@ function makeProviderConfig(overrides: Partial<ProviderConfigurations> = {}): Pr
     itunes: { enabled: false, coverResolution: 'high', ...overrides.itunes },
     audible: { enabled: true, domain: 'com', ...overrides.audible },
     audnexus: { enabled: true, ...overrides.audnexus },
+    librofm: { enabled: false, ...overrides.librofm },
     comicvine: { enabled: false, apiKey: '', ...overrides.comicvine },
     ranobedb: { enabled: false, ...overrides.ranobedb },
     kobo: { enabled: true, country: 'us', language: 'en', ...overrides.kobo },

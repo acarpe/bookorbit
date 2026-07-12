@@ -24,7 +24,7 @@ function normalizeSearchTitle(title: string | undefined): string | undefined {
 }
 
 function isAudiobookProvider(providerKey: MetadataProviderKey): boolean {
-  return providerKey === MetadataProviderKey.AUDIBLE || providerKey === MetadataProviderKey.AUDNEXUS;
+  return providerKey === MetadataProviderKey.AUDIBLE || providerKey === MetadataProviderKey.AUDNEXUS || providerKey === MetadataProviderKey.LIBROFM;
 }
 
 @Controller('metadata-fetch')

@@ -133,15 +133,7 @@ export interface TestKoreaderConnectionResult {
 }
 
 export type KoreaderCatalogSection =
-  | "libraries"
-  | "collections"
-  | "smart-scopes"
-  | "authors"
-  | "series"
-  | "search"
-  | "recent"
-  | "all-books"
-  | "continue-reading";
+  "libraries" | "collections" | "smart-scopes" | "authors" | "series" | "search" | "recent" | "all-books" | "continue-reading";
 
 export type KoreaderCatalogSort = "title" | "author" | "recently_added" | "recently_updated" | "recently_read" | "series";
 
