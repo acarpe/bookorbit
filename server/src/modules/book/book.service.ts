@@ -295,6 +295,7 @@ export class BookService {
     openLibraryId?: string | null;
     itunesId?: string | null;
     audibleId?: string | null;
+    librofmId?: string | null;
     koboId?: string | null;
     comicvineId?: string | null;
     ranobedbId?: string | null;
@@ -309,6 +310,7 @@ export class BookService {
     if (meta.openLibraryId) providerIds[MetadataProviderKey.OPEN_LIBRARY] = meta.openLibraryId;
     if (meta.itunesId) providerIds[MetadataProviderKey.ITUNES] = meta.itunesId;
     if (meta.audibleId) providerIds[MetadataProviderKey.AUDIBLE] = meta.audibleId;
+    if (meta.librofmId) providerIds[MetadataProviderKey.LIBROFM] = meta.librofmId;
     if (meta.koboId) providerIds[MetadataProviderKey.KOBO] = meta.koboId;
     if (meta.comicvineId) providerIds[MetadataProviderKey.COMICVINE] = meta.comicvineId;
     if (meta.ranobedbId) providerIds[MetadataProviderKey.RANOBEDB] = meta.ranobedbId;
@@ -328,6 +330,7 @@ export class BookService {
       | 'openLibraryId'
       | 'itunesId'
       | 'audibleId'
+      | 'librofmId'
       | 'koboId'
       | 'comicvineId'
       | 'ranobedbId'
@@ -343,6 +346,7 @@ export class BookService {
     if (providerIds[MetadataProviderKey.OPEN_LIBRARY]) dto.openLibraryId = providerIds[MetadataProviderKey.OPEN_LIBRARY];
     if (providerIds[MetadataProviderKey.ITUNES]) dto.itunesId = providerIds[MetadataProviderKey.ITUNES];
     if (providerIds[MetadataProviderKey.AUDIBLE]) dto.audibleId = providerIds[MetadataProviderKey.AUDIBLE];
+    if (providerIds[MetadataProviderKey.LIBROFM]) dto.librofmId = providerIds[MetadataProviderKey.LIBROFM];
     if (providerIds[MetadataProviderKey.KOBO]) dto.koboId = providerIds[MetadataProviderKey.KOBO];
     if (providerIds[MetadataProviderKey.COMICVINE]) dto.comicvineId = providerIds[MetadataProviderKey.COMICVINE];
     if (providerIds[MetadataProviderKey.RANOBEDB]) dto.ranobedbId = providerIds[MetadataProviderKey.RANOBEDB];
@@ -1580,6 +1584,7 @@ export class BookService {
     if (dto.openLibraryId !== undefined) scalarFields.openLibraryId = dto.openLibraryId ?? null;
     if (dto.itunesId !== undefined) scalarFields.itunesId = dto.itunesId ?? null;
     if (dto.audibleId !== undefined) scalarFields.audibleId = dto.audibleId ?? null;
+    if (dto.librofmId !== undefined) scalarFields.librofmId = dto.librofmId ?? null;
     if (dto.koboId !== undefined) scalarFields.koboId = dto.koboId ?? null;
     if (dto.comicvineId !== undefined) scalarFields.comicvineId = dto.comicvineId ?? null;
     if (dto.ranobedbId !== undefined) scalarFields.ranobedbId = dto.ranobedbId ?? null;
@@ -2494,7 +2499,7 @@ export class BookService {
         author: authorRows[0]?.name ?? undefined,
         isbn: meta?.isbn13 ?? meta?.isbn10 ?? undefined,
         existingProviderIds: providerIds,
-        isAudiobook: (meta?.durationSeconds !== null && meta?.durationSeconds !== undefined) || !!meta?.audibleId,
+        isAudiobook: (meta?.durationSeconds !== null && meta?.durationSeconds !== undefined) || !!meta?.audibleId || !!meta?.librofmId,
         maxCandidatesPerProvider: 1,
       };
 
@@ -2897,6 +2902,7 @@ export class BookService {
         [MetadataProviderKey.OPEN_LIBRARY]: meta?.openLibraryId ?? null,
         [MetadataProviderKey.ITUNES]: meta?.itunesId ?? null,
         [MetadataProviderKey.AUDIBLE]: meta?.audibleId ?? null,
+        [MetadataProviderKey.LIBROFM]: meta?.librofmId ?? null,
         [MetadataProviderKey.KOBO]: meta?.koboId ?? null,
         [MetadataProviderKey.COMICVINE]: meta?.comicvineId ?? null,
         [MetadataProviderKey.RANOBEDB]: meta?.ranobedbId ?? null,
@@ -3144,6 +3150,7 @@ export class BookService {
           if (parsed.seriesName !== null) result.seriesName = parsed.seriesName;
           if (parsed.seriesIndex !== null) result.seriesIndex = parsed.seriesIndex;
           if (parsed.audibleId !== null) result.audibleId = parsed.audibleId;
+          if (parsed.librofmId !== null) result.librofmId = parsed.librofmId;
           if (parsed.durationSeconds !== null) result.durationSeconds = parsed.durationSeconds;
           if (parsed.authors.length > 0) result.authors = parsed.authors.map((a) => a.name);
           if (parsed.genres.length > 0) result.genres = parsed.genres;

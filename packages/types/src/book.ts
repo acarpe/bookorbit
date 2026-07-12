@@ -188,6 +188,7 @@ export type BookMetadataRefreshPreviewFields = {
   openLibraryId?: string | null;
   itunesId?: string | null;
   audibleId?: string | null;
+  librofmId?: string | null;
   koboId?: string | null;
   comicvineId?: string | null;
   ranobedbId?: string | null;

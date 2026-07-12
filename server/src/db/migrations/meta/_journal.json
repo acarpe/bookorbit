@@ -344,6 +344,13 @@
       "when": 1783800042730,
       "tag": "0048_preserve-bigint-inodes",
       "breakpoints": true
+    },
+    {
+      "idx": 49,
+      "version": "7",
+      "when": 1783837707573,
+      "tag": "0049_add-librofm-provider-id",
+      "breakpoints": true
     }
   ]
 }

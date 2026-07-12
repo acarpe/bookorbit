@@ -1010,6 +1010,7 @@ describe('BookService', () => {
         sources: {},
         providerIds: {
           [MetadataProviderKey.GOOGLE]: 'g-id',
+          [MetadataProviderKey.LIBROFM]: '9781234567890',
           [MetadataProviderKey.OPEN_LIBRARY]: 'ol-id',
         },
         diagnostics: makeMetadataFetchDiagnostics({ resolvedFieldCount: 1 }),
@@ -1021,9 +1022,10 @@ describe('BookService', () => {
         metadata: {
           title: 'Resolved',
           googleBooksId: 'g-id',
+          librofmId: '9781234567890',
           openLibraryId: 'ol-id',
         },
-        diagnostics: makeMetadataFetchDiagnostics({ resolvedFieldCount: 3 }),
+        diagnostics: makeMetadataFetchDiagnostics({ resolvedFieldCount: 4 }),
       });
     });
 
@@ -1158,6 +1160,7 @@ describe('BookService', () => {
         sources: {},
         providerIds: {
           [MetadataProviderKey.GOOGLE]: 'g-id',
+          [MetadataProviderKey.LIBROFM]: '9781234567890',
           [MetadataProviderKey.OPEN_LIBRARY]: 'ol-id',
         },
       });
@@ -1175,6 +1178,7 @@ describe('BookService', () => {
         {
           title: 'Resolved',
           googleBooksId: 'g-id',
+          librofmId: '9781234567890',
           openLibraryId: 'ol-id',
         },
         user,
@@ -3695,6 +3699,7 @@ describe('BookService', () => {
             openLibraryId: null,
             itunesId: null,
             audibleId: null,
+            librofmId: '9781234567890',
             koboId: 'beautiful-ugly-3',
             comicvineId: null,
             ranobedbId: 'ranobe-detail',
@@ -3775,6 +3780,7 @@ describe('BookService', () => {
       expect(result.comicMetadata).toEqual(expect.objectContaining({ issueNumber: '1', teams: ['House Atreides'] }));
       expect(result.rating).toBe(5);
       expect(result.providerIds.google).toBe('g1');
+      expect(result.providerIds.librofm).toBe('9781234567890');
       expect(result.providerIds.kobo).toBe('beautiful-ugly-3');
       expect(result.providerIds.ranobedb).toBe('ranobe-detail');
       expect(result.fileWriteStatus).toEqual({

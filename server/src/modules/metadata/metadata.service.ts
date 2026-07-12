@@ -170,6 +170,7 @@ export class MetadataService {
 
     const { dto: filtered } = await this.bookMetadataLockService.filterAutomatedBookUpdate(bookId, {
       audibleId: data.audibleId,
+      librofmId: data.librofmId,
       audioMetadata: {
         narrators: data.narrators,
         chapters: data.chapters && data.chapters.length > 0 ? data.chapters : null,
@@ -180,6 +181,10 @@ export class MetadataService {
 
     if (filtered.audibleId !== undefined) {
       updates.push(this.db.update(bookMetadata).set({ audibleId: filtered.audibleId, updatedAt: new Date() }).where(eq(bookMetadata.bookId, bookId)));
+    }
+
+    if (filtered.librofmId !== undefined) {
+      updates.push(this.db.update(bookMetadata).set({ librofmId: filtered.librofmId, updatedAt: new Date() }).where(eq(bookMetadata.bookId, bookId)));
     }
 
     if (filtered.audioMetadata?.chapters !== undefined) {
@@ -594,6 +599,7 @@ export class MetadataService {
       authors: data.authors.map((author) => author.name),
       genres: data.genres,
       audibleId: data.audibleId,
+      librofmId: data.librofmId,
       audioMetadata: {
         durationSeconds: data.durationSeconds ?? null,
         chapters: data.chapters && data.chapters.length > 0 ? data.chapters : null,
@@ -621,6 +627,7 @@ export class MetadataService {
     if (filtered.seriesName !== undefined) scalarFields.seriesName = normalizeMetadataText(filtered.seriesName);
     if (filtered.seriesIndex !== undefined) scalarFields.seriesIndex = filtered.seriesIndex;
     if (filtered.audibleId !== undefined) scalarFields.audibleId = filtered.audibleId;
+    if (filtered.librofmId !== undefined) scalarFields.librofmId = filtered.librofmId;
     if (filtered.audioMetadata?.durationSeconds !== undefined) scalarFields.durationSeconds = filtered.audioMetadata.durationSeconds;
     if (filtered.audioMetadata?.chapters !== undefined) scalarFields.chapters = filtered.audioMetadata.chapters;
     if (Object.keys(scalarFields).length > 0) {

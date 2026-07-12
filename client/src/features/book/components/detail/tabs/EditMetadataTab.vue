@@ -34,7 +34,7 @@ import { usePublisherSearch, useSeriesNameSearch, useLanguageSearch } from '../.
 import InputWithSuggestions from '@/components/ui/InputWithSuggestions.vue'
 import { RATING_STARS, getRatingStarClass } from '@/features/book/lib/rating-stars'
 import { buildFileMetadataPatch } from '@/features/book/lib/file-metadata-patch'
-import { metadataRefreshEmptyMessage } from '@/features/book/lib/metadata-refresh-feedback'
+import { metadataRefreshAppliedMessage, metadataRefreshEmptyMessage } from '@/features/book/lib/metadata-refresh-feedback'
 import { filterProviderIdFields, isProviderIdFieldAvailable, isProviderIdFormField } from '@/features/book/lib/provider-id-fields'
 import { formatCommunityRatingLine } from '@/features/book/lib/community-rating'
 
@@ -69,6 +69,7 @@ const DIRECT_PATCH_FIELDS = [
   'openLibraryId',
   'itunesId',
   'audibleId',
+  'librofmId',
   'koboId',
   'comicvineId',
   'ranobedbId',
@@ -597,6 +598,7 @@ function buildPreviewPatch(preview: MetadataRefreshPreview): MetadataPatch {
     openLibraryId: preview.openLibraryId,
     itunesId: preview.itunesId,
     audibleId: preview.audibleId,
+    librofmId: preview.librofmId,
     koboId: preview.koboId,
     comicvineId: preview.comicvineId,
     ranobedbId: preview.ranobedbId,
@@ -611,7 +613,10 @@ function buildPreviewPatch(preview: MetadataRefreshPreview): MetadataPatch {
 
 async function autoFill() {
   const result = await previewRefresh(props.book.id)
-  if (!result) return
+  if (!result) {
+    toast.error('Auto-fill failed')
+    return
+  }
 
   const preview = result.metadata
   if (Object.keys(preview).length === 0) {
@@ -620,7 +625,14 @@ async function autoFill() {
   }
 
   const { skippedFields, updatedCount } = applyPatchToForm(buildPreviewPatch(preview), preview.coverUrl)
-  showApplyResult(skippedFields, updatedCount)
+  if (skippedFields.length > 0) {
+    showApplyResult(skippedFields, updatedCount)
+    return
+  }
+  toast.success(metadataRefreshAppliedMessage(result.diagnostics, updatedCount), {
+    closeButton: result.diagnostics.enabledUnreferencedProviders.length > 0,
+    duration: result.diagnostics.enabledUnreferencedProviders.length > 0 ? AUTO_FILL_EMPTY_TOAST_DURATION_MS : undefined,
+  })
 }
 
 function applyFileMetadataToForm(meta: FileMetadata): number {

@@ -22,7 +22,7 @@ import {
 import { DialogClose, DialogContent, DialogOverlay, DialogPortal, DialogRoot } from 'reka-ui'
 import { getFormatColor } from '@/features/book/lib/format-colors'
 import { providerIconPath, providerIconPathSafe } from '@/features/book/lib/provider-icons'
-import { lubimyczytacBookUrl } from '@/features/book/lib/provider-links'
+import { libroFmAudiobookUrl, lubimyczytacBookUrl } from '@/features/book/lib/provider-links'
 import { getProviderColor, PROVIDER_SHORT_LABELS } from '@/lib/provider-colors'
 import { useCoverVersions } from '@/features/book/composables/useCoverVersions'
 import { COVER_ASPECT_RATIO_KEY, DEFAULT_COVER_ASPECT_RATIO } from '@/features/book/lib/cover-aspect-ratio'
@@ -660,6 +660,15 @@ const providerLinks = computed<ProviderLink[]>(() => {
       url: `https://www.audible.com/pd/${ids.audible}`,
       iconUrl: providerIconPath('audible'),
       fallback: 'Au',
+    })
+  }
+  if (ids.librofm) {
+    out.push({
+      key: 'librofm',
+      label: 'Libro.fm',
+      url: libroFmAudiobookUrl(ids.librofm),
+      iconUrl: providerIconPath('librofm'),
+      fallback: 'Lf',
     })
   }
   if (ids.kobo) {

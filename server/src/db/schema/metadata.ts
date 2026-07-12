@@ -69,6 +69,7 @@ export const bookMetadata = pgTable(
     durationSeconds: integer('duration_seconds'),
     abridged: boolean('abridged').notNull().default(false),
     audibleId: varchar('audible_id', { length: 20 }),
+    librofmId: varchar('librofm_id', { length: 50 }),
     comicvineId: varchar('comicvine_id', { length: 50 }),
     ranobedbId: varchar('ranobedb_id', { length: 50 }),
     lubimyczytacId: text('lubimyczytac_id'),

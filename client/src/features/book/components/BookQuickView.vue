@@ -9,7 +9,7 @@ import { DialogRoot, DialogContent, DialogPortal, DialogOverlay, DialogClose, Di
 import { formatBytes } from '@/lib/formatting'
 import { getProviderColor } from '@/lib/provider-colors'
 import { providerIconPath } from '@/features/book/lib/provider-icons'
-import { lubimyczytacBookUrl } from '@/features/book/lib/provider-links'
+import { libroFmAudiobookUrl, lubimyczytacBookUrl } from '@/features/book/lib/provider-links'
 import { useBookDetail } from '../composables/useBookDetail'
 import { useCoverVersions } from '../composables/useCoverVersions'
 import { getFormatColor } from '../lib/format-colors'
@@ -135,6 +135,15 @@ const providerLinks = computed<ProviderLink[]>(() => {
       url: `https://books.apple.com/book/id${ids.itunes}`,
       iconUrl: providerIconPath('itunes'),
       fallback: '',
+    })
+  }
+  if (ids.librofm) {
+    out.push({
+      key: 'librofm',
+      label: 'Libro.fm',
+      url: libroFmAudiobookUrl(ids.librofm),
+      iconUrl: providerIconPath('librofm'),
+      fallback: 'Lf',
     })
   }
   if (ids.ranobedb) {

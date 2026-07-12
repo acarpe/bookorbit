@@ -136,6 +136,10 @@ function buildAudioMetadataArgs(payload: BookWritePayload, options: FormatWriteO
     pushFormatMetadata(metadata, 'audible_asin', audibleId);
   }
 
+  if (canWriteField(payload, options, 'librofmId')) {
+    pushFormatMetadata(metadata, 'librofm_isbn', textValue(payload.librofmId));
+  }
+
   return metadata;
 }
 

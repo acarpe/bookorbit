@@ -305,6 +305,26 @@ describe('MetadataFetchController', () => {
     );
   });
 
+  it('infers audiobook search from stored Libro.fm ids when providers are not specified', async () => {
+    service.getStoredProviderContext.mockResolvedValue({
+      libraryId: 8,
+      providerIds: { [MetadataProviderKey.LIBROFM]: '9781234567890' },
+    });
+    pipeline.getEffectiveProviderKeys.mockResolvedValue([MetadataProviderKey.GOOGLE, MetadataProviderKey.LIBROFM]);
+    service.search.mockReturnValue(of({ provider: MetadataProviderKey.LIBROFM, providerId: '9781234567890', title: 'Audio Result' }));
+
+    const stream = await controller.stream({ bookId: 44, title: 'Audio Result' }, user);
+    await firstValueFrom(stream.pipe(toArray()));
+
+    expect(service.search).toHaveBeenCalledWith(
+      expect.objectContaining({
+        existingProviderIds: { [MetadataProviderKey.LIBROFM]: '9781234567890' },
+        isAudiobook: true,
+      }),
+      [MetadataProviderKey.GOOGLE, MetadataProviderKey.LIBROFM],
+    );
+  });
+
   it('delegates lookup requests to the metadata fetch service and filters blocklisted genres', async () => {
     providerConfig.getConfig.mockResolvedValue(
       makeProviderConfig({
