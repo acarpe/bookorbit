@@ -72,7 +72,7 @@ import { FileRenameService, RENAME_RELEVANT_FIELDS } from '../file-write/file-re
 import { FileWriteService } from '../file-write/file-write.service';
 import { NarratorService } from '../narrator/narrator.service';
 import { UserBookNoteService } from '../user-book-note/user-book-note.service';
-import { UserBookStatusService } from '../user-book-status/user-book-status.service';
+import { UserBookStatusService, type AutoReadingActivity } from '../user-book-status/user-book-status.service';
 import { AchievementEventsService, ACHIEVEMENT_EVENT_BOOK_RATING_CHANGED } from '../achievement/achievement-events.service';
 import { BookMetadataLockService } from '../book-metadata-lock/book-metadata-lock.service';
 import { BookQueryBuilder } from './book-query-builder.service';
@@ -1908,15 +1908,38 @@ export class BookService {
     if (currentFile.bookId !== bookId) {
       throw new BadRequestException(`currentFileId ${dto.currentFileId} does not belong to book ${bookId}`);
     }
+    const previous = await this.bookRepo.findAudioProgress(userId, bookId);
     await this.bookRepo.upsertAudioProgress(userId, bookId, dto.currentFileId, dto.positionSeconds, dto.percentage);
-    await this.autoUpdateReadStatusForProgress(userId, { bookId, libraryId }, dto.percentage);
+    const strongRereadEvidence = previous != null && previous.percentage - dto.percentage >= 10;
+    await this.autoUpdateReadStatusForProgress(
+      userId,
+      { bookId, libraryId },
+      dto.percentage,
+      strongRereadEvidence ? { origin: 'bookorbit', strongRereadEvidence: true } : {},
+    );
   }
 
-  async autoUpdateReadStatusForProgress(userId: number, file: ProgressStatusFileContext, percentage: number): Promise<void> {
+  async autoUpdateReadStatusForProgress(
+    userId: number,
+    file: ProgressStatusFileContext,
+    percentage: number,
+    activity: AutoReadingActivity = {},
+  ): Promise<void> {
     const startedAt = Date.now();
     try {
       const library = await this.libraryService.findOne(file.libraryId);
-      await this.userBookStatusService.autoUpdate(userId, file.bookId, percentage, library.readingThreshold, library.markAsFinishedPercentComplete);
+      if (Object.keys(activity).length > 0) {
+        await this.userBookStatusService.autoUpdate(
+          userId,
+          file.bookId,
+          percentage,
+          library.readingThreshold,
+          library.markAsFinishedPercentComplete,
+          activity,
+        );
+      } else {
+        await this.userBookStatusService.autoUpdate(userId, file.bookId, percentage, library.readingThreshold, library.markAsFinishedPercentComplete);
+      }
     } catch (error: unknown) {
       const err = error instanceof Error ? error : new Error(String(error));
       this.logger.warn(
@@ -1937,6 +1960,7 @@ export class BookService {
 
   async saveProgress(userId: number, fileId: number, dto: SaveProgressDto, user: RequestUser) {
     const file = await this.verifyFileAccess(fileId, user);
+    const previous = await this.bookRepo.findProgress(userId, fileId);
     await this.bookRepo.upsertProgress(
       userId,
       fileId,
@@ -1961,7 +1985,13 @@ export class BookService {
         dto.koboContentSourceProgressPercent ?? null,
       );
     }
-    await this.autoUpdateReadStatusForProgress(userId, file, dto.percentage);
+    const strongRereadEvidence = previous != null && previous.percentage - dto.percentage >= 10;
+    await this.autoUpdateReadStatusForProgress(
+      userId,
+      file,
+      dto.percentage,
+      strongRereadEvidence ? { origin: 'bookorbit', strongRereadEvidence: true } : {},
+    );
   }
 
   async clearFileProgress(userId: number, fileId: number, user: RequestUser): Promise<void> {
@@ -1969,11 +1999,16 @@ export class BookService {
     await this.bookRepo.clearFileProgress(userId, fileId);
   }
 
+  async clearBookProgressForReread(userId: number, bookId: number, user: RequestUser): Promise<void> {
+    await this.verifyBookAccess(bookId, user);
+    await this.bookRepo.clearBookProgress(userId, bookId);
+  }
+
   async setReadStatus(bookId: number, dto: SetStatusDto, user: RequestUser): Promise<UserBookStatus> {
     await this.verifyBookAccess(bookId, user);
-    const hasStatus = Object.prototype.hasOwnProperty.call(dto, 'status');
-    const hasStartedAt = Object.prototype.hasOwnProperty.call(dto, 'startedAt');
-    const hasFinishedAt = Object.prototype.hasOwnProperty.call(dto, 'finishedAt');
+    const hasStatus = dto.status !== undefined;
+    const hasStartedAt = dto.startedAt !== undefined;
+    const hasFinishedAt = dto.finishedAt !== undefined;
     if (!hasStatus && !hasStartedAt && !hasFinishedAt) {
       throw new BadRequestException('At least one of status, startedAt, or finishedAt is required');
     }
@@ -2017,7 +2052,14 @@ export class BookService {
       throw new BadRequestException('finishedAt must be on or after startedAt');
     }
 
-    const updated = await this.userBookStatusService.updateManual(user.id, bookId, patch);
+    const dateKeys = {
+      ...(startedKey ? { startedOn: startedKey } : {}),
+      ...(finishedKey ? { endedOn: finishedKey } : {}),
+    };
+    const updated =
+      Object.keys(dateKeys).length > 0
+        ? await this.userBookStatusService.updateManual(user.id, bookId, patch, dateKeys)
+        : await this.userBookStatusService.updateManual(user.id, bookId, patch);
     return this.toDateOnlyReadStatus(updated, timeZone);
   }
 

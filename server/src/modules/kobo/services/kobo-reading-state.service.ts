@@ -105,6 +105,17 @@ export class KoboReadingStateService {
       where: and(eq(schema.koboReadingStates.userId, userId), eq(schema.koboReadingStates.bookId, bookId)),
     });
 
+    const previousBookmark = this.asJsonObj(existing?.currentBookmark ?? null);
+    const previousStatus = this.asJsonObj(existing?.statusInfo ?? null);
+    const previousPercent = this.extractPercent(previousBookmark);
+    const incomingPercent = this.extractPercent(incomingBookmark);
+    const previousTimesStarted = typeof previousStatus?.TimesStartedReading === 'number' ? previousStatus.TimesStartedReading : null;
+    const incomingTimesStarted = typeof incomingStatus?.TimesStartedReading === 'number' ? incomingStatus.TimesStartedReading : null;
+    const strongRereadEvidence =
+      (incomingStatus?.Status === 'Reading' && previousStatus?.Status !== 'Reading') ||
+      (incomingTimesStarted !== null && previousTimesStarted !== null && incomingTimesStarted > previousTimesStarted) ||
+      (incomingPercent !== null && previousPercent !== null && previousPercent - incomingPercent >= 10);
+
     const mergedBookmark = mergeSubObject(incomingBookmark, existing?.currentBookmark as JsonObj | null);
     const mergedStats = mergeSubObject(incomingStats, existing?.statistics as JsonObj | null);
     const mergedStatus = mergeSubObject(incomingStatus, existing?.statusInfo as JsonObj | null);
@@ -166,7 +177,10 @@ export class KoboReadingStateService {
       if (twoWayProgressSync) {
         await this.markSnapshotBookUnsynced(userId, bookId);
       }
-      await this.autoUpdateReadStatus(userId, bookId, percent, readingThreshold, finishedThreshold);
+      await this.autoUpdateReadStatus(userId, bookId, percent, readingThreshold, finishedThreshold, {
+        occurredOn: effectiveLastModified.slice(0, 10),
+        strongRereadEvidence,
+      });
       this.achievementEvents.emit(ACHIEVEMENT_EVENT_BOOK_PROGRESS_CHANGED, {
         userId,
         bookId,
@@ -184,10 +198,15 @@ export class KoboReadingStateService {
     percent: number,
     readingThreshold: number,
     finishedThreshold: number,
+    activity: { occurredOn: string; strongRereadEvidence: boolean },
   ): Promise<void> {
     const startedAt = Date.now();
     try {
-      await this.userBookStatusService.autoUpdate(userId, bookId, percent, readingThreshold, finishedThreshold);
+      await this.userBookStatusService.autoUpdate(userId, bookId, percent, readingThreshold, finishedThreshold, {
+        origin: 'kobo',
+        occurredOn: activity.occurredOn,
+        strongRereadEvidence: activity.strongRereadEvidence,
+      });
     } catch (error: unknown) {
       const err = error instanceof Error ? error : new Error(String(error));
       this.logger.warn(

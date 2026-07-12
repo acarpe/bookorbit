@@ -1574,6 +1574,14 @@ export class BookRepository {
     await this.db.delete(audiobookProgress).where(and(eq(audiobookProgress.userId, userId), eq(audiobookProgress.currentFileId, fileId)));
   }
 
+  async clearBookProgress(userId: number, bookId: number): Promise<void> {
+    const fileIds = this.db.select({ id: bookFiles.id }).from(bookFiles).where(eq(bookFiles.bookId, bookId));
+    await this.db.transaction(async (tx) => {
+      await tx.delete(readingProgress).where(and(eq(readingProgress.userId, userId), inArray(readingProgress.bookFileId, fileIds)));
+      await tx.delete(audiobookProgress).where(and(eq(audiobookProgress.userId, userId), eq(audiobookProgress.bookId, bookId)));
+    });
+  }
+
   async findAudioProgress(userId: number, bookId: number) {
     const [row] = await this.db
       .select()

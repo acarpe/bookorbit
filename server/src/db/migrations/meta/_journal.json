@@ -351,6 +351,13 @@
       "when": 1783837707573,
       "tag": "0049_add-librofm-provider-id",
       "breakpoints": true
+    },
+    {
+      "idx": 50,
+      "version": "7",
+      "when": 1783874453297,
+      "tag": "0050_reading-attempts",
+      "breakpoints": true
     }
   ]
 }

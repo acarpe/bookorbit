@@ -230,7 +230,14 @@ describe('KoboReadingStateService', () => {
       true,
     );
 
-    expect(userBookStatusService.autoUpdate).toHaveBeenCalledWith(1, 5, 42.5, 1, 99);
+    expect(userBookStatusService.autoUpdate).toHaveBeenCalledWith(
+      1,
+      5,
+      42.5,
+      1,
+      99,
+      expect.objectContaining({ origin: 'kobo', strongRereadEvidence: false }),
+    );
     expect(progressInsert.values).toHaveBeenCalledWith(
       expect.objectContaining({
         userId: 1,
@@ -298,7 +305,14 @@ describe('KoboReadingStateService', () => {
       false,
     );
 
-    expect(userBookStatusService.autoUpdate).toHaveBeenCalledWith(1, 5, 42.5, 1, 99);
+    expect(userBookStatusService.autoUpdate).toHaveBeenCalledWith(
+      1,
+      5,
+      42.5,
+      1,
+      99,
+      expect.objectContaining({ origin: 'kobo', strongRereadEvidence: false }),
+    );
     expect(progressBridge.koboBookmarkToCanonical).not.toHaveBeenCalled();
     expect(progressInsert.values).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -334,7 +348,14 @@ describe('KoboReadingStateService', () => {
       makeService(db).upsertState(1, 5, { CurrentBookmark: { LastModified: '2026-01-01T00:00:00Z', ProgressPercent: 42.5 } }, 1, 99, false),
     ).resolves.toEqual(expect.objectContaining({ EntitlementId: 'entitlement-5' }));
 
-    expect(userBookStatusService.autoUpdate).toHaveBeenCalledWith(1, 5, 42.5, 1, 99);
+    expect(userBookStatusService.autoUpdate).toHaveBeenCalledWith(
+      1,
+      5,
+      42.5,
+      1,
+      99,
+      expect.objectContaining({ origin: 'kobo', strongRereadEvidence: false }),
+    );
     expect(achievementEvents.emit).toHaveBeenCalledWith(
       ACHIEVEMENT_EVENT_BOOK_PROGRESS_CHANGED,
       expect.objectContaining({ userId: 1, bookId: 5, progress: 42.5, source: 'kobo' }),

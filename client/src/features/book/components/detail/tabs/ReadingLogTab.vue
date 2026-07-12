@@ -13,6 +13,7 @@ import ReadingLogHeatmap from './ReadingLogHeatmap.vue'
 import ReadingLogTable from './ReadingLogTable.vue'
 import ReadingLogExportMenu from './ReadingLogExportMenu.vue'
 import AddSessionDialog from './AddSessionDialog.vue'
+import ReadingAttemptHistory from './ReadingAttemptHistory.vue'
 
 const props = defineProps<{ book: BookDetail }>()
 
@@ -158,6 +159,8 @@ const quickFilters: { label: string; value: QuickFilter }[] = [
     </div>
 
     <ReadingLogHero :book="book" :stats="stats" :loading="loading" @saved="handleHeroSaved" @add-session="handleOpenAddSession" />
+
+    <ReadingAttemptHistory :book-id="book.id" @saved="handleHeroSaved" />
 
     <div class="rounded-xl border border-border/80 bg-card p-2 shadow-[var(--elevation-xs)]">
       <div class="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">

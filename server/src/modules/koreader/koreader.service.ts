@@ -149,6 +149,8 @@ export class KoreaderService {
   ) {
     const chapterIndex = this.chapterService.parseChapterIndexFromProgress(data.progress ?? null);
 
+    const previousDeviceProgress = await this.repo.getLatestDeviceProgress(bookFile.id, userId);
+
     this.chapterExtractor.extractAndStoreChapters(bookFile.id).catch(() => {});
 
     await this.repo.upsertDeviceProgress({
@@ -168,7 +170,13 @@ export class KoreaderService {
     const cfi = data.progress ? await this.convertProgressToCfi(bookFile.id, data.progress) : null;
     await this.repo.upsertReadingProgress(bookFile.id, userId, bookorbitPercentage, cfi, data.progress ?? null);
     await this.bookService.syncKoboReadingStateForExternalProgress(userId, bookFile.id, bookorbitPercentage).catch(() => undefined);
-    await this.bookService.autoUpdateReadStatusForProgress(userId, bookFile, bookorbitPercentage);
+    const previousPercentage = previousDeviceProgress?.percentage != null ? toBookorbitPercentage(previousDeviceProgress.percentage) : null;
+    const strongRereadEvidence = previousPercentage !== null && previousPercentage - bookorbitPercentage >= 10;
+    await this.bookService.autoUpdateReadStatusForProgress(userId, bookFile, bookorbitPercentage, {
+      origin: 'koreader',
+      occurredOn: data.timestamp ? new Date(data.timestamp * 1000).toISOString().slice(0, 10) : new Date().toISOString().slice(0, 10),
+      strongRereadEvidence,
+    });
     this.achievementEvents.emit(ACHIEVEMENT_EVENT_BOOK_PROGRESS_CHANGED, {
       userId,
       bookId: bookFile.bookId,

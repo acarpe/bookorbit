@@ -2925,6 +2925,28 @@ describe('BookService', () => {
         });
       });
 
+      it('ignores omitted date fields materialized as undefined by DTO transformation', async () => {
+        const { service, userBookStatusService } = makeService();
+        const user = makeUser({ id: 77 });
+        vi.spyOn(service, 'verifyBookAccess').mockResolvedValue(undefined);
+        userBookStatusService.updateManual.mockResolvedValue({
+          status: 'reading',
+          source: 'manual',
+          startedAt: null,
+          finishedAt: null,
+          updatedAt: '2026-04-11T00:00:00.000Z',
+        });
+        const transformedDto = {
+          status: 'reading' as const,
+          startedAt: undefined,
+          finishedAt: undefined,
+        };
+
+        await service.setReadStatus(10, transformedDto, user);
+
+        expect(userBookStatusService.updateManual).toHaveBeenCalledWith(77, 10, { status: 'reading' });
+      });
+
       it('accepts ISO date input, applies timezone normalization, and persists as manual patch dates', async () => {
         const { service, userBookStatusService } = makeService();
         const user = makeUser({ id: 12, settings: { timezone: 'America/New_York' } });

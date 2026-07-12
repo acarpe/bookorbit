@@ -366,7 +366,12 @@ describe('KoreaderService', () => {
       });
       expect(mockRepo.upsertReadingProgress).toHaveBeenCalledWith(44, 12, 50, null, '/body/DocFragment[7]');
       expect(mockBookService.syncKoboReadingStateForExternalProgress).toHaveBeenCalledWith(12, 44, 50);
-      expect(mockBookService.autoUpdateReadStatusForProgress).toHaveBeenCalledWith(12, { id: 44, bookId: 55, libraryId: 3 }, 50);
+      expect(mockBookService.autoUpdateReadStatusForProgress).toHaveBeenCalledWith(
+        12,
+        { id: 44, bookId: 55, libraryId: 3 },
+        50,
+        expect.objectContaining({ origin: 'koreader', strongRereadEvidence: false }),
+      );
       expect(mockAchievementEvents.emit).toHaveBeenCalledWith(ACHIEVEMENT_EVENT_BOOK_PROGRESS_CHANGED, {
         userId: 12,
         bookId: 55,

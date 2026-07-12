@@ -26,6 +26,7 @@ import {
   books,
   genres,
   readingProgress,
+  readingAttempts,
   readingSessions,
   userBookRatings,
   userBookStatus,
@@ -54,14 +55,15 @@ export class DashboardWidgetRepository {
     const yearStart = sql`date_trunc('year', current_date)`;
     const [row] = await this.db
       .select({ count: sql<number>`count(*)::int` })
-      .from(userBookStatus)
-      .innerJoin(books, eq(books.id, userBookStatus.bookId))
+      .from(readingAttempts)
+      .innerJoin(books, eq(books.id, readingAttempts.bookId))
       .where(
         and(
-          eq(userBookStatus.userId, userId),
-          inArray(userBookStatus.status, ['read', 'skimmed']),
-          isNotNull(userBookStatus.finishedAt),
-          gte(userBookStatus.finishedAt, yearStart),
+          eq(readingAttempts.userId, userId),
+          eq(readingAttempts.outcome, 'completed'),
+          isNull(readingAttempts.deletedAt),
+          isNotNull(readingAttempts.endedOn),
+          gte(readingAttempts.endedOn, yearStart),
           inArray(books.libraryId, accessibleLibraryIds),
           ...cfClauses,
         ),
