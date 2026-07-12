@@ -105,7 +105,8 @@
     ],
     "patchedDependencies": {
       "@embedpdf/core@2.14.4": "patches/@embedpdf__core@2.14.4.patch",
-      "@embedpdf/engines@2.14.4": "patches/@embedpdf__engines@2.14.4.patch"
+      "@embedpdf/engines@2.14.4": "patches/@embedpdf__engines@2.14.4.patch",
+      "@embedpdf/plugin-scroll@2.14.4": "patches/@embedpdf__plugin-scroll@2.14.4.patch"
     }
   }
 }
