@@ -3709,7 +3709,9 @@
     "actions": {
       "pause": "Pausieren",
       "resume": "Fortsetzen",
-      "cancelQueued": "Warteschlange abbrechen"
+      "cancelQueued": "Warteschlange abbrechen",
+      "dismissBookStatus": "Status des Metadatenabrufs ausblenden",
+      "dismissAuthorStatus": "Status der Autorenanreicherung ausblenden"
     },
     "cancel": {
       "processingWillFinish": "Derzeit in Bearbeitung befindliche Elemente werden abgeschlossen.",
@@ -3719,7 +3721,9 @@
     "viewFailed": "Eine fehlgeschlagene anzeigen | {count} fehlgeschlagene anzeigen",
     "card": {
       "fetchingMetadata": "Metadaten werden abgerufen",
-      "enrichingAuthors": "Autoren werden angereichert"
+      "enrichingAuthors": "Autoren werden angereichert",
+      "metadataFetchFinished": "Metadatenabruf abgeschlossen",
+      "authorEnrichmentFinished": "Autorenanreicherung abgeschlossen"
     },
     "label": {
       "paused": "Pausiert",

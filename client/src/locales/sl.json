@@ -3706,7 +3706,9 @@
     "actions": {
       "pause": "Premor",
       "resume": "Nadaljuj",
-      "cancelQueued": "Prekliči v čakalni vrsti"
+      "cancelQueued": "Prekliči v čakalni vrsti",
+      "dismissBookStatus": "Skrij stanje pridobivanja metapodatkov",
+      "dismissAuthorStatus": "Skrij stanje obogatitve avtorjev"
     },
     "cancel": {
       "processingWillFinish": "Trenutno obdelovane postavke se bodo dokončale.",
@@ -3716,7 +3718,9 @@
     "viewFailed": "Prikaži eno neuspešno | Prikaži {count} neuspešnih",
     "card": {
       "fetchingMetadata": "Pridobivanje metapodatkov",
-      "enrichingAuthors": "Obogatitev avtorjev"
+      "enrichingAuthors": "Obogatitev avtorjev",
+      "metadataFetchFinished": "Pridobivanje metapodatkov končano",
+      "authorEnrichmentFinished": "Obogatitev avtorjev končana"
     },
     "label": {
       "paused": "V premoru",

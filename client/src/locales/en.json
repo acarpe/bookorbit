@@ -3698,7 +3698,9 @@
     "actions": {
       "pause": "Pause",
       "resume": "Resume",
-      "cancelQueued": "Cancel queued"
+      "cancelQueued": "Cancel queued",
+      "dismissBookStatus": "Dismiss metadata fetch status",
+      "dismissAuthorStatus": "Dismiss author enrichment status"
     },
     "cancel": {
       "processingWillFinish": "Currently processing items will finish.",
@@ -3708,7 +3710,9 @@
     "viewFailed": "View one failed | View {count} failed",
     "card": {
       "fetchingMetadata": "Fetching metadata",
-      "enrichingAuthors": "Enriching authors"
+      "enrichingAuthors": "Enriching authors",
+      "metadataFetchFinished": "Metadata fetch finished",
+      "authorEnrichmentFinished": "Author enrichment finished"
     },
     "label": {
       "paused": "Paused",

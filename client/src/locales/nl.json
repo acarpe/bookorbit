@@ -3709,7 +3709,9 @@
     "actions": {
       "pause": "Pauzeren",
       "resume": "Hervatten",
-      "cancelQueued": "Wachtrij annuleren"
+      "cancelQueued": "Wachtrij annuleren",
+      "dismissBookStatus": "Status van metadata ophalen sluiten",
+      "dismissAuthorStatus": "Status van auteursverrijking sluiten"
     },
     "cancel": {
       "processingWillFinish": "Items die nu worden verwerkt, worden afgemaakt.",
@@ -3719,7 +3721,9 @@
     "viewFailed": "Bekijk een mislukt item | Bekijk {count} mislukte items",
     "card": {
       "fetchingMetadata": "Metadata ophalen",
-      "enrichingAuthors": "Auteurs verrijken"
+      "enrichingAuthors": "Auteurs verrijken",
+      "metadataFetchFinished": "Metadata ophalen voltooid",
+      "authorEnrichmentFinished": "Auteursverrijking voltooid"
     },
     "label": {
       "paused": "Gepauzeerd",
