@@ -4,7 +4,7 @@ import { basename, extname, join } from 'path';
 import { mkdir, realpath, stat } from 'fs/promises';
 import { Readable } from 'stream';
 
-import type { BookDockMetadata } from '@bookorbit/types';
+import { resolveBookDockSearchTitle, type BookDockMetadata } from '@bookorbit/types';
 import type { BookDockFileRow } from '../../db/schema';
 import { sanitizeLogValue } from '../../common/utils/log-sanitize.utils';
 import { SUPPORTED_BOOK_FORMATS, UploadValidatorService } from '../upload/upload-validator.service';
@@ -226,7 +226,7 @@ export class BookDockIngestService implements OnApplicationBootstrap, OnModuleDe
 
     const meta = row.embeddedMetadata;
     const params = {
-      title: meta?.title ?? undefined,
+      title: resolveBookDockSearchTitle(row.fileName, meta?.title),
       author: meta?.authors?.[0] ?? undefined,
       isbn: meta?.isbn13 ?? meta?.isbn10 ?? undefined,
     };

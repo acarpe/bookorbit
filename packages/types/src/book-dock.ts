@@ -3,6 +3,18 @@ import type { AudiobookChapter } from "./audiobook";
 export type BookDockFileStatus = "pending" | "extracting" | "fetching" | "ready" | "error";
 export type BookDockAutoFinalizeMetadataMode = "safe_merge" | "fetched_only" | "embedded_only";
 
+export function resolveBookDockSearchTitle(fileName: string, metadataTitle?: string | null): string | undefined {
+  const normalizedMetadataTitle = metadataTitle?.trim();
+  if (normalizedMetadataTitle) return normalizedMetadataTitle;
+
+  const normalizedFileName = fileName.trim();
+  if (!normalizedFileName) return undefined;
+
+  const extensionIndex = normalizedFileName.lastIndexOf(".");
+  const stem = extensionIndex > 0 ? normalizedFileName.slice(0, extensionIndex) : normalizedFileName;
+  return stem.trim() || undefined;
+}
+
 export interface BookDockMetadata {
   title?: string;
   subtitle?: string;

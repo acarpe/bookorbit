@@ -3,7 +3,14 @@ import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { formatDateTime } from '@/i18n/formatters'
 import { X, BookOpen, Check, Trash2, Sparkles, ArrowLeft, Wand2, AlertCircle } from '@lucide/vue'
-import type { BookDockFile, BookDockMetadata, MetadataCandidate, MetadataSource, MetadataProviderKey } from '@bookorbit/types'
+import {
+  resolveBookDockSearchTitle,
+  type BookDockFile,
+  type BookDockMetadata,
+  type MetadataCandidate,
+  type MetadataSource,
+  type MetadataProviderKey,
+} from '@bookorbit/types'
 import BookDockStatusBadge from './BookDockStatusBadge.vue'
 import MetadataSearchPanel from '@/features/book/components/detail/tabs/MetadataSearchPanel.vue'
 import MetadataDiffPanel from '@/features/book/components/detail/tabs/MetadataDiffPanel.vue'
@@ -195,7 +202,7 @@ const {
 } = useMetadataSearch()
 
 const searchDefaults = computed(() => ({
-  title: form.title || undefined,
+  title: resolveBookDockSearchTitle(props.file.fileName, form.title),
   author: form.authors?.split(',')[0]?.trim() || undefined,
   isbn: form.isbn13 || form.isbn10 || undefined,
 }))
