@@ -500,6 +500,7 @@
       "subtitle": "Erstellen Sie teilbare Anmeldelinks für gemeinsam genutzte Konten.",
       "createLink": "Link erstellen",
       "noSharedAccounts": "Keine gemeinsam genutzten Konten gefunden",
+      "noSharedAccountsHint": "Erstellen Sie zuerst auf der {usersPage} ein gemeinsames Konto, um Magic Links zu erzeugen.",
       "activeLinks": "Aktive Links",
       "inactiveLinks": "Inaktive Links",
       "paused": "Pausiert",
@@ -1841,11 +1842,13 @@
           "loadMore": "Weitere Aktivität laden"
         },
         "howBooksSynced": {
-          "title": "Wie Bücher synchronisiert werden"
+          "title": "Wie Bücher synchronisiert werden",
+          "body": "Um Bücher an Ihr Kobo-Gerät zu senden, müssen Sie {syncToKobo} für die Sammlungen aktivieren, die diese Bücher enthalten. Öffnen Sie eine beliebige Sammlung über die Seitenleiste, klicken Sie auf das Bearbeiten-Symbol und aktivieren Sie {syncToKobo}. Bücher, die nicht Teil einer aktivierten Sammlung sind, werden nicht synchronisiert."
         },
         "nextSteps": {
           "title": "Nächste Schritte",
-          "step1": "1. Richten Sie Ihr Kobo-Gerät so ein, dass es mit der obigen Sync-URL synchronisiert."
+          "step1": "1. Richten Sie Ihr Kobo-Gerät so ein, dass es mit der obigen Sync-URL synchronisiert.",
+          "step2": "2. Öffnen Sie in BookOrbit über die Seitenleiste eine beliebige Sammlung, klicken Sie auf das Bearbeiten-Symbol und aktivieren Sie {syncToKobo}. Nur Bücher in für die Synchronisierung aktivierten Sammlungen werden auf Ihr Gerät heruntergeladen."
         },
         "syncToKobo": "Mit Kobo synchronisieren",
         "tabs": {

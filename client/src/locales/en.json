@@ -494,6 +494,7 @@
       "subtitle": "Create shareable login links for shared accounts.",
       "createLink": "Create link",
       "noSharedAccounts": "No shared accounts found",
+      "noSharedAccountsHint": "Create a shared account from the {usersPage} first to generate magic links.",
       "activeLinks": "Active links",
       "inactiveLinks": "Inactive links",
       "paused": "Paused",
@@ -1835,11 +1836,13 @@
           "loadMore": "Load more activity"
         },
         "howBooksSynced": {
-          "title": "How books are synced"
+          "title": "How books are synced",
+          "body": "To send books to your Kobo device, you must enable {syncToKobo} on the collections containing those books. Open any collection from the sidebar, click the Edit icon, and toggle {syncToKobo}. Books that are not part of an enabled collection will not sync."
         },
         "nextSteps": {
           "title": "Next Steps",
-          "step1": "1. Configure your Kobo device to sync with the Sync URL above."
+          "step1": "1. Configure your Kobo device to sync with the Sync URL above.",
+          "step2": "2. In BookOrbit, go to any collection from the sidebar, click the Edit icon, and enable {syncToKobo}. Only books inside sync-enabled collections will download to your device."
         },
         "syncToKobo": "Sync to Kobo",
         "tabs": {

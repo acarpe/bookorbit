@@ -68,6 +68,7 @@ export const readingAttempts = pgTable(
   },
   (t) => [
     index('reading_attempts_user_book_idx').on(t.userId, t.bookId, t.id),
+    index('reading_attempts_book_id_idx').on(t.bookId),
     index('reading_attempts_user_outcome_ended_idx').on(t.userId, t.outcome, t.endedOn),
     uniqueIndex('reading_attempts_one_active_uidx')
       .on(t.userId, t.bookId)
@@ -217,6 +218,7 @@ export const readingSessions = pgTable(
     index('rs_book_file_started_at_idx').on(t.bookFileId, t.startedAt),
     index('rs_user_book_file_idx').on(t.userId, t.bookFileId),
     index('rs_user_book_started_at_idx').on(t.userId, t.bookId, t.startedAt),
+    index('reading_sessions_book_id_idx').on(t.bookId),
     index('rs_attempt_started_at_idx').on(t.attemptId, t.startedAt),
     check('reading_sessions_source_chk', sql`${t.source} in ('web', 'koreader', 'manual', 'kobo')`),
     check('reading_sessions_duration_seconds_nonnegative_chk', sql`${t.durationSeconds} >= 0`),
@@ -249,6 +251,7 @@ export const userReadingDailyStats = pgTable(
   (t) => [
     primaryKey({ columns: [t.userId, t.libraryId, t.day] }),
     index('urds_user_day_idx').on(t.userId, t.day),
+    index('user_reading_daily_stats_library_id_idx').on(t.libraryId),
     check('user_reading_daily_stats_reading_seconds_nonnegative_chk', sql`${t.readingSeconds} >= 0`),
     check('user_reading_daily_stats_sessions_count_nonnegative_chk', sql`${t.sessionsCount} >= 0`),
   ],
@@ -279,6 +282,8 @@ export const audiobookProgress = pgTable(
   (t) => [
     primaryKey({ columns: [t.userId, t.bookId] }),
     index('abp_user_id_idx').on(t.userId),
+    index('audiobook_progress_book_id_idx').on(t.bookId),
+    index('audiobook_progress_current_file_id_idx').on(t.currentFileId),
     check('audiobook_progress_percentage_range_chk', sql`${t.percentage} >= 0 and ${t.percentage} <= 100`),
     check('audiobook_progress_position_seconds_nonnegative_chk', sql`${t.positionSeconds} >= 0`),
   ],
@@ -306,6 +311,7 @@ export const bookmarks = pgTable(
   },
   (t) => [
     index('bookmarks_user_book_idx').on(t.userId, t.bookId),
+    index('bookmarks_book_id_idx').on(t.bookId),
     uniqueIndex('bookmarks_user_book_cfi_uidx')
       .on(t.userId, t.bookId, t.cfi)
       .where(sql`${t.cfi} is not null`),
@@ -352,6 +358,7 @@ export const annotations = pgTable(
     index('annotations_user_id_idx').on(t.userId),
     index('annotations_user_id_id_idx').on(t.userId, t.id),
     index('annotations_user_book_idx').on(t.userId, t.bookId),
+    index('annotations_book_id_idx').on(t.bookId),
     index('annotations_user_book_active_idx')
       .on(t.userId, t.bookId)
       .where(sql`${t.deletedAt} is null`),
@@ -391,6 +398,7 @@ export const annotationPositions = pgTable(
   (t) => [
     uniqueIndex('annotation_positions_annotation_format_uidx').on(t.annotationId, t.format),
     index('annotation_positions_user_idx').on(t.userId),
+    index('annotation_positions_book_file_id_idx').on(t.bookFileId),
     index('annotation_positions_format_status_idx').on(t.format, t.status),
     check('annotation_positions_format_chk', sql`${t.format} in ('cfi', 'xpointer', 'pdf', 'kobo_span')`),
     check('annotation_positions_status_chk', sql`${t.status} in ('exact', 'repaired', 'failed', 'pending')`),
@@ -479,7 +487,7 @@ export const readerPreferences = pgTable(
       .defaultNow()
       .$onUpdateFn(() => new Date()),
   },
-  (t) => [uniqueIndex('rp_user_file_idx').on(t.userId, t.bookFileId)],
+  (t) => [uniqueIndex('rp_user_file_idx').on(t.userId, t.bookFileId), index('reader_preferences_book_file_id_idx').on(t.bookFileId)],
 );
 
 export type ReaderPreference = typeof readerPreferences.$inferSelect;

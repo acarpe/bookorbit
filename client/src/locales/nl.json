@@ -500,6 +500,7 @@
       "subtitle": "Maak deelbare inloglinks voor gedeelde accounts.",
       "createLink": "Link maken",
       "noSharedAccounts": "Geen gedeelde accounts gevonden",
+      "noSharedAccountsHint": "Maak eerst een gedeeld account aan via de {usersPage} om magic links te genereren.",
       "activeLinks": "Actieve links",
       "inactiveLinks": "Inactieve links",
       "paused": "Gepauzeerd",
@@ -1841,11 +1842,13 @@
           "loadMore": "Meer activiteit laden"
         },
         "howBooksSynced": {
-          "title": "Hoe boeken worden gesynchroniseerd"
+          "title": "Hoe boeken worden gesynchroniseerd",
+          "body": "Om boeken naar je Kobo-apparaat te sturen, moet je {syncToKobo} inschakelen voor de collecties die deze boeken bevatten. Open een collectie via de zijbalk, klik op het bewerkingspictogram en schakel {syncToKobo} in. Boeken die geen deel uitmaken van een ingeschakelde collectie worden niet gesynchroniseerd."
         },
         "nextSteps": {
           "title": "Volgende stappen",
-          "step1": "1. Configureer je Kobo-apparaat om te synchroniseren met de bovenstaande synchronisatie-URL."
+          "step1": "1. Configureer je Kobo-apparaat om te synchroniseren met de bovenstaande synchronisatie-URL.",
+          "step2": "2. Ga in BookOrbit via de zijbalk naar een collectie, klik op het bewerkingspictogram en schakel {syncToKobo} in. Alleen boeken in collecties waarvoor synchronisatie is ingeschakeld worden naar je apparaat gedownload."
         },
         "syncToKobo": "Synchroniseren naar Kobo",
         "tabs": {

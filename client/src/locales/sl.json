@@ -497,6 +497,7 @@
       "subtitle": "Ustvarite povezave za prijavo, ki jih lahko delite za skupne račune.",
       "createLink": "Ustvari povezavo",
       "noSharedAccounts": "Ni najdenih skupnih računov",
+      "noSharedAccountsHint": "Za ustvarjanje čarobnih povezav najprej ustvarite skupni račun na {usersPage}.",
       "activeLinks": "Aktivne povezave",
       "inactiveLinks": "Neaktivne povezave",
       "paused": "Ustavljeno",
@@ -1838,11 +1839,13 @@
           "loadMore": "Naloži več dejavnosti"
         },
         "howBooksSynced": {
-          "title": "Kako se knjige sinhronizirajo"
+          "title": "Kako se knjige sinhronizirajo",
+          "body": "Če želite poslati knjige v napravo Kobo, morate za zbirke, ki vsebujejo te knjige, omogočiti {syncToKobo}. V stranski vrstici odprite katero koli zbirko, kliknite ikono za urejanje in vklopite {syncToKobo}. Knjige, ki niso del omogočene zbirke, se ne bodo sinhronizirale."
         },
         "nextSteps": {
           "title": "Naslednji koraki",
-          "step1": "1. Nastavite napravo Kobo za sinhronizacijo z zgornjim URL-jem za sinhronizacijo."
+          "step1": "1. Nastavite napravo Kobo za sinhronizacijo z zgornjim URL-jem za sinhronizacijo.",
+          "step2": "2. V BookOrbitu v stranski vrstici odprite katero koli zbirko, kliknite ikono za urejanje in omogočite {syncToKobo}. V napravo se bodo prenesle samo knjige iz zbirk z omogočeno sinhronizacijo."
         },
         "syncToKobo": "Sinhronizacija s Kobo",
         "tabs": {
