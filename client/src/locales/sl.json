@@ -3092,8 +3092,7 @@
         "moreLikeThis": "Več podobnega"
       },
       "series": {
-        "moreInSeriesPrefix": "Več v",
-        "moreInSeriesSuffix": "zbirki"
+        "moreInSeries": "Več v zbirki {series}"
       },
       "writeRename": {
         "written": "ni zapisanih polj | Zapisano (eno polje) | Zapisano ({count} polj)",

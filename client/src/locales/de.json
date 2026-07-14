@@ -3095,8 +3095,7 @@
         "moreLikeThis": "Mehr davon"
       },
       "series": {
-        "moreInSeriesPrefix": "Mehr aus der",
-        "moreInSeriesSuffix": "Reihe"
+        "moreInSeries": "Mehr aus der Reihe {series}"
       },
       "writeRename": {
         "written": "keine Felder geschrieben | Geschrieben (ein Feld) | Geschrieben ({count} Felder)",

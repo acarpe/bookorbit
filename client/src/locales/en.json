@@ -3089,8 +3089,7 @@
         "moreLikeThis": "More Like This"
       },
       "series": {
-        "moreInSeriesPrefix": "More in the",
-        "moreInSeriesSuffix": "series"
+        "moreInSeries": "More in the {series} series"
       },
       "writeRename": {
         "written": "no fields written | Written (one field) | Written ({count} fields)",

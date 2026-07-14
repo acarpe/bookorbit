@@ -3100,8 +3100,7 @@
         "moreLikeThis": "Meer zoals dit"
       },
       "series": {
-        "moreInSeriesPrefix": "Meer in de",
-        "moreInSeriesSuffix": "reeks"
+        "moreInSeries": "Meer in de reeks {series}"
       },
       "writeRename": {
         "written": "geen velden geschreven | Geschreven (één veld) | Geschreven ({count} velden)",
