@@ -379,6 +379,13 @@
       "when": 1783973564941,
       "tag": "0053_koreader_device_file_naming",
       "breakpoints": true
+    },
+    {
+      "idx": 54,
+      "version": "7",
+      "when": 1784079674841,
+      "tag": "0054_add_book_duplicate_scans",
+      "breakpoints": true
     }
   ]
 }

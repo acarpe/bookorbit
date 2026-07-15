@@ -141,7 +141,7 @@ function normalizeResolverOptions(options?: PathResolverOptions): Required<PathR
   };
 }
 
-function sanitizePathSegmentValue(value: string, replacementCharacter: "_" | "-"): string {
+export function sanitizePathSegment(value: string, replacementCharacter: "_" | "-" = "_"): string {
   let sanitized = value
     .replace(INVALID_SEGMENT_CHARS_REGEX, replacementCharacter)
     .trim()
@@ -163,7 +163,7 @@ function sanitizeResolutionValues(values: Record<string, string>, options: Requi
 
   const sanitized: Record<string, string> = {};
   for (const [key, value] of Object.entries(values)) {
-    sanitized[key] = value.trim() ? sanitizePathSegmentValue(value, options.replacementCharacter) : "";
+    sanitized[key] = value.trim() ? sanitizePathSegment(value, options.replacementCharacter) : "";
   }
 
   return sanitized;
