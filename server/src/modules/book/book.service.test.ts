@@ -4695,6 +4695,9 @@ describe('BookService', () => {
 
       await expect(service.renameFile(fileId, { filename: '../new.epub' }, user)).rejects.toThrow(BadRequestException);
       await expect(service.renameFile(fileId, { filename: 'dir/new.epub' }, user)).rejects.toThrow(BadRequestException);
+      await expect(service.renameFile(fileId, { filename: 'bad\0name.epub' }, user)).rejects.toThrow(BadRequestException);
+      await expect(service.renameFile(fileId, { filename: `${'a'.repeat(256)}.epub` }, user)).rejects.toThrow(BadRequestException);
+      expect(rename).not.toHaveBeenCalled();
     });
 
     it('only updates db if filename is not provided or unchanged', async () => {

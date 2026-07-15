@@ -142,10 +142,7 @@ function normalizeResolverOptions(options?: PathResolverOptions): Required<PathR
 }
 
 export function sanitizePathSegment(value: string, replacementCharacter: "_" | "-" = "_"): string {
-  let sanitized = value
-    .replace(INVALID_SEGMENT_CHARS_REGEX, replacementCharacter)
-    .trim()
-    .replace(/[. ]+$/g, "");
+  let sanitized = stripTrailingDotsAndSpaces(value.replace(INVALID_SEGMENT_CHARS_REGEX, replacementCharacter).trim());
   if (!sanitized || sanitized === "." || sanitized === "..") {
     sanitized = replacementCharacter;
   }
@@ -156,6 +153,12 @@ export function sanitizePathSegment(value: string, replacementCharacter: "_" | "
   }
 
   return sanitized;
+}
+
+function stripTrailingDotsAndSpaces(value: string): string {
+  let end = value.length;
+  while (end > 0 && (value[end - 1] === "." || value[end - 1] === " ")) end -= 1;
+  return end === value.length ? value : value.slice(0, end);
 }
 
 function sanitizeResolutionValues(values: Record<string, string>, options: Required<PathResolverOptions>): Record<string, string> {

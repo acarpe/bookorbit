@@ -1341,12 +1341,21 @@ export class BookService {
 
       let newAbsolutePath = file.absolutePath;
       if (dto.filename && dto.filename !== basename(file.absolutePath)) {
-        if (dto.filename.includes('/') || dto.filename.includes('\\')) {
-          throw new BadRequestException('Filename cannot contain path separators');
+        const safeFilename = basename(dto.filename);
+        if (
+          safeFilename !== dto.filename ||
+          safeFilename === '.' ||
+          safeFilename === '..' ||
+          safeFilename.includes('\\') ||
+          safeFilename.includes('\0') ||
+          Buffer.byteLength(safeFilename, 'utf8') > 255
+        ) {
+          throw new BadRequestException('Filename is invalid');
         }
-        newAbsolutePath = join(dirname(file.absolutePath), dto.filename);
+        newAbsolutePath = join(dirname(file.absolutePath), safeFilename);
         if (newAbsolutePath !== file.absolutePath) {
           try {
+            // codeql[js/path-injection] basename constrains the user-provided value to one validated filename segment.
             await rename(file.absolutePath, newAbsolutePath);
           } catch (err) {
             throw new BadRequestException(`Failed to rename file on disk: ${err instanceof Error ? err.message : String(err)}`);

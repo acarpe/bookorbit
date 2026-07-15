@@ -8,6 +8,7 @@ import {
   replacePlaceholders,
   resolveDownloadFilename,
   resolveUploadPath,
+  sanitizePathSegment,
   validatePattern,
 } from '@bookorbit/types';
 
@@ -32,6 +33,12 @@ const DECIMAL_INDEX: Record<string, string> = {
   ...FULL,
   seriesIndex: '01.5',
 };
+
+describe('sanitizePathSegment', () => {
+  it('removes a large trailing run of dots and spaces in linear time', () => {
+    expect(sanitizePathSegment(`book${'. '.repeat(100_000)}`)).toBe('book');
+  });
+});
 
 // ── applyModifier ─────────────────────────────────────────────────────────────
 

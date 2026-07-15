@@ -149,6 +149,7 @@ BookOrbit is available in English, German, Dutch, Brazilian Portuguese, and Slov
 - **Questions and discussion:** [GitHub Discussions](https://github.com/bookorbit/bookorbit/discussions)
 - **Bug reports:** [GitHub Issues](https://github.com/bookorbit/bookorbit/issues/new?template=bug_report.yml)
 - **Feature requests:** [GitHub Issues](https://github.com/bookorbit/bookorbit/issues/new?template=feature_request.yml)
+- **Security vulnerabilities:** Follow the private reporting process in the [Security Policy](.github/SECURITY.md).
 
 ---
 
