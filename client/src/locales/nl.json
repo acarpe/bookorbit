@@ -92,7 +92,8 @@
       "mobileSummary": "Thema: {theme} • Accent: {accent} • Achtergrond: {background}",
       "themeMode": {
         "light": "Licht",
-        "dark": "Donker"
+        "dark": "Donker",
+        "system": "System"
       },
       "theme": {
         "title": "Thema",
@@ -4152,7 +4153,8 @@
     },
     "themePicker": {
       "light": "Licht",
-      "dark": "Donker"
+      "dark": "Donker",
+      "system": "System"
     },
     "userAvatar": {
       "profilePicture": "Profielfoto",

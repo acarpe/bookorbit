@@ -113,6 +113,13 @@ describe('UserPreferencesService', () => {
     expect(repo.upsert).toHaveBeenCalledWith(11, 'theme', validThemePreferences);
   });
 
+  it('upsertThemePreferences accepts the system theme', async () => {
+    const systemThemePreferences = { ...validThemePreferences, theme: 'system' } as const;
+
+    await expect(service.upsertThemePreferences(11, systemThemePreferences)).resolves.toBeUndefined();
+    expect(repo.upsert).toHaveBeenCalledWith(11, 'theme', systemThemePreferences);
+  });
+
   it('upsertThemePreferences rejects invalid theme ids', async () => {
     await expect(service.upsertThemePreferences(11, { ...validThemePreferences, theme: 'sepia' } as never)).rejects.toBeInstanceOf(
       BadRequestException,

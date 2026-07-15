@@ -83,7 +83,8 @@
       "mobileSummary": "Theme: {theme} • Accent: {accent} • Background: {background}",
       "themeMode": {
         "light": "Light",
-        "dark": "Dark"
+        "dark": "Dark",
+        "system": "System"
       },
       "theme": {
         "title": "Theme",
@@ -4110,7 +4111,8 @@
     },
     "themePicker": {
       "light": "Light",
-      "dark": "Dark"
+      "dark": "Dark",
+      "system": "System"
     },
     "userAvatar": {
       "profilePicture": "Profile picture",

@@ -92,7 +92,8 @@
       "mobileSummary": "Thema: {theme} • Akzent: {accent} • Hintergrund: {background}",
       "themeMode": {
         "light": "Hell",
-        "dark": "Dunkel"
+        "dark": "Dunkel",
+        "system": "System"
       },
       "theme": {
         "title": "Thema",
@@ -4152,7 +4153,8 @@
     },
     "themePicker": {
       "light": "Hell",
-      "dark": "Dunkel"
+      "dark": "Dunkel",
+      "system": "System"
     },
     "userAvatar": {
       "profilePicture": "Profilbild",

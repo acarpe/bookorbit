@@ -92,7 +92,8 @@
       "mobileSummary": "Tema: {theme} • Destaque: {accent} • Fundo: {background}",
       "themeMode": {
         "light": "Claro",
-        "dark": "Escuro"
+        "dark": "Escuro",
+        "system": "System"
       },
       "theme": {
         "title": "Tema",
@@ -4152,7 +4153,8 @@
     },
     "themePicker": {
       "light": "Claro",
-      "dark": "Escuro"
+      "dark": "Escuro",
+      "system": "System"
     },
     "userAvatar": {
       "profilePicture": "Foto de perfil",

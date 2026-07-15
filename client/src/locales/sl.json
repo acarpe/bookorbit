@@ -92,7 +92,8 @@
       "mobileSummary": "Tema: {theme} • Poudarek: {accent} • Ozadje: {background}",
       "themeMode": {
         "light": "Svetla",
-        "dark": "Temna"
+        "dark": "Temna",
+        "system": "System"
       },
       "theme": {
         "title": "Tema",
@@ -4152,7 +4153,8 @@
     },
     "themePicker": {
       "light": "Svetla",
-      "dark": "Temna"
+      "dark": "Temna",
+      "system": "System"
     },
     "userAvatar": {
       "profilePicture": "Profilna slika",
