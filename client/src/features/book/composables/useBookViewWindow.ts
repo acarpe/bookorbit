@@ -28,6 +28,7 @@ export function useBookViewWindow(options: {
   listEndpoint: (id: number) => string
   bucketsEndpoint: (id: number) => string
   viewMode: Ref<string>
+  railEnabled?: Ref<boolean>
   railViewport?: Ref<HTMLElement | null>
   collapseEnabled?: Ref<boolean>
   q?: Ref<string>
@@ -68,7 +69,9 @@ export function useBookViewWindow(options: {
   const bucketKind = computed(() => jumpBucketKindForSort(sort.value))
   const primarySortField = computed(() => sort.value[0]?.field ?? 'title')
   const railModeActive = computed(() => options.viewMode.value === 'grid')
-  const railEligible = computed(() => bucketKind.value !== null && railModeActive.value && window.total.value >= MIN_TOTAL_FOR_RAIL)
+  const railEligible = computed(
+    () => (options.railEnabled?.value ?? true) && bucketKind.value !== null && railModeActive.value && window.total.value >= MIN_TOTAL_FOR_RAIL,
+  )
 
   const bucketsApi = useJumpBuckets({
     endpoint: bucketsEndpoint,

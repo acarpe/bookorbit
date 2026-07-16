@@ -4129,6 +4129,7 @@
         "display": "Exibição",
         "coverSize": "Tamanho da capa",
         "gridGap": "Espaçamento da grade",
+        "showJumpRails": "Show jump rails",
         "columnsHint": "Use o painel de visibilidade de colunas no cabeçalho da tabela para mostrar ou ocultar colunas.",
         "coverShape": "Formato da capa",
         "circle": "Círculo",

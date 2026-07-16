@@ -4129,6 +4129,7 @@
         "display": "Weergave",
         "coverSize": "Omslaggrootte",
         "gridGap": "Rasterafstand",
+        "showJumpRails": "Show jump rails",
         "columnsHint": "Gebruik het paneel voor kolomzichtbaarheid in de tabelkop om kolommen te tonen of te verbergen.",
         "coverShape": "Omslagvorm",
         "circle": "Cirkel",

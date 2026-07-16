@@ -78,6 +78,7 @@ const libraryId = shallowRef<number | null>(route.params.id ? Number(route.param
 const currentLibrary = computed(() => libraries.value.find((l) => l.id === libraryId.value))
 const currentCoverAspectRatio = computed(() => currentLibrary.value?.coverAspectRatio ?? DEFAULT_COVER_ASPECT_RATIO)
 const { coverSize, gridGap } = useViewDisplaySettings('library', libraryId, currentCoverAspectRatio)
+const { tableDensity, showJumpRails } = useDisplaySettings()
 
 const libraryNotFound = computed(() => librariesLoaded.value && libraryId.value !== null && !currentLibrary.value)
 const title = computed(() => currentLibrary.value?.name ?? t('views.library.title'))
@@ -138,6 +139,7 @@ const {
   listEndpoint: (id) => `/api/v1/libraries/${id}/books`,
   bucketsEndpoint: (id) => `/api/v1/libraries/${id}/books/jump-buckets`,
   viewMode: effectiveViewMode,
+  railEnabled: showJumpRails,
   railViewport: mainRef,
   collapseEnabled: collapseEnabledRef,
   q: debouncedQuery,
@@ -157,7 +159,6 @@ const hasSavedFilter = computed(() => savedFilter.value !== undefined)
 const isFilterSaved = computed(() => JSON.stringify(filter.value) === JSON.stringify(savedFilter.value))
 
 const { sortModel, isDefaultSort, sortSummary, resetSort } = useViewSort(sort, 'library', libraryId)
-const { tableDensity } = useDisplaySettings()
 const { allSavedViews, saveView, renameView, deleteView, duplicateView, toggleFavorite, importViews } = useSavedViews('library', libraryId)
 
 function handleSaveCurrentView(name: string) {
@@ -567,6 +568,8 @@ defineOptions({ name: 'HomeView' })
         :total="total"
         v-model:coverSize="coverSize"
         v-model:gridGap="gridGap"
+        :show-jump-rail-toggle="true"
+        v-model:showJumpRails="showJumpRails"
         v-model:viewMode="viewMode"
         :selection-mode="selectionMode"
         :searchable="true"

@@ -4087,6 +4087,7 @@
         "display": "Display",
         "coverSize": "Cover size",
         "gridGap": "Grid gap",
+        "showJumpRails": "Show jump rails",
         "columnsHint": "Use the column visibility panel in the table header to show or hide columns.",
         "coverShape": "Cover shape",
         "circle": "Circle",

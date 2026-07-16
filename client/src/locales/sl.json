@@ -4129,6 +4129,7 @@
         "display": "Prikaz",
         "coverSize": "Velikost naslovnice",
         "gridGap": "Razmik mreže",
+        "showJumpRails": "Show jump rails",
         "columnsHint": "Uporabi ploščo za vidnost stolpcev v glavi tabele, da prikažeš ali skriješ stolpce.",
         "coverShape": "Oblika naslovnice",
         "circle": "Krog",

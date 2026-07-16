@@ -50,7 +50,7 @@ const { viewMode, effectiveViewMode } = useEffectiveViewMode()
 const { hasPermission, isDemoRestrictedAccount } = usePermissions()
 
 const collectionId = shallowRef(Number(route.params.id))
-const { tableDensity } = useDisplaySettings()
+const { tableDensity, showJumpRails } = useDisplaySettings()
 const { allSavedViews, saveView, renameView, deleteView, duplicateView, toggleFavorite, importViews } = useSavedViews('collection', collectionId)
 const coverAspectRatio = computed(() => DEFAULT_COVER_ASPECT_RATIO)
 const { coverSize, gridGap } = useViewDisplaySettings('collection', collectionId, coverAspectRatio)
@@ -109,6 +109,7 @@ const {
   listEndpoint: (id) => `/api/v1/collections/${id}/books/query`,
   bucketsEndpoint: (id) => `/api/v1/collections/${id}/books/jump-buckets`,
   viewMode: effectiveViewMode,
+  railEnabled: showJumpRails,
   railViewport: mainRef,
   collapseEnabled: collapseEnabledRef,
   q: debouncedQuery,
@@ -438,6 +439,8 @@ defineOptions({ name: 'CollectionView' })
         :total="total"
         v-model:coverSize="coverSize"
         v-model:gridGap="gridGap"
+        :show-jump-rail-toggle="true"
+        v-model:showJumpRails="showJumpRails"
         v-model:viewMode="viewMode"
         :selection-mode="selectionMode"
         :searchable="true"

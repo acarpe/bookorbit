@@ -86,9 +86,10 @@ async function flush() {
   await nextTick()
 }
 
-function setup(options: { scope?: number | null; viewMode?: string; collapse?: boolean; q?: string } = {}) {
+function setup(options: { scope?: number | null; viewMode?: string; collapse?: boolean; q?: string; railEnabled?: boolean } = {}) {
   const scopeId = ref<number | null>(options.scope === undefined ? 1 : options.scope)
   const viewMode = ref(options.viewMode ?? 'table')
+  const railEnabled = ref(options.railEnabled ?? true)
   const collapseEnabled = ref(options.collapse ?? false)
   const q = ref(options.q ?? '')
   const win = useBookViewWindow({
@@ -96,16 +97,21 @@ function setup(options: { scope?: number | null; viewMode?: string; collapse?: b
     listEndpoint: (id) => `/api/v1/libraries/${id}/books`,
     bucketsEndpoint: (id) => `/api/v1/libraries/${id}/books/jump-buckets`,
     viewMode,
+    railEnabled,
     collapseEnabled,
     q,
   })
-  return { win, scopeId, viewMode, collapseEnabled, q }
+  return { win, scopeId, viewMode, railEnabled, collapseEnabled, q }
 }
 
 function listRequests(): number[] {
   return fetchMock.mock.calls
     .filter(([url]) => !url.includes('jump-buckets'))
     .map(([, init]) => (JSON.parse(String(init?.body)) as { pagination: { page: number } }).pagination.page)
+}
+
+function jumpRequestCount(): number {
+  return fetchMock.mock.calls.filter(([url]) => url.includes('jump-buckets')).length
 }
 
 describe('useBookViewWindow', () => {
@@ -246,6 +252,22 @@ describe('useBookViewWindow', () => {
 
     expect(win.railVisible.value).toBe(false)
     expect(win.railGutterReserved.value).toBe(false)
+  })
+
+  it('does not request buckets while jump rails are disabled and loads them when enabled', async () => {
+    mockApi(250, [bucket('A', 0), bucket('B', 120)])
+    const { win, railEnabled } = setup({ viewMode: 'grid', railEnabled: false })
+    await flush()
+
+    expect(jumpRequestCount()).toBe(0)
+    expect(win.railVisible.value).toBe(false)
+
+    railEnabled.value = true
+    await flush()
+    await flush()
+
+    expect(jumpRequestCount()).toBe(1)
+    expect(win.railVisible.value).toBe(true)
   })
 
   it('shows the jump rail in grid mode once buckets load and jumps scroll to the bucket index', async () => {

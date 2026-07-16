@@ -4129,6 +4129,7 @@
         "display": "Anzeige",
         "coverSize": "Covergröße",
         "gridGap": "Rasterabstand",
+        "showJumpRails": "Show jump rails",
         "columnsHint": "Verwende das Spaltensichtbarkeits-Panel in der Tabellenkopfzeile, um Spalten ein- oder auszublenden.",
         "coverShape": "Coverform",
         "circle": "Kreis",
