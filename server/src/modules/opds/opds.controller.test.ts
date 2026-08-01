@@ -337,7 +337,7 @@ describe('OpdsController', () => {
       title: 'Bad:/Title*',
       authorName: 'Au<th>or',
     });
-    mockStat.mockResolvedValue({ size: 12345 } as never);
+    mockStat.mockResolvedValue({ size: 12345, mtimeMs: 5000 } as never);
     mockCreateReadStream.mockReturnValue(stream as never);
 
     await controller.download(99, 0, { userId: 2, isSuperuser: false } as never, reply);
@@ -347,8 +347,30 @@ describe('OpdsController', () => {
       'attachment; filename="BadTitle - Author.epub"; filename*=UTF-8\'\'BadTitle%20-%20Author.epub',
     );
     expect(reply.header).toHaveBeenCalledWith('Content-Length', 12345);
+    expect(reply.header).toHaveBeenCalledWith('Accept-Ranges', 'bytes');
     expect(reply.type).toHaveBeenCalledWith('application/epub+zip');
     expect(reply.send).toHaveBeenCalledWith(stream);
+  });
+
+  it('serves a partial download when the reader resumes with a range', async () => {
+    const { controller, opdsBookService } = makeController();
+    const reply = makeReply();
+
+    opdsBookService.getBookFiles.mockResolvedValue({
+      absolutePath: '/books/library/book.epub',
+      format: 'epub',
+      title: 'Dune',
+      authorName: 'Frank Herbert',
+    });
+    mockStat.mockResolvedValue({ size: 12345, mtimeMs: 5000 } as never);
+    mockCreateReadStream.mockReturnValue({} as never);
+
+    await controller.download(99, 0, { userId: 2, isSuperuser: false } as never, reply, 'bytes=12000-', '"3039-1388"');
+
+    expect(reply.status).toHaveBeenCalledWith(206);
+    expect(reply.header).toHaveBeenCalledWith('Content-Range', 'bytes 12000-12344/12345');
+    expect(reply.header).toHaveBeenCalledWith('Content-Length', 345);
+    expect(mockCreateReadStream).toHaveBeenCalledWith('/books/library/book.epub', { start: 12000, end: 12344 });
   });
 
   it('throws NotFoundException when requested download file is unavailable', async () => {

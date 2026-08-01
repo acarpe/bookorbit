@@ -870,8 +870,44 @@ describe('KoreaderCatalogService', () => {
       `attachment; filename="Dune - Frank Herbert.epub"; filename*=UTF-8''Dune%20-%20Frank%20Herbert.epub`,
     );
     expect(reply.header).toHaveBeenCalledWith('Content-Length', 1234);
+    expect(reply.header).toHaveBeenCalledWith('Accept-Ranges', 'bytes');
     expect(reply.type).toHaveBeenCalledWith('application/epub+zip');
     expect(mockCreateReadStream).toHaveBeenCalledWith('/books/dune.epub');
+  });
+
+  it('serves a partial response when the plugin resumes a download', async () => {
+    const { service } = makeService();
+    const reply = makeReply();
+
+    await service.streamFile(makeUser(), 100, reply as never, { rangeHeader: 'bytes=1000-' });
+
+    expect(reply.status).toHaveBeenCalledWith(206);
+    expect(reply.header).toHaveBeenCalledWith('Content-Range', 'bytes 1000-1233/1234');
+    expect(reply.header).toHaveBeenCalledWith('Content-Length', 234);
+    expect(reply.header).toHaveBeenCalledWith('ETag', '"4d2-1388"');
+    expect(mockCreateReadStream).toHaveBeenCalledWith('/books/dune.epub', { start: 1000, end: 1233 });
+  });
+
+  it('restarts a resumed download from the beginning when the file changed underneath', async () => {
+    const { service } = makeService();
+    const reply = makeReply();
+
+    await service.streamFile(makeUser(), 100, reply as never, { rangeHeader: 'bytes=1000-', ifRangeHeader: '"stale"' });
+
+    expect(reply.status).not.toHaveBeenCalledWith(206);
+    expect(reply.header).toHaveBeenCalledWith('Content-Length', 1234);
+    expect(mockCreateReadStream).toHaveBeenCalledWith('/books/dune.epub');
+  });
+
+  it('answers 416 when the resume offset is past the end of the file', async () => {
+    const { service } = makeService();
+    const reply = makeReply();
+
+    await service.streamFile(makeUser(), 100, reply as never, { rangeHeader: 'bytes=5000-' });
+
+    expect(reply.status).toHaveBeenCalledWith(416);
+    expect(reply.header).toHaveBeenCalledWith('Content-Range', 'bytes */1234');
+    expect(mockCreateReadStream).not.toHaveBeenCalled();
   });
 
   it('encodes non-ASCII content file download filenames for Content-Disposition', async () => {

@@ -1411,11 +1411,12 @@ export class BookService {
   async getFileInfo(
     fileId: number,
     user: RequestUser,
-  ): Promise<{ path: string; size: number; format: string; bookId: number; originalFilename: string }> {
+  ): Promise<{ path: string; size: number; mtimeMs: number; format: string; bookId: number; originalFilename: string }> {
     const file = await this.verifyFileAccess(fileId, user);
     let size: number;
+    let mtimeMs: number;
     try {
-      ({ size } = await stat(file.absolutePath));
+      ({ size, mtimeMs } = await stat(file.absolutePath));
     } catch (err) {
       if (this.isMissingFilesystemEntry(err)) {
         throw new NotFoundException(`File ${fileId} not found on disk`);
@@ -1423,7 +1424,7 @@ export class BookService {
       throw err;
     }
     const originalFilename = basename(file.absolutePath);
-    return { path: file.absolutePath, size, format: file.format ?? 'unknown', bookId: file.bookId, originalFilename };
+    return { path: file.absolutePath, size, mtimeMs, format: file.format ?? 'unknown', bookId: file.bookId, originalFilename };
   }
 
   async resolveDownloadFilename(file: { bookId: number; absolutePath: string; format: string | null }): Promise<string> {
