@@ -24,11 +24,45 @@ local TEMP_DIR_NAME = ".bookorbit-tmp"
 local POLL_INTERVAL = 0.5
 local STALE_TEMP_AGE = 24 * 60 * 60
 local MAX_STALE_SWEEP = 64
+local MAX_ATTEMPTS = 2
+local MAX_RESUME_KEY = 48
+
+-- Failures that describe the response rather than the link. Repeating one
+-- returns the same answer, and whatever reached the disk under it is worthless,
+-- so neither a retry nor the partial file is worth keeping.
+local FATAL_ERRORS = {
+    cancelled = true,
+    empty_response = true,
+    response_too_large = true,
+    too_many_redirects = true,
+    unexpected_content_type = true,
+    unsafe_destination = true,
+    unsafe_redirect = true,
+}
 
 local Transfer = {}
 
 Transfer.TEMP_DIR_NAME = TEMP_DIR_NAME
 Transfer.POLL_INTERVAL = POLL_INTERVAL
+Transfer.MAX_ATTEMPTS = MAX_ATTEMPTS
+
+-- Resume keys currently held by a live run. Two transfers sharing one temporary
+-- file would interleave their writes, so the second one gives up resuming
+-- rather than the first one's bytes.
+local active = {}
+
+local function resumeSlug(key)
+    local slug = tostring(key or ""):gsub("[^%w_%-]", "")
+    if slug == "" or #slug > MAX_RESUME_KEY then return nil end
+    return slug
+end
+
+-- An HTTP status is the server's verdict and will not change on a second try;
+-- anything else came from the link.
+local function isRetryable(err)
+    if type(err) == "number" then return false end
+    return not FATAL_ERRORS[tostring(err)]
+end
 
 local function normalize(path)
     return tostring(path or ""):gsub("\\", "/"):gsub("/+", "/"):gsub("/$", "")
@@ -101,7 +135,9 @@ end
 --
 -- opts: perform(download_opts) -> (result, err), destination, root,
 -- generation, expected_bytes, on_progress(received, total), is_current(),
--- trap_widget.
+-- resume_key, trap_widget. A resume_key names the temporary file after the
+-- remote file instead of the attempt, which is what lets a dropped transfer
+-- continue where it stopped rather than start over.
 function Transfer.run(opts)
     local root = opts.root
     if not Transfer.isInsideRoot(root, opts.destination) then
@@ -110,7 +146,11 @@ function Transfer.run(opts)
     local dir = Transfer.ensureTempDir(root)
     if not dir then return nil, "temp_dir_failed" end
 
-    local base = string.format("bo_%d_%d", opts.generation or 0, os.time())
+    local slug = resumeSlug(opts.resume_key)
+    if slug and active[slug] then slug = nil end
+    local base = slug and ("bo_r" .. slug) or string.format("bo_%d_%d", opts.generation or 0, os.time())
+    if slug then active[slug] = true end
+
     local temp_path = dir .. "/" .. base .. ".part"
     local progress_path = dir .. "/" .. base .. ".progress"
 
@@ -123,31 +163,48 @@ function Transfer.run(opts)
     UIManager:scheduleIn(POLL_INTERVAL, function() pollProgress(state) end)
 
     local block_timeout, total_timeout = TransferPolicy.timeouts(opts.expected_bytes)
-    local ok, result, err = pcall(opts.perform, {
-        temp_path = temp_path,
-        progress_path = progress_path,
-        progress_generation = opts.generation,
-        expected_bytes = opts.expected_bytes,
-        block_timeout = block_timeout,
-        total_timeout = total_timeout,
-        publish = "parent",
-        hash = opts.hash,
-        trap_widget = opts.trap_widget,
-        -- Only reached when no subprocess could be forked; then the parent is
-        -- blocked anyway and the callback is the sole progress channel.
-        progress_cb = opts.on_progress and function(received)
-            opts.on_progress(received, opts.expected_bytes)
-        end or nil,
-    })
+    local max_attempts = slug and MAX_ATTEMPTS or 1
+    local ok, result, err
+    for attempt = 1, max_attempts do
+        ok, result, err = pcall(opts.perform, {
+            temp_path = temp_path,
+            progress_path = progress_path,
+            progress_generation = opts.generation,
+            expected_bytes = opts.expected_bytes,
+            block_timeout = block_timeout,
+            total_timeout = total_timeout,
+            publish = "parent",
+            hash = opts.hash,
+            resume = slug ~= nil,
+            keep_partial = slug ~= nil,
+            trap_widget = opts.trap_widget,
+            -- Only reached when no subprocess could be forked; then the parent is
+            -- blocked anyway and the callback is the sole progress channel.
+            progress_cb = opts.on_progress and function(received)
+                opts.on_progress(received, opts.expected_bytes)
+            end or nil,
+        })
+        if not ok or result then break end
+        -- One retry, and only while the user still wants the file: the bytes
+        -- already on disk make the second attempt short, but a dead link stays
+        -- dead and the caller offers its own retry after that.
+        if attempt >= max_attempts or not isRetryable(err) then break end
+        if opts.is_current and not opts.is_current() then break end
+    end
     state.stopped = true
     TransferProgress.cleanup(progress_path)
+    if slug then active[slug] = nil end
 
     if not ok then
         util.removeFile(temp_path)
         error(result, 0)
     end
     if not result then
-        util.removeFile(temp_path)
+        -- A dropped link leaves usable bytes behind. They stay for the next
+        -- attempt at this file, and the stale sweep collects them if none comes.
+        if not (slug and isRetryable(err)) then
+            util.removeFile(temp_path)
+        end
         return nil, err
     end
 

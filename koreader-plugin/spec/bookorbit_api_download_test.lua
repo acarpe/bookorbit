@@ -22,6 +22,9 @@ package.loaded["socket.http"] = {
             local ok, err = request.sink(chunk)
             if not ok then return nil, err end
         end
+        -- A link that drops mid-body never reaches the sink's end marker and
+        -- reports a transport failure instead of a status.
+        if active.transport_error then return nil, active.transport_error end
         request.sink(nil)
         return 1, active.code, active.headers, active.status or "OK"
     end,
@@ -308,6 +311,195 @@ assertEqual(handed_back.hash, "md5-26", "the child hashes the file it just wrote
 assertEqual(exists(final_path), false, "parent publishing never renames in the child")
 assertEqual(exists(temp_path), true, "the temporary file survives for the parent to publish")
 os.remove(temp_path)
+
+local function writeFile(path, content)
+    local handle = assert(io.open(path, "wb"))
+    handle:write(content)
+    handle:close()
+end
+
+-- A link that drops mid-body leaves the bytes it already delivered behind, so
+-- the next attempt has something to continue from.
+requests = {}
+response.queue = { { chunks = { "JFIF-part-one" }, transport_error = "closed" } }
+local dropped, drop_err = api:downloadBlocking("/thumb", final_path, {
+    temp_path = temp_path,
+    keep_partial = true,
+})
+assertEqual(dropped, nil, "a dropped link reports failure")
+assertEqual(drop_err, "closed", "the transport error reaches the caller")
+assertEqual(exists(final_path), false, "a dropped link publishes nothing")
+assertEqual(readFile(temp_path), "JFIF-part-one", "the delivered bytes stay for the next attempt")
+
+-- That next attempt probes the remote file for a validator, hands it back in
+-- If-Range and asks only for the remainder.
+requests = {}
+response.queue = {
+    {
+        code = 206,
+        headers = { etag = '"1a-2b"', ["content-range"] = "bytes 0-0/26" },
+        chunks = { "J" },
+    },
+    {
+        code = 206,
+        headers = { ["content-type"] = "image/jpeg", ["content-range"] = "bytes 13-25/26" },
+        chunks = { "JFIF-part-two" },
+    },
+}
+local continued = api:downloadBlocking("/thumb", final_path, {
+    temp_path = temp_path,
+    publish = "parent",
+    resume = true,
+    keep_partial = true,
+    expect_content_type = "image/",
+})
+assertEqual(#requests, 2, "resuming probes once and then asks for the remainder")
+assertEqual(requests[1].headers["range"], "bytes=0-0", "the probe reads a single byte")
+assertEqual(requests[2].headers["range"], "bytes=13-", "the transfer continues at the first missing byte")
+assertEqual(requests[2].headers["if-range"], '"1a-2b"', "the probed validator authorizes the resume")
+assertEqual(type(continued), "table", "a resumed transfer returns its result")
+assertEqual(continued.bytes, 26, "the byte count covers the whole file, not just this attempt")
+assertEqual(continued.resumed, 13, "the result reports how much was already on disk")
+assertEqual(readFile(temp_path), "JFIF-part-oneJFIF-part-two", "the remainder is appended to the bytes on disk")
+
+-- A server that refuses If-Range answers with the whole file. The bytes on disk
+-- describe a representation it no longer serves, so they are dropped and the
+-- transfer starts over rather than appending to them.
+requests = {}
+writeFile(temp_path, "stale-content")
+response.queue = {
+    {
+        code = 206,
+        headers = { etag = '"1a-2b"', ["content-range"] = "bytes 0-0/26" },
+        chunks = { "J" },
+    },
+    {
+        code = 200,
+        headers = { ["content-type"] = "image/jpeg" },
+        chunks = { "JFIF-part-one", "JFIF-part-two" },
+    },
+}
+local restarted = api:downloadBlocking("/thumb", final_path, {
+    temp_path = temp_path,
+    publish = "parent",
+    resume = true,
+})
+assertEqual(#requests, 3, "a refused If-Range starts the transfer over")
+assertEqual(requests[3].headers["range"], nil, "the restarted request asks for the whole file")
+assertEqual(restarted.bytes, 26, "the restarted transfer reports only its own bytes")
+assertEqual(restarted.resumed, 0, "a restarted transfer continued nothing")
+assertEqual(readFile(temp_path), "JFIF-part-oneJFIF-part-two", "the stale bytes are gone")
+
+-- A file that shrank below the offset answers 416, which is the same verdict.
+requests = {}
+writeFile(temp_path, "stale-content")
+response.queue = {
+    {
+        code = 206,
+        headers = { etag = '"1a-2b"', ["content-range"] = "bytes 0-0/26" },
+        chunks = { "J" },
+    },
+    { code = 416, headers = {}, chunks = {} },
+}
+local unsatisfiable = api:downloadBlocking("/thumb", final_path, {
+    temp_path = temp_path,
+    publish = "parent",
+    resume = true,
+})
+assertEqual(#requests, 3, "an unsatisfiable range starts the transfer over")
+assertEqual(unsatisfiable.bytes, 26, "the restarted transfer completes")
+assertEqual(readFile(temp_path), "JFIF-part-oneJFIF-part-two", "the stale bytes are gone")
+
+-- An intermediary that rewrites the range answers 206 somewhere other than the
+-- offset that was asked for. Appending that to the bytes on disk would corrupt
+-- the file, so it counts as a refusal too.
+requests = {}
+writeFile(temp_path, "stale-content")
+response.queue = {
+    {
+        code = 206,
+        headers = { etag = '"1a-2b"', ["content-range"] = "bytes 0-0/26" },
+        chunks = { "J" },
+    },
+    {
+        code = 206,
+        headers = { ["content-range"] = "bytes 0-25/26" },
+        chunks = { "JFIF-part-oneJFIF-part-two" },
+    },
+}
+local misaligned = api:downloadBlocking("/thumb", final_path, {
+    temp_path = temp_path,
+    publish = "parent",
+    resume = true,
+})
+assertEqual(#requests, 3, "a range that starts elsewhere starts the transfer over")
+assertEqual(misaligned.resumed, 0, "a misaligned range is never appended to")
+assertEqual(readFile(temp_path), "JFIF-part-oneJFIF-part-two", "the file is transferred in full")
+
+-- A server that ignores the range starts sending the whole file. The probe
+-- wants headers, not bytes, so it is cut off instead of buffering a book.
+requests = {}
+writeFile(temp_path, "JFIF-part-one")
+response.queue = {
+    {
+        code = 200,
+        headers = { ["content-type"] = "image/jpeg" },
+        chunks = { string.rep("x", 4096) },
+    },
+}
+local ignored = api:downloadBlocking("/thumb", final_path, {
+    temp_path = temp_path,
+    publish = "parent",
+    resume = true,
+})
+assertEqual(#requests, 2, "a server that ignores the range authorizes no resume")
+assertEqual(requests[2].headers["range"], nil, "the transfer falls back to the whole file")
+assertEqual(ignored.resumed, 0, "nothing is continued against a server that ignores ranges")
+assertEqual(readFile(temp_path), "JFIF-part-oneJFIF-part-two", "the file is transferred in full")
+
+-- Only a strong validator proves the bytes below the offset are still current,
+-- so a weak one sends the transfer back to byte zero.
+requests = {}
+writeFile(temp_path, "JFIF-part-one")
+response.queue = {
+    {
+        code = 206,
+        headers = { etag = 'W/"1a-2b"', ["content-range"] = "bytes 0-0/26" },
+        chunks = { "J" },
+    },
+}
+local weak = api:downloadBlocking("/thumb", final_path, {
+    temp_path = temp_path,
+    publish = "parent",
+    resume = true,
+})
+assertEqual(#requests, 2, "a weak validator still costs the probe")
+assertEqual(requests[2].headers["range"], nil, "a weak validator authorizes no resume")
+assertEqual(weak.resumed, 0, "a weak validator continues nothing")
+assertEqual(readFile(temp_path), "JFIF-part-oneJFIF-part-two", "the file is transferred in full")
+os.remove(temp_path)
+
+-- Nothing on disk means nothing to continue, so the probe is skipped entirely.
+requests = {}
+response.queue = nil
+local fresh = api:downloadBlocking("/thumb", final_path, {
+    temp_path = temp_path,
+    publish = "parent",
+    resume = true,
+})
+assertEqual(#requests, 1, "an empty temporary file is not probed")
+assertEqual(requests[1].headers["range"], nil, "a first attempt asks for the whole file")
+assertEqual(fresh.resumed, 0, "a first attempt continued nothing")
+os.remove(temp_path)
+
+-- Without keep_partial a dropped link leaves nothing behind, which is what a
+-- non-resumable caller expects.
+requests = {}
+response.queue = { { chunks = { "JFIF-part-one" }, transport_error = "closed" } }
+local discarded = api:downloadBlocking("/thumb", final_path, { temp_path = temp_path })
+assertEqual(discarded, nil, "a dropped link reports failure")
+assertEqual(exists(temp_path), false, "a non-resumable transfer removes its temporary file")
+response.queue = nil
 
 -- An owned subprocess covers everything inside it: nested requests run inline
 -- in the child instead of forking a second worker.
