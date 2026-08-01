@@ -278,7 +278,13 @@ export class OpdsController {
     if (!bookFiles) throw new NotFoundException('File not found');
 
     const { absolutePath, format } = bookFiles;
-    const { size, mtimeMs } = await stat(absolutePath);
+    let size: number;
+    let mtimeMs: number;
+    try {
+      ({ size, mtimeMs } = await stat(absolutePath));
+    } catch {
+      throw new NotFoundException('File not found on disk');
+    }
 
     const filename = await this.bookService.resolveDownloadFilename({
       bookId,

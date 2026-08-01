@@ -379,4 +379,17 @@ describe('OpdsController', () => {
 
     await expect(controller.download(88, 77, { userId: 2, isSuperuser: false } as never, makeReply())).rejects.toThrow(NotFoundException);
   });
+
+  it('throws NotFoundException when the download file is missing on disk', async () => {
+    const { controller, opdsBookService } = makeController();
+    opdsBookService.getBookFiles.mockResolvedValue({
+      absolutePath: '/books/library/gone.epub',
+      format: 'epub',
+      title: 'Dune',
+      authorName: 'Frank Herbert',
+    });
+    mockStat.mockRejectedValue(Object.assign(new Error('ENOENT'), { code: 'ENOENT' }));
+
+    await expect(controller.download(99, 0, { userId: 2, isSuperuser: false } as never, makeReply())).rejects.toThrow(NotFoundException);
+  });
 });
