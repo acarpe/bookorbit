@@ -22,6 +22,7 @@ import { MAX_OFFSET_ROWS, isOffsetWithinLimit } from '../../common/constants/pag
 import { Public } from '../../common/decorators/public.decorator';
 import { imageContentTypeFromPath } from '../../common/image-content-type';
 import { contentDispositionHeader } from '../../common/utils/content-disposition.utils';
+import { sendFileWithRanges } from '../../common/utils/http-range.utils';
 import { OPDS_MIME_ACQ, OPDS_MIME_NAV, OPDS_MIME_SEARCH, fileMimeType } from './opds-xml.helpers';
 import { OpdsAuthGuard } from './opds-auth.guard';
 import type { OpdsRequestUser } from './opds-auth.guard';
@@ -268,6 +269,8 @@ export class OpdsController {
     @Query('fileId', new DefaultValuePipe(0), ParseIntPipe) fileId: number,
     @OpdsUser() user: OpdsRequestUser,
     @Res() reply: FastifyReply,
+    @Headers('range') rangeHeader?: string,
+    @Headers('if-range') ifRangeHeader?: string,
   ) {
     await this.opdsBookService.validateBookAccess(bookId, user.userId, user.isSuperuser, user.contentFilters);
 
@@ -275,8 +278,7 @@ export class OpdsController {
     if (!bookFiles) throw new NotFoundException('File not found');
 
     const { absolutePath, format } = bookFiles;
-    const { size: fileSize } = await stat(absolutePath);
-    const mime = fileMimeType(format);
+    const { size, mtimeMs } = await stat(absolutePath);
 
     const filename = await this.bookService.resolveDownloadFilename({
       bookId,
@@ -284,10 +286,15 @@ export class OpdsController {
       format: format === 'unknown' ? null : format,
     });
 
-    reply.header('Content-Disposition', contentDispositionHeader('attachment', filename, 'download'));
-    reply.header('Content-Length', fileSize);
-    reply.type(mime);
-    reply.send(createReadStream(absolutePath));
+    sendFileWithRanges(reply, {
+      path: absolutePath,
+      size,
+      mtimeMs,
+      contentType: fileMimeType(format),
+      contentDisposition: contentDispositionHeader('attachment', filename, 'download'),
+      rangeHeader,
+      ifRangeHeader,
+    });
   }
 
   private sendXml(reply: FastifyReply, xml: string, mimeType: string) {

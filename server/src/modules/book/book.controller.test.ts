@@ -284,6 +284,28 @@ describe('BookController', () => {
     expect(mockCreateReadStream).toHaveBeenCalledWith('/tmp/book.epub');
   });
 
+  it('serves a partial download when a client resumes an interrupted transfer', async () => {
+    const { controller, bookService } = makeController();
+    const { reply, headers } = makeReply();
+    bookService.getFileInfo.mockResolvedValue({
+      path: '/tmp/book.epub',
+      size: 1000,
+      mtimeMs: 5000,
+      format: 'epub',
+      bookId: 5,
+      originalFilename: 'book.epub',
+    });
+    bookService.resolveDownloadFilename.mockResolvedValue('book.epub');
+
+    await controller.downloadFile(1, makeUser(), reply, 'bytes=600-', '"3e8-1388"');
+
+    expect(reply.status).toHaveBeenCalledWith(206);
+    expect(headers['Content-Range']).toBe('bytes 600-999/1000');
+    expect(headers['Content-Length']).toBe(400);
+    expect(headers['ETag']).toBe('"3e8-1388"');
+    expect(mockCreateReadStream).toHaveBeenCalledWith('/tmp/book.epub', { start: 600, end: 999 });
+  });
+
   it('serves inline content-disposition for file stream route', async () => {
     const { controller, bookService } = makeController();
     const { reply, headers } = makeReply();
