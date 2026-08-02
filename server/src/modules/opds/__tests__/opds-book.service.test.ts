@@ -1,7 +1,12 @@
-import { ForbiddenException } from '@nestjs/common';
+vi.mock('fs/promises', () => ({ stat: vi.fn() }));
+
+import { ForbiddenException, NotFoundException } from '@nestjs/common';
+import { stat } from 'fs/promises';
 
 import { bookSeries, bookSeriesMemberships } from '../../../db/schema';
 import { OpdsBookService } from '../opds-book.service';
+
+const statMock = vi.mocked(stat);
 
 type BookPageResult = { entries: unknown[]; total: number };
 
@@ -262,6 +267,52 @@ describe('OpdsBookService', () => {
       title: 'book-7',
       authorName: '',
     });
+  });
+
+  it('resolves getDownloadTarget with the size and mtime of the file on disk', async () => {
+    const { service } = makeService();
+    vi.spyOn(service, 'getBookFiles').mockResolvedValue({
+      absolutePath: '/books/a.epub',
+      format: 'epub',
+      title: 'A',
+      authorName: 'B',
+    });
+    statMock.mockResolvedValue({ size: 4096, mtimeMs: 1_700_000_000_000 } as never);
+
+    await expect(service.getDownloadTarget(7, 42)).resolves.toEqual({
+      absolutePath: '/books/a.epub',
+      format: 'epub',
+      size: 4096,
+      mtimeMs: 1_700_000_000_000,
+    });
+  });
+
+  it('reports a missing download file as not found and propagates every other stat failure', async () => {
+    const { service } = makeService();
+    vi.spyOn(service, 'getBookFiles').mockResolvedValue({
+      absolutePath: '/books/a.epub',
+      format: 'epub',
+      title: 'A',
+      authorName: 'B',
+    });
+
+    statMock.mockRejectedValueOnce(Object.assign(new Error('missing'), { code: 'ENOENT' }));
+    await expect(service.getDownloadTarget(7)).rejects.toThrow(NotFoundException);
+
+    statMock.mockRejectedValueOnce(Object.assign(new Error('missing'), { code: 'ENOTDIR' }));
+    await expect(service.getDownloadTarget(7)).rejects.toThrow(NotFoundException);
+
+    statMock.mockRejectedValueOnce(Object.assign(new Error('denied'), { code: 'EACCES' }));
+    await expect(service.getDownloadTarget(7)).rejects.toThrow('denied');
+  });
+
+  it('reports an unknown download file as not found without touching the filesystem', async () => {
+    const { service } = makeService();
+    vi.spyOn(service, 'getBookFiles').mockResolvedValue(null);
+    statMock.mockClear();
+
+    await expect(service.getDownloadTarget(7, 42)).rejects.toThrow(NotFoundException);
+    expect(statMock).not.toHaveBeenCalled();
   });
 
   it('applies text search inside smartScope when q is provided', async () => {
