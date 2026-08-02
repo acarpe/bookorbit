@@ -9,7 +9,7 @@ vi.mock('fs/promises', () => ({
 import { createReadStream } from 'fs';
 import { join } from 'path';
 import { stat } from 'fs/promises';
-import { BadRequestException, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Logger, NotFoundException } from '@nestjs/common';
 import { DEFAULT_KOREADER_DEVICE_PATTERN } from '@bookorbit/types';
 import type { MockedFunction } from 'vitest';
 
@@ -908,6 +908,32 @@ describe('KoreaderCatalogService', () => {
     expect(reply.status).toHaveBeenCalledWith(416);
     expect(reply.header).toHaveBeenCalledWith('Content-Range', 'bytes */1234');
     expect(mockCreateReadStream).not.toHaveBeenCalled();
+  });
+
+  it('reports a missing content file as not found and propagates every other stat failure', async () => {
+    const { service } = makeService();
+
+    mockStat.mockRejectedValueOnce(Object.assign(new Error('gone'), { code: 'ENOENT' }));
+    await expect(service.streamFile(makeUser(), 100, makeReply() as never)).rejects.toThrow(NotFoundException);
+
+    mockStat.mockRejectedValueOnce(Object.assign(new Error('denied'), { code: 'EACCES' }));
+    await expect(service.streamFile(makeUser(), 100, makeReply() as never)).rejects.toThrow('denied');
+  });
+
+  it('logs the download start before any check that can fail, and a matching failure', async () => {
+    const { service, bookService } = makeService();
+    const logSpy = vi.spyOn(Logger.prototype, 'log').mockImplementation(() => undefined);
+    const warnSpy = vi.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
+    bookService.verifyFileAccess.mockRejectedValueOnce(new NotFoundException('File not found'));
+
+    await expect(service.streamFile(makeUser(), 100, makeReply() as never, { rangeHeader: 'bytes=10-' })).rejects.toThrow(NotFoundException);
+
+    expect(logSpy).toHaveBeenCalledWith(expect.stringContaining('[koreader.catalog_download] [start] fileId=100 userId=1 range="bytes=10-"'));
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('[koreader.catalog_download] [fail] fileId=100 userId=1 durationMs='));
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('errorClass=NotFoundException error="File not found"'));
+
+    logSpy.mockRestore();
+    warnSpy.mockRestore();
   });
 
   it('encodes non-ASCII content file download filenames for Content-Disposition', async () => {
