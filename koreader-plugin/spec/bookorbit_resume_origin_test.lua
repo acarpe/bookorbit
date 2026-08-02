@@ -153,4 +153,30 @@ assertEqual(ResumeOrigin.save("/tmp/spec2.part", origin, failing), false, "a fai
 assertEqual(store["/tmp/spec2.part.origin"], nil, "a failed publish leaves nothing visible")
 assertEqual(store["/tmp/spec2.part.origin.tmp"], nil, "a failed publish removes its temporary file")
 
+-- A short write is what a full disk leaves. Publishing it would rename a
+-- truncated claim into the place a later attempt reads as authoritative.
+local short = stubbedStore()
+short.write = function(_, path)
+    store[path] = "bookorbit-res"
+    return nil, "no space left on device"
+end
+assertEqual(ResumeOrigin.save("/tmp/spec3.part", origin, short), false, "a failed write reports failure")
+assertEqual(store["/tmp/spec3.part.origin"], nil, "a failed write publishes nothing")
+assertEqual(store["/tmp/spec3.part.origin.tmp"], nil, "a failed write removes what it did manage to write")
+
+-- Lua's os.rename refuses an existing destination on Windows. Refreshing a
+-- record has to work there too, or a record ages out of the stale sweep under a
+-- partial that is still being filled.
+local windows = stubbedStore()
+local posix_rename = windows.rename
+windows.rename = function(from, to)
+    if store[to] ~= nil then return nil, "destination exists" end
+    return posix_rename(from, to)
+end
+assertEqual(ResumeOrigin.save("/tmp/spec4.part", origin, windows), true, "a first publish succeeds")
+assertEqual(ResumeOrigin.save("/tmp/spec4.part", origin, windows), true, "a record can be refreshed in place")
+assertEqual(ResumeOrigin.load("/tmp/spec4.part", windows).validator, '"1a2b-3c4d"',
+    "the refreshed record still reads back")
+assertEqual(store["/tmp/spec4.part.origin.tmp"], nil, "refreshing leaves no temporary file behind")
+
 print("bookorbit_resume_origin_test.lua: ok")
