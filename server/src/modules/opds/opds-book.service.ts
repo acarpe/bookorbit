@@ -689,6 +689,7 @@ export class OpdsBookService {
     const file = await this.getBookFiles(bookId, fileId);
     if (!file) throw new NotFoundException('File not found');
 
+    const start = Date.now();
     try {
       const { size, mtimeMs } = await stat(file.absolutePath);
       return { absolutePath: file.absolutePath, format: file.format, size, mtimeMs };
@@ -696,7 +697,7 @@ export class OpdsBookService {
       if (isMissingFilesystemEntry(err)) throw new NotFoundException('File not found on disk');
       const error = err instanceof Error ? err : new Error(String(err));
       this.logger.error(
-        `[opds.download] [fail] bookId=${bookId} fileId=${fileId ?? 0} errorClass=${error.constructor.name} error="${sanitizeLogValue(error.message)}" - download file stat failed`,
+        `[opds.download] [fail] bookId=${bookId} fileId=${fileId ?? 0} durationMs=${Date.now() - start} errorClass=${error.constructor.name} error="${sanitizeLogValue(error.message)}" - download file stat failed`,
       );
       throw err;
     }
