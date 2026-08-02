@@ -105,7 +105,7 @@ export class KoboDownloadService {
       this.logger.warn(
         `[kobo.download] [fail] bookId=${bookId} fileId=${fileId} durationMs=${Date.now() - start} errorClass=${error.constructor.name} error="${sanitizeLogValue(error.message)}" - kepub conversion failed, falling back to epub`,
       );
-      return this.streamFile(sourcePath, fileId, 'epub', reply, range);
+      return this.streamFile(sourcePath, fileId, 'epub', reply, {});
     }
   }
 }

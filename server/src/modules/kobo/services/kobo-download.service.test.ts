@@ -247,4 +247,49 @@ describe('KoboDownloadService', () => {
 
     expect(streamFileSpy).toHaveBeenLastCalledWith('/books/source.epub', 55, 'epub', expect.anything(), {});
   });
+
+  it('streamKepub drops the range when it falls back to the source epub', async () => {
+    const deps = makeDeps();
+    deps.kepubConversionService.getKepubPath.mockRejectedValue(new Error('convert failed'));
+    const service = makeService(deps);
+    const streamFileSpy = vi.spyOn(service as any, 'streamFile').mockResolvedValue(undefined);
+
+    await (service as any).streamKepub('/books/source.epub', 'hash', 44, 55, false, makeReply(), {
+      rangeHeader: 'bytes=400-',
+      ifRangeHeader: '"kepub-etag"',
+    });
+
+    expect(streamFileSpy).toHaveBeenLastCalledWith('/books/source.epub', 55, 'epub', expect.anything(), {});
+  });
+
+  it('streamFile serves the whole file when If-Range no longer matches', async () => {
+    const deps = makeDeps();
+    const service = makeService(deps);
+    const reply = makeReply();
+    statMock.mockResolvedValueOnce({ size: 1000, mtimeMs: 1_700_000_000_000 } as never);
+    createReadStreamMock.mockReturnValue({} as never);
+
+    await (service as any).streamFile('/books/book.epub', 99, 'epub', reply, {
+      rangeHeader: 'bytes=400-',
+      ifRangeHeader: '"stale-1"',
+    });
+
+    expect(reply.status).not.toHaveBeenCalledWith(206);
+    expect(reply.header).toHaveBeenCalledWith('Content-Length', 1000);
+    expect(createReadStreamMock).toHaveBeenCalledWith('/books/book.epub');
+  });
+
+  it('streamFile answers 416 for an offset past the end of the file', async () => {
+    const deps = makeDeps();
+    const service = makeService(deps);
+    const reply = makeReply();
+    statMock.mockResolvedValueOnce({ size: 1000, mtimeMs: 1_700_000_000_000 } as never);
+    createReadStreamMock.mockClear();
+
+    await (service as any).streamFile('/books/book.epub', 99, 'epub', reply, { rangeHeader: 'bytes=1000-' });
+
+    expect(reply.status).toHaveBeenCalledWith(416);
+    expect(reply.header).toHaveBeenCalledWith('Content-Range', 'bytes */1000');
+    expect(createReadStreamMock).not.toHaveBeenCalled();
+  });
 });
