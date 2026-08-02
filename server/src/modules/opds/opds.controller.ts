@@ -274,17 +274,7 @@ export class OpdsController {
   ) {
     await this.opdsBookService.validateBookAccess(bookId, user.userId, user.isSuperuser, user.contentFilters);
 
-    const bookFiles = await this.opdsBookService.getBookFiles(bookId, fileId);
-    if (!bookFiles) throw new NotFoundException('File not found');
-
-    const { absolutePath, format } = bookFiles;
-    let size: number;
-    let mtimeMs: number;
-    try {
-      ({ size, mtimeMs } = await stat(absolutePath));
-    } catch {
-      throw new NotFoundException('File not found on disk');
-    }
+    const { absolutePath, format, size, mtimeMs } = await this.opdsBookService.getDownloadTarget(bookId, fileId);
 
     const filename = await this.bookService.resolveDownloadFilename({
       bookId,

@@ -48,6 +48,12 @@ function makeController() {
       title: 'Book Title',
       authorName: 'Author Name',
     }),
+    getDownloadTarget: vi.fn().mockResolvedValue({
+      absolutePath: '/books/library/book.epub',
+      format: 'epub',
+      size: 12345,
+      mtimeMs: 5000,
+    }),
   } as never;
   const config = {
     get: vi.fn().mockReturnValue('/books'),
@@ -331,13 +337,12 @@ describe('OpdsController', () => {
     const reply = makeReply();
     const stream = { kind: 'download-stream' };
 
-    opdsBookService.getBookFiles.mockResolvedValue({
+    opdsBookService.getDownloadTarget.mockResolvedValue({
       absolutePath: '/books/library/book.epub',
       format: 'epub',
-      title: 'Bad:/Title*',
-      authorName: 'Au<th>or',
+      size: 12345,
+      mtimeMs: 5000,
     });
-    mockStat.mockResolvedValue({ size: 12345, mtimeMs: 5000 } as never);
     mockCreateReadStream.mockReturnValue(stream as never);
 
     await controller.download(99, 0, { userId: 2, isSuperuser: false } as never, reply);
@@ -356,13 +361,12 @@ describe('OpdsController', () => {
     const { controller, opdsBookService } = makeController();
     const reply = makeReply();
 
-    opdsBookService.getBookFiles.mockResolvedValue({
+    opdsBookService.getDownloadTarget.mockResolvedValue({
       absolutePath: '/books/library/book.epub',
       format: 'epub',
-      title: 'Dune',
-      authorName: 'Frank Herbert',
+      size: 12345,
+      mtimeMs: 5000,
     });
-    mockStat.mockResolvedValue({ size: 12345, mtimeMs: 5000 } as never);
     mockCreateReadStream.mockReturnValue({} as never);
 
     await controller.download(99, 0, { userId: 2, isSuperuser: false } as never, reply, 'bytes=12000-', '"3039-1388"');
@@ -373,23 +377,11 @@ describe('OpdsController', () => {
     expect(mockCreateReadStream).toHaveBeenCalledWith('/books/library/book.epub', { start: 12000, end: 12344 });
   });
 
-  it('throws NotFoundException when requested download file is unavailable', async () => {
+  it('propagates the not-found the download target lookup raises', async () => {
     const { controller, opdsBookService } = makeController();
-    opdsBookService.getBookFiles.mockResolvedValue(null);
+    opdsBookService.getDownloadTarget.mockRejectedValue(new NotFoundException('File not found'));
 
     await expect(controller.download(88, 77, { userId: 2, isSuperuser: false } as never, makeReply())).rejects.toThrow(NotFoundException);
-  });
-
-  it('throws NotFoundException when the download file is missing on disk', async () => {
-    const { controller, opdsBookService } = makeController();
-    opdsBookService.getBookFiles.mockResolvedValue({
-      absolutePath: '/books/library/gone.epub',
-      format: 'epub',
-      title: 'Dune',
-      authorName: 'Frank Herbert',
-    });
-    mockStat.mockRejectedValue(Object.assign(new Error('ENOENT'), { code: 'ENOENT' }));
-
-    await expect(controller.download(99, 0, { userId: 2, isSuperuser: false } as never, makeReply())).rejects.toThrow(NotFoundException);
+    expect(opdsBookService.getDownloadTarget).toHaveBeenCalledWith(88, 77);
   });
 });

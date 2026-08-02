@@ -1,9 +1,12 @@
-import { ForbiddenException, Inject, Injectable } from '@nestjs/common';
+import { ForbiddenException, Inject, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { stat } from 'fs/promises';
 import { SQL, and, count, eq, gt, inArray, or, sql } from 'drizzle-orm';
 import { NodePgDatabase } from 'drizzle-orm/node-postgres';
 
 import { DB } from '../../db';
 import { accentInsensitiveIlike, buildSearchPattern } from '../../common/utils/accent-insensitive-search.utils';
+import { isMissingFilesystemEntry } from '../../common/utils/fs-error.utils';
+import { sanitizeLogValue } from '../../common/utils/log-sanitize.utils';
 import * as schema from '../../db/schema';
 import {
   authors,
@@ -133,6 +136,8 @@ export interface OpdsManifestBookRow {
 
 @Injectable()
 export class OpdsBookService {
+  private readonly logger = new Logger(OpdsBookService.name);
+
   constructor(
     @Inject(DB) private readonly db: Db,
     private readonly queryBuilder: BookQueryBuilder,
@@ -678,6 +683,23 @@ export class OpdsBookService {
       title: file.title ?? `book-${bookId}`,
       authorName: authorRow?.name ?? '',
     };
+  }
+
+  async getDownloadTarget(bookId: number, fileId?: number): Promise<{ absolutePath: string; format: string; size: number; mtimeMs: number }> {
+    const file = await this.getBookFiles(bookId, fileId);
+    if (!file) throw new NotFoundException('File not found');
+
+    try {
+      const { size, mtimeMs } = await stat(file.absolutePath);
+      return { absolutePath: file.absolutePath, format: file.format, size, mtimeMs };
+    } catch (err) {
+      if (isMissingFilesystemEntry(err)) throw new NotFoundException('File not found on disk');
+      const error = err instanceof Error ? err : new Error(String(err));
+      this.logger.error(
+        `[opds.download] [fail] bookId=${bookId} fileId=${fileId ?? 0} errorClass=${error.constructor.name} error="${sanitizeLogValue(error.message)}" - download file stat failed`,
+      );
+      throw err;
+    }
   }
 
   private async buildSmartScopeWhere(
