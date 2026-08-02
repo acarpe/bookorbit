@@ -19,7 +19,8 @@ export type ParsedRange = ByteRange | 'unsatisfiable' | null;
 /**
  * Range headers as they arrive from a client, threaded down to the stream
  * helper. A repeated header reaches Fastify as an array, which is malformed for
- * both of these and is treated as absent.
+ * both of these: a repeated Range means no usable range, while a repeated
+ * If-Range means an unmet precondition rather than an absent one.
  */
 export interface FileRangeRequest {
   rangeHeader?: string | string[];
@@ -87,10 +88,13 @@ export function parseRangeHeader(header: string | string[] | undefined, size: nu
 /**
  * If-Range demands strong comparison, so a weak entity tag never authorizes a
  * partial response: the client gets the full file back instead of silently
- * splicing bytes from a representation that may have changed.
+ * splicing bytes from a representation that may have changed. Only a genuinely
+ * absent header skips the check; a repeated one arrives as an array and is
+ * unsatisfied, since guessing which value the client meant could splice.
  */
 export function isIfRangeSatisfied(ifRangeHeader: string | string[] | undefined, etag: string, lastModified: string): boolean {
-  if (typeof ifRangeHeader !== 'string') return true;
+  if (ifRangeHeader === undefined) return true;
+  if (typeof ifRangeHeader !== 'string') return false;
   const value = ifRangeHeader.trim();
   if (value === '') return true;
   if (value.startsWith('W/')) return false;
