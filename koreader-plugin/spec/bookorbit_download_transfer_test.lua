@@ -87,6 +87,25 @@ os.rename = function(from, to)
     return true
 end
 
+-- The origin record is dropped through os.remove rather than util.removeFile,
+-- because it belongs to the module that writes it. Counting those separately is
+-- what proves a record never outlives the partial it vouches for.
+local unlinked = {}
+local real_os_remove = os.remove
+os.remove = function(path)
+    table.insert(unlinked, path)
+    files[path] = nil
+    return true
+end
+
+local function originsDropped()
+    local count = 0
+    for _, path in ipairs(unlinked) do
+        if path:find("%.origin$") then count = count + 1 end
+    end
+    return count
+end
+
 local function runScheduled()
     local pending = scheduled
     scheduled = {}
@@ -205,6 +224,7 @@ assertEqual(resume_opts.keep_partial, true, "the child leaves them behind when t
 -- reached the disk survives for the caller's own retry after that.
 renames = {}
 removed = {}
+unlinked = {}
 local attempts = 0
 local dropped, dropped_err = Transfer.run{
     root = "/downloads",
@@ -220,12 +240,14 @@ assertEqual(attempts, Transfer.MAX_ATTEMPTS, "a dropped link is retried inside t
 assertEqual(dropped, nil, "an exhausted retry still reports failure")
 assertEqual(dropped_err, "closed", "the last transport error reaches the caller")
 assertEqual(#removed, 0, "the partial file stays for the next attempt at this file")
+assertEqual(originsDropped(), 0, "the record that proves those bytes stays with them")
 
 -- A server verdict will not change on a second try, and neither will a response
 -- the client itself refused, so both stop after one attempt and take the
 -- worthless bytes with them.
 attempts = 0
 removed = {}
+unlinked = {}
 local refused, refused_err = Transfer.run{
     root = "/downloads",
     destination = "/downloads/Books/f.epub",
@@ -240,6 +262,7 @@ assertEqual(attempts, 1, "an http status is not retried")
 assertEqual(refused, nil, "an http status reports failure")
 assertEqual(refused_err, 404, "the status code reaches the caller")
 assertEqual(#removed, 1, "a refused transfer removes its temporary file")
+assertEqual(originsDropped() > 0, true, "a record never outlives the partial it describes")
 
 attempts = 0
 removed = {}
@@ -334,5 +357,6 @@ assertEqual(unsafe_err, "unsafe_destination", "an unauthorized destination says 
 assertEqual(requested, false, "an unauthorized destination never starts a transfer")
 
 os.rename = real_rename
+os.remove = real_os_remove
 
 print("bookorbit_download_transfer_test.lua: ok")

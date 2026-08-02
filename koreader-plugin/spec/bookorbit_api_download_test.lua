@@ -125,6 +125,7 @@ package.loaded["ui/trapper"] = {
 package.path = "koreader-plugin/bookorbit.koplugin/?.lua;" .. package.path
 
 local BookOrbitApi = require("bookorbit_api")
+local ResumeOrigin = require("bookorbit_resume_origin")
 
 local function assertEqual(actual, expected, label)
     if actual ~= expected then
@@ -318,18 +319,43 @@ local function writeFile(path, content)
     handle:close()
 end
 
+-- Leaves a partial the way an interrupted attempt does: the bytes, plus the
+-- record written before the first of them that says what they are. Bytes
+-- without that record are unproven and get discarded, so seeding one without
+-- the other would test a state the transfer never produces.
+local function writePartial(content, record)
+    writeFile(temp_path, content)
+    assert(ResumeOrigin.save(temp_path, record or {
+        url = "https://books.example.com/api/v1/thumb",
+        username = "reader",
+        validator = '"1a-2b"',
+        total = 26,
+    }), "the seeded record must be persistable")
+end
+
 -- A link that drops mid-body leaves the bytes it already delivered behind, so
--- the next attempt has something to continue from.
+-- the next attempt has something to continue from. The record naming the
+-- representation they came from was written before the first of them landed,
+-- which is what makes them safe to continue rather than merely present.
 requests = {}
-response.queue = { { chunks = { "JFIF-part-one" }, transport_error = "closed" } }
+response.queue = {
+    {
+        code = 206,
+        headers = { etag = '"1a-2b"', ["content-range"] = "bytes 0-0/26" },
+        chunks = { "J" },
+    },
+    { chunks = { "JFIF-part-one" }, transport_error = "closed" },
+}
 local dropped, drop_err = api:downloadBlocking("/thumb", final_path, {
     temp_path = temp_path,
+    resume = true,
     keep_partial = true,
 })
 assertEqual(dropped, nil, "a dropped link reports failure")
 assertEqual(drop_err, "closed", "the transport error reaches the caller")
 assertEqual(exists(final_path), false, "a dropped link publishes nothing")
 assertEqual(readFile(temp_path), "JFIF-part-one", "the delivered bytes stay for the next attempt")
+assertEqual(exists(ResumeOrigin.path(temp_path)), true, "the record stays with the bytes it vouches for")
 
 -- That next attempt probes the remote file for a validator, hands it back in
 -- If-Range and asks only for the remainder.
@@ -361,12 +387,101 @@ assertEqual(type(continued), "table", "a resumed transfer returns its result")
 assertEqual(continued.bytes, 26, "the byte count covers the whole file, not just this attempt")
 assertEqual(continued.resumed, 13, "the result reports how much was already on disk")
 assertEqual(readFile(temp_path), "JFIF-part-oneJFIF-part-two", "the remainder is appended to the bytes on disk")
+assertEqual(exists(ResumeOrigin.path(temp_path)), false, "a completed transfer takes its record with it")
+os.remove(temp_path)
+
+-- The file the bytes came from changed while the transfer was interrupted. The
+-- probe reports the new representation, so If-Range would match it trivially
+-- and splice new bytes onto old ones. Only the record written before the old
+-- bytes landed can tell them apart, and it does.
+requests = {}
+writePartial("OLD-part-one", {
+    url = "https://books.example.com/api/v1/thumb",
+    username = "reader",
+    validator = '"aa-bb"',
+    total = 26,
+})
+-- The server here honors the stale offset rather than refusing it, which is
+-- what makes this a corruption and not a wasted request: the old prefix and the
+-- new remainder add up to the advertised length and publish as complete.
+response.queue = {
+    {
+        code = 206,
+        headers = { etag = '"1a-2b"', ["content-range"] = "bytes 0-0/26" },
+        chunks = { "J" },
+    },
+    {
+        code = 206,
+        headers = { ["content-range"] = "bytes 12-25/26" },
+        chunks = { "NEW-remainder!" },
+    },
+}
+local rewritten = api:downloadBlocking("/thumb", final_path, {
+    temp_path = temp_path,
+    publish = "parent",
+    resume = true,
+    keep_partial = true,
+})
+assertEqual(#requests, 2, "a changed representation still runs the transfer")
+assertEqual(requests[2].headers["range"], nil, "bytes from another representation are never continued")
+assertEqual(rewritten.resumed, 0, "a changed representation continues nothing")
+assertEqual(readFile(temp_path), "NEW-remainder!", "the old prefix is gone rather than spliced onto")
+os.remove(temp_path)
+
+-- Same file, same length, same validator, but recorded against another server
+-- or account. Resume keys are derived from the file id alone, so without the
+-- origin check this would continue into a stranger's partial.
+requests = {}
+writePartial("JFIF-part-one", {
+    url = "https://other.example.com/api/v1/thumb",
+    username = "reader",
+    validator = '"1a-2b"',
+    total = 26,
+})
+response.queue = {
+    {
+        code = 206,
+        headers = { etag = '"1a-2b"', ["content-range"] = "bytes 0-0/26" },
+        chunks = { "J" },
+    },
+}
+local foreign = api:downloadBlocking("/thumb", final_path, {
+    temp_path = temp_path,
+    publish = "parent",
+    resume = true,
+    keep_partial = true,
+})
+assertEqual(requests[2].headers["range"], nil, "a partial recorded elsewhere is never continued")
+assertEqual(foreign.resumed, 0, "a foreign origin continues nothing")
+os.remove(temp_path)
+
+-- Bytes nobody vouched for are the pre-upgrade case and the corrupted-sidecar
+-- case at once. They are discarded rather than trusted.
+requests = {}
+writeFile(temp_path, "JFIF-part-one")
+response.queue = {
+    {
+        code = 206,
+        headers = { etag = '"1a-2b"', ["content-range"] = "bytes 0-0/26" },
+        chunks = { "J" },
+    },
+}
+local unproven = api:downloadBlocking("/thumb", final_path, {
+    temp_path = temp_path,
+    publish = "parent",
+    resume = true,
+    keep_partial = true,
+})
+assertEqual(requests[2].headers["range"], nil, "an unrecorded partial is never continued")
+assertEqual(unproven.resumed, 0, "an unrecorded partial continues nothing")
+assertEqual(readFile(temp_path), "JFIF-part-oneJFIF-part-two", "the unproven bytes are replaced")
+os.remove(temp_path)
 
 -- A server that refuses If-Range answers with the whole file. The bytes on disk
 -- describe a representation it no longer serves, so they are dropped and the
 -- transfer starts over rather than appending to them.
 requests = {}
-writeFile(temp_path, "stale-content")
+writePartial("stale-content")
 response.queue = {
     {
         code = 206,
@@ -392,7 +507,7 @@ assertEqual(readFile(temp_path), "JFIF-part-oneJFIF-part-two", "the stale bytes 
 
 -- A file that shrank below the offset answers 416, which is the same verdict.
 requests = {}
-writeFile(temp_path, "stale-content")
+writePartial("stale-content")
 response.queue = {
     {
         code = 206,
@@ -414,7 +529,7 @@ assertEqual(readFile(temp_path), "JFIF-part-oneJFIF-part-two", "the stale bytes 
 -- offset that was asked for. Appending that to the bytes on disk would corrupt
 -- the file, so it counts as a refusal too.
 requests = {}
-writeFile(temp_path, "stale-content")
+writePartial("stale-content")
 response.queue = {
     {
         code = 206,
@@ -439,7 +554,7 @@ assertEqual(readFile(temp_path), "JFIF-part-oneJFIF-part-two", "the file is tran
 -- A server that ignores the range starts sending the whole file. The probe
 -- wants headers, not bytes, so it is cut off instead of buffering a book.
 requests = {}
-writeFile(temp_path, "JFIF-part-one")
+writePartial("JFIF-part-one")
 response.queue = {
     {
         code = 200,
@@ -460,7 +575,7 @@ assertEqual(readFile(temp_path), "JFIF-part-oneJFIF-part-two", "the file is tran
 -- Only a strong validator proves the bytes below the offset are still current,
 -- so a weak one sends the transfer back to byte zero.
 requests = {}
-writeFile(temp_path, "JFIF-part-one")
+writePartial("JFIF-part-one")
 response.queue = {
     {
         code = 206,
@@ -479,17 +594,104 @@ assertEqual(weak.resumed, 0, "a weak validator continues nothing")
 assertEqual(readFile(temp_path), "JFIF-part-oneJFIF-part-two", "the file is transferred in full")
 os.remove(temp_path)
 
--- Nothing on disk means nothing to continue, so the probe is skipped entirely.
+-- Nothing on disk means nothing to continue, but the probe still runs: its
+-- answer is the record this attempt writes before its first byte, and without
+-- one the bytes it leaves behind could never be resumed.
 requests = {}
-response.queue = nil
+response.queue = {
+    {
+        code = 206,
+        headers = { etag = '"1a-2b"', ["content-range"] = "bytes 0-0/26" },
+        chunks = { "J" },
+    },
+}
 local fresh = api:downloadBlocking("/thumb", final_path, {
     temp_path = temp_path,
     publish = "parent",
     resume = true,
 })
-assertEqual(#requests, 1, "an empty temporary file is not probed")
-assertEqual(requests[1].headers["range"], nil, "a first attempt asks for the whole file")
+assertEqual(#requests, 2, "a first attempt is probed so it can record its origin")
+assertEqual(requests[2].headers["range"], nil, "a first attempt asks for the whole file")
 assertEqual(fresh.resumed, 0, "a first attempt continued nothing")
+assertEqual(exists(ResumeOrigin.path(temp_path)), false, "a complete transfer leaves no record behind")
+os.remove(temp_path)
+
+-- A link that drops during the probe says nothing about the bytes on disk. It
+-- must not cost them: the attempt gives up while they are still there, and the
+-- error is retryable so the caller comes back for them.
+requests = {}
+writePartial("JFIF-part-one")
+response.queue = { { chunks = {}, transport_error = "closed" } }
+local probe_dropped, probe_err = api:downloadBlocking("/thumb", final_path, {
+    temp_path = temp_path,
+    publish = "parent",
+    resume = true,
+    keep_partial = true,
+})
+assertEqual(probe_dropped, nil, "a probe that loses the link reports failure")
+assertEqual(probe_err, "probe_failed", "the caller is told the probe failed, not the transfer")
+assertEqual(#requests, 1, "a failed probe never starts the transfer")
+assertEqual(readFile(temp_path), "JFIF-part-one", "a failed probe leaves the saved partial alone")
+assertEqual(exists(ResumeOrigin.path(temp_path)), true, "a failed probe leaves the record that proves them")
+
+-- A server that answers and cannot support the resume is a settled verdict, so
+-- the transfer proceeds from zero rather than reporting a retryable failure.
+requests = {}
+response.queue = {
+    { code = 404, headers = {}, chunks = {} },
+    { code = 200, headers = { ["content-type"] = "image/jpeg" }, chunks = { "JFIF-part-one", "JFIF-part-two" } },
+}
+local unsupported = api:downloadBlocking("/thumb", final_path, {
+    temp_path = temp_path,
+    publish = "parent",
+    resume = true,
+    keep_partial = true,
+})
+assertEqual(#requests, 2, "a settled probe answer still runs the transfer")
+assertEqual(requests[2].headers["range"], nil, "a probe the server refused authorizes no resume")
+assertEqual(unsupported.resumed, 0, "nothing is continued when the probe was refused")
+os.remove(temp_path)
+
+-- A temporary file that opens but refuses to seek would append at byte zero
+-- while still counting from the offset, publishing a corrupt file as complete.
+-- The transfer restarts instead.
+requests = {}
+writePartial("JFIF-part-one")
+local real_open = io.open
+io.open = function(path, mode)
+    local handle = real_open(path, mode)
+    if not handle or path ~= temp_path or mode ~= "r+b" then return handle end
+    -- A file handle is userdata and takes no stubbed field, so the refusal is
+    -- staged on a proxy that forwards everything else to the real handle.
+    return {
+        seek = function() return nil, "seek_failed" end,
+        write = function(_, ...) return handle:write(...) end,
+        close = function() return handle:close() end,
+    }
+end
+response.queue = {
+    {
+        code = 206,
+        headers = { etag = '"1a-2b"', ["content-range"] = "bytes 0-0/26" },
+        chunks = { "J" },
+    },
+    {
+        code = 200,
+        headers = { ["content-type"] = "image/jpeg" },
+        chunks = { "JFIF-part-one", "JFIF-part-two" },
+    },
+}
+local unseekable = api:downloadBlocking("/thumb", final_path, {
+    temp_path = temp_path,
+    publish = "parent",
+    resume = true,
+    keep_partial = true,
+})
+io.open = real_open
+assertEqual(requests[2].headers["range"], nil, "a failed seek restarts the transfer from zero")
+assertEqual(unseekable.resumed, 0, "a failed seek continues nothing")
+assertEqual(unseekable.bytes, 26, "the restarted transfer counts only its own bytes")
+assertEqual(readFile(temp_path), "JFIF-part-oneJFIF-part-two", "the restarted body replaces the partial")
 os.remove(temp_path)
 
 -- Without keep_partial a dropped link leaves nothing behind, which is what a

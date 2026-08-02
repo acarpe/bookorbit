@@ -14,6 +14,7 @@ local socketutil = require("socketutil")
 local logger = require("logger")
 local util = require("util")
 
+local ResumeOrigin = require("bookorbit_resume_origin")
 local TransferPolicy = require("bookorbit_transfer_policy")
 local TransferProgress = require("bookorbit_transfer_progress")
 
@@ -300,16 +301,25 @@ end
 -- after the body completed, so it cannot record a validator of its own; probing
 -- gives the next attempt one to hand back in If-Range, which is what proves the
 -- bytes already on disk still belong to the representation being continued.
+--
+-- Returns validator, total on success. On failure the third return separates a
+-- link that dropped ("transport", worth another attempt) from a server that
+-- answered and cannot support this resume ("unsupported", settled). The caller
+-- has bytes on disk riding on that distinction.
 function BookOrbitApi:probeRange(url)
     -- The probe wants headers, not bytes. A server that ignores the range would
     -- otherwise stream a whole book into memory before we could see its status,
     -- so the body is discarded and the request is cut off past one byte.
     local probed = 0
+    local overran = false
     local sink = function(chunk, err)
         if err then return nil, err end
         if chunk and chunk ~= "" then
             probed = probed + #chunk
-            if probed > MAX_PROBE_BYTES then return nil, "probe_too_large" end
+            if probed > MAX_PROBE_BYTES then
+                overran = true
+                return nil, "probe_too_large"
+            end
         end
         return 1
     end
@@ -329,14 +339,19 @@ function BookOrbitApi:probeRange(url)
     })
     socketutil:reset_timeout()
 
-    if code ~= 206 or type(headers) ~= "table" then return nil end
+    -- Cutting the body off is reported the same way a dead socket is, so the
+    -- flag is what separates them. A server that answered with more than a
+    -- range's worth of bytes has settled the question: it ignores ranges.
+    if overran then return nil, nil, "unsupported" end
+    if type(code) ~= "number" then return nil, nil, "transport" end
+    if code ~= 206 or type(headers) ~= "table" then return nil, nil, "unsupported" end
     local validator = headers["etag"] or headers["ETag"]
     local content_range = headers["content-range"] or headers["Content-Range"]
     local total = type(content_range) == "string" and tonumber(content_range:match("/(%d+)%s*$")) or nil
     -- A weak validator cannot authorize a resume: only a strong one guarantees
     -- the bytes below the offset are the same bytes the server would send now.
-    if type(validator) ~= "string" or validator:sub(1, 1) ~= '"' then return nil end
-    if not total or total <= 0 then return nil end
+    if type(validator) ~= "string" or validator:sub(1, 1) ~= '"' then return nil, nil, "unsupported" end
+    if not total or total <= 0 then return nil, nil, "unsupported" end
     return validator, total
 end
 
@@ -352,6 +367,10 @@ end
 -- earlier attempt left in the temporary file are continued through a Range
 -- request instead of being transferred again; keep_partial then leaves them on
 -- disk when the link drops, which is what makes the next attempt a resume.
+--
+-- Resuming costs one extra request. It probes the remote file before writing
+-- anything, so this attempt records which representation its bytes came from
+-- and the next one can tell them apart from a file that changed underneath it.
 function BookOrbitApi:downloadBlocking(path, local_path, opts)
     opts = opts or {}
     local temp_path = opts.temp_path or (local_path .. ".part")
@@ -363,17 +382,45 @@ function BookOrbitApi:downloadBlocking(path, local_path, opts)
 
     local resume_from, validator = 0, nil
     local total_bytes = tonumber(opts.expected_bytes) or 0
+    -- The probe runs even with nothing on disk, because its answer is what the
+    -- origin record is made of and that record has to exist before the first
+    -- byte of this attempt lands. Probing only when a partial exists would
+    -- leave the first attempt unrecorded, and an unrecorded partial is exactly
+    -- what the next attempt has to throw away.
     if opts.resume then
+        local probed_validator, probed_total, probe_err = self:probeRange(current_url)
+        -- A link that dropped mid-probe says nothing about the bytes on disk.
+        -- Falling through would open the temporary file with "w" and destroy
+        -- exactly what the next attempt exists to continue, so this returns
+        -- instead, retryable and with the partial untouched.
+        if probe_err == "transport" then return nil, "probe_failed" end
+
+        local origin = probed_validator and {
+            url = current_url,
+            username = self.username,
+            validator = probed_validator,
+            total = probed_total,
+        } or nil
         local on_disk = fileSize(temp_path)
-        if on_disk > 0 then
-            local probed_validator, probed_total = self:probeRange(current_url)
-            if probed_validator and on_disk <= probed_total then
-                validator, total_bytes = probed_validator, probed_total
-                -- A temporary that already holds every byte still has to be
-                -- proven current, so the last one is re-requested rather than
-                -- trusted: If-Range then answers for everything below it too.
-                resume_from = math.min(on_disk, probed_total - 1)
-            end
+        -- Bytes are continued only when a record written before the first of
+        -- them names the representation they came from. Without it they may be
+        -- a prefix of an older file, and appending to those publishes a corrupt
+        -- book that opens.
+        if on_disk > 0 and origin and on_disk <= probed_total
+                and ResumeOrigin.matches(ResumeOrigin.load(temp_path), origin) then
+            validator, total_bytes = probed_validator, probed_total
+            -- A temporary that already holds every byte still has to be proven
+            -- current, so the last one is re-requested rather than trusted:
+            -- If-Range then answers for everything below it too.
+            resume_from = math.min(on_disk, probed_total - 1)
+        else
+            util.removeFile(temp_path)
+        end
+
+        if origin then
+            ResumeOrigin.save(temp_path, origin)
+        else
+            ResumeOrigin.cleanup(temp_path)
         end
     end
 
@@ -387,7 +434,10 @@ function BookOrbitApi:downloadBlocking(path, local_path, opts)
     -- the same answer and whatever reached the disk is worthless.
     local function fail(out, err, keep)
         if out then pcall(function() out:close() end) end
-        if not (keep and opts.keep_partial) then util.removeFile(temp_path) end
+        if not (keep and opts.keep_partial) then
+            util.removeFile(temp_path)
+            ResumeOrigin.cleanup(temp_path)
+        end
         return nil, err
     end
 
@@ -422,7 +472,16 @@ function BookOrbitApi:downloadBlocking(path, local_path, opts)
         if resume_from > 0 then
             out, open_err = io.open(temp_path, "r+b")
             if out then
-                out:seek("set", resume_from)
+                -- A handle can open and still refuse to move. Appending to an
+                -- unmoved position overwrites the file from byte zero while
+                -- resume_from + received keeps reporting the resumed total, so
+                -- the transfer publishes a corrupt file as complete.
+                local position, seek_err = out:seek("set", resume_from)
+                if position ~= resume_from then
+                    pcall(function() out:close() end)
+                    out, open_err = nil, seek_err
+                    resume_from, validator = 0, nil
+                end
             else
                 -- The bytes went away between the probe and the open; there is
                 -- nothing left to continue, so this becomes a fresh transfer.
@@ -486,6 +545,9 @@ function BookOrbitApi:downloadBlocking(path, local_path, opts)
         if code == 301 or code == 302 or code == 303 or code == 307 or code == 308 then
             pcall(function() out:close() end)
             util.removeFile(temp_path)
+            -- The record describes the URL that was just left behind, and the
+            -- bytes it vouched for are gone with it.
+            ResumeOrigin.cleanup(temp_path)
             redirects = redirects + 1
             if redirects > MAX_DOWNLOAD_REDIRECTS then
                 return nil, "too_many_redirects"
@@ -501,6 +563,10 @@ function BookOrbitApi:downloadBlocking(path, local_path, opts)
             -- Clearing the offset also means this can happen at most once.
             pcall(function() out:close() end)
             util.removeFile(temp_path)
+            -- The record vouched for bytes the server has just disowned. It is
+            -- dropped rather than rewritten from this response, so the restart
+            -- is not itself resumable; proving that would need a second probe.
+            ResumeOrigin.cleanup(temp_path)
             resume_from, validator, total_received = 0, nil, 0
         else
             if code ~= 200 and code ~= 206 then return fail(out, code) end
@@ -516,6 +582,12 @@ function BookOrbitApi:downloadBlocking(path, local_path, opts)
             end
 
             if progress_writer then progress_writer(resume_from + received, true) end
+
+            -- Nothing is left to resume once the bytes are complete, and the
+            -- record must not outlive them: the temporary file is about to be
+            -- renamed away, and a later partial reusing that name would inherit
+            -- a record vouching for bytes it never held.
+            ResumeOrigin.cleanup(temp_path)
 
             -- The parent owns publishing for user-cancellable transfers: a
             -- dismissed subprocess cannot be stopped once it starts renaming,

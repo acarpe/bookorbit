@@ -17,13 +17,16 @@ local UIManager = require("ui/uimanager")
 local lfs = require("libs/libkoreader-lfs")
 local util = require("util")
 
+local ResumeOrigin = require("bookorbit_resume_origin")
 local TransferPolicy = require("bookorbit_transfer_policy")
 local TransferProgress = require("bookorbit_transfer_progress")
 
 local TEMP_DIR_NAME = ".bookorbit-tmp"
 local POLL_INTERVAL = 0.5
 local STALE_TEMP_AGE = 24 * 60 * 60
-local MAX_STALE_SWEEP = 64
+-- A killed run can leave a partial and the origin record that describes it, so
+-- the budget covers two entries per transfer rather than one.
+local MAX_STALE_SWEEP = 128
 local MAX_ATTEMPTS = 2
 local MAX_RESUME_KEY = 48
 
@@ -197,13 +200,16 @@ function Transfer.run(opts)
 
     if not ok then
         util.removeFile(temp_path)
+        ResumeOrigin.cleanup(temp_path)
         error(result, 0)
     end
     if not result then
         -- A dropped link leaves usable bytes behind. They stay for the next
-        -- attempt at this file, and the stale sweep collects them if none comes.
+        -- attempt at this file, along with the record that says what they are,
+        -- and the stale sweep collects both if no attempt comes.
         if not (slug and isRetryable(err)) then
             util.removeFile(temp_path)
+            ResumeOrigin.cleanup(temp_path)
         end
         return nil, err
     end
@@ -211,16 +217,19 @@ function Transfer.run(opts)
     local completed_path = type(result) == "table" and result.temp_path or temp_path
     if opts.is_current and not opts.is_current() then
         util.removeFile(completed_path)
+        ResumeOrigin.cleanup(completed_path)
         return nil, "cancelled"
     end
     if not Transfer.isInsideRoot(root, opts.destination) then
         util.removeFile(completed_path)
+        ResumeOrigin.cleanup(completed_path)
         return nil, "unsafe_destination"
     end
 
     local renamed, rename_err = os.rename(completed_path, opts.destination)
     if not renamed then
         util.removeFile(completed_path)
+        ResumeOrigin.cleanup(completed_path)
         return nil, tostring(rename_err or "publish_failed")
     end
     return true, nil, type(result) == "table" and result or {}
