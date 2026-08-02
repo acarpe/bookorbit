@@ -269,7 +269,7 @@ describe('OpdsBookService', () => {
     });
   });
 
-  it('resolves getDownloadTarget with the size and mtime of the file on disk', async () => {
+  it('resolves getDownloadTarget with the identity of the file on disk', async () => {
     const { service } = makeService();
     vi.spyOn(service, 'getBookFiles').mockResolvedValue({
       absolutePath: '/books/a.epub',
@@ -277,13 +277,14 @@ describe('OpdsBookService', () => {
       title: 'A',
       authorName: 'B',
     });
-    statMock.mockResolvedValue({ size: 4096, mtimeMs: 1_700_000_000_000 } as never);
+    statMock.mockResolvedValue({ size: 4096n, mtimeNs: 1_700_000_000_000_000_000n, ino: 42n } as never);
 
     await expect(service.getDownloadTarget(7, 42)).resolves.toEqual({
       absolutePath: '/books/a.epub',
       format: 'epub',
       size: 4096,
-      mtimeMs: 1_700_000_000_000,
+      mtimeNs: 1_700_000_000_000_000_000n,
+      ino: 42n,
     });
   });
 

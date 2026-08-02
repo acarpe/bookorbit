@@ -271,6 +271,8 @@ describe('BookController', () => {
       path: '/tmp/book.epub',
       size: 100,
       format: 'epub',
+      mtimeNs: 5_000_000_000n,
+      ino: 42n,
       bookId: 5,
       originalFilename: 'book.epub',
     });
@@ -290,19 +292,20 @@ describe('BookController', () => {
     bookService.getFileInfo.mockResolvedValue({
       path: '/tmp/book.epub',
       size: 1000,
-      mtimeMs: 5000,
       format: 'epub',
+      mtimeNs: 5_000_000_000n,
+      ino: 42n,
       bookId: 5,
       originalFilename: 'book.epub',
     });
     bookService.resolveDownloadFilename.mockResolvedValue('book.epub');
 
-    await controller.downloadFile(1, makeUser(), reply, 'bytes=600-', '"3e8-1388"');
+    await controller.downloadFile(1, makeUser(), reply, 'bytes=600-', '"3e8-12a05f200-2a"');
 
     expect(reply.status).toHaveBeenCalledWith(206);
     expect(headers['Content-Range']).toBe('bytes 600-999/1000');
     expect(headers['Content-Length']).toBe(400);
-    expect(headers['ETag']).toBe('"3e8-1388"');
+    expect(headers['ETag']).toBe('"3e8-12a05f200-2a"');
     expect(mockCreateReadStream).toHaveBeenCalledWith('/tmp/book.epub', { start: 600, end: 999 });
   });
 
@@ -313,6 +316,8 @@ describe('BookController', () => {
       path: '/tmp/book.epub',
       size: 100,
       format: 'epub',
+      mtimeNs: 5_000_000_000n,
+      ino: 42n,
       bookId: 5,
       originalFilename: 'book.epub',
     });
@@ -329,6 +334,8 @@ describe('BookController', () => {
       path: '/tmp/book.pdf',
       size: 500,
       format: 'pdf',
+      mtimeNs: 5_000_000_000n,
+      ino: 42n,
       bookId: 5,
       originalFilename: 'book.pdf',
     });
@@ -348,6 +355,8 @@ describe('BookController', () => {
       path: '/tmp/book.epub',
       size: 100,
       format: 'epub',
+      mtimeNs: 5_000_000_000n,
+      ino: 42n,
       bookId: 5,
       originalFilename: 'book.epub',
     });
@@ -1021,6 +1030,8 @@ describe('BookController', () => {
       path: '/tmp/book.epub',
       size: 100,
       format: 'epub',
+      mtimeNs: 5_000_000_000n,
+      ino: 42n,
       bookId: 5,
       originalFilename: 'book.epub',
     });

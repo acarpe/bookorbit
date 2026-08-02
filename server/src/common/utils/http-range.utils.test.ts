@@ -4,9 +4,16 @@ vi.mock('fs', () => ({ createReadStream: vi.fn((path: string, options?: unknown)
 
 import { createReadStream } from 'fs';
 
-import { buildFileEtag, isIfRangeSatisfied, parseRangeHeader, sendFileWithRanges } from './http-range.utils';
+import { buildFileEtag, isIfRangeSatisfied, isMtimeSettled, parseRangeHeader, sendFileWithRanges } from './http-range.utils';
 
 const mockCreateReadStream = vi.mocked(createReadStream);
+
+const SETTLED_MTIME_NS = 1_700_000_000_000_000_000n;
+const SETTLED_MTIME_MS = 1_700_000_000_000;
+
+function freshMtimeNs() {
+  return BigInt(Date.now()) * 1_000_000n;
+}
 
 function makeReply() {
   const headers: Record<string, string | number> = {};
@@ -60,27 +67,68 @@ describe('parseRangeHeader', () => {
   });
 });
 
-describe('isIfRangeSatisfied', () => {
-  const etag = buildFileEtag(500, 1_700_000_000_000);
-  const lastModified = new Date(1_700_000_000_000).toUTCString();
+describe('buildFileEtag', () => {
+  it('renders size, nanosecond mtime and inode as three hex fields in one pair of quotes', () => {
+    expect(buildFileEtag({ size: 500, mtimeNs: SETTLED_MTIME_NS, ino: 42n })).toBe('"1f4-17979cfe362a0000-2a"');
+  });
 
-  it('accepts a missing header, a matching entity tag and a matching date', () => {
-    expect(isIfRangeSatisfied(undefined, etag, lastModified)).toBe(true);
-    expect(isIfRangeSatisfied(etag, etag, lastModified)).toBe(true);
-    expect(isIfRangeSatisfied(lastModified, etag, lastModified)).toBe(true);
+  it('renders a negative inode unsigned so mounts that overflow still produce a canonical tag', () => {
+    expect(buildFileEtag({ size: 500, mtimeNs: SETTLED_MTIME_NS, ino: -2n })).toBe('"1f4-17979cfe362a0000-fffffffffffffffe"');
+  });
+
+  it('separates two files that differ only in inode', () => {
+    const a = buildFileEtag({ size: 500, mtimeNs: SETTLED_MTIME_NS, ino: 42n });
+    const b = buildFileEtag({ size: 500, mtimeNs: SETTLED_MTIME_NS, ino: 43n });
+    expect(a).not.toBe(b);
+  });
+});
+
+describe('isMtimeSettled', () => {
+  it('refuses a file written inside the filesystem tick window', () => {
+    expect(isMtimeSettled(10_000, 10_000)).toBe(false);
+    expect(isMtimeSettled(10_000, 11_999)).toBe(false);
+  });
+
+  it('accepts a file whose tick has closed', () => {
+    expect(isMtimeSettled(10_000, 12_000)).toBe(true);
+    expect(isMtimeSettled(10_000, 60_000)).toBe(true);
+  });
+
+  it('fails safe on a clock that reads behind the recorded mtime', () => {
+    expect(isMtimeSettled(10_000, 9_000)).toBe(false);
+  });
+});
+
+describe('isIfRangeSatisfied', () => {
+  const etag = buildFileEtag({ size: 500, mtimeNs: SETTLED_MTIME_NS, ino: 42n });
+  const lastModified = new Date(SETTLED_MTIME_MS).toUTCString();
+
+  it('accepts a missing header and a matching strong entity tag', () => {
+    expect(isIfRangeSatisfied(undefined, etag)).toBe(true);
+    expect(isIfRangeSatisfied(etag, etag)).toBe(true);
+  });
+
+  it('rejects the HTTP-date form, which a filesystem second cannot make strong', () => {
+    expect(isIfRangeSatisfied(lastModified, etag)).toBe(false);
+    expect(isIfRangeSatisfied(new Date(1_600_000_000_000).toUTCString(), etag)).toBe(false);
   });
 
   it('rejects a stale validator and any weak entity tag', () => {
-    expect(isIfRangeSatisfied('"deadbeef-1"', etag, lastModified)).toBe(false);
-    expect(isIfRangeSatisfied(new Date(1_600_000_000_000).toUTCString(), etag, lastModified)).toBe(false);
-    expect(isIfRangeSatisfied(`W/${etag}`, etag, lastModified)).toBe(false);
-    expect(isIfRangeSatisfied('not-a-date', etag, lastModified)).toBe(false);
+    expect(isIfRangeSatisfied('"deadbeef-1"', etag)).toBe(false);
+    expect(isIfRangeSatisfied(`W/${etag}`, etag)).toBe(false);
+    expect(isIfRangeSatisfied('not-a-date', etag)).toBe(false);
+  });
+
+  it('rejects every validator while no strong tag exists', () => {
+    expect(isIfRangeSatisfied(etag, null)).toBe(false);
+    expect(isIfRangeSatisfied(lastModified, null)).toBe(false);
+    expect(isIfRangeSatisfied(undefined, null)).toBe(true);
   });
 
   it('rejects a repeated header rather than treating it as absent', () => {
-    expect(isIfRangeSatisfied([etag, etag], etag, lastModified)).toBe(false);
-    expect(isIfRangeSatisfied([etag], etag, lastModified)).toBe(false);
-    expect(isIfRangeSatisfied([], etag, lastModified)).toBe(false);
+    expect(isIfRangeSatisfied([etag, etag], etag)).toBe(false);
+    expect(isIfRangeSatisfied([etag], etag)).toBe(false);
+    expect(isIfRangeSatisfied([], etag)).toBe(false);
   });
 });
 
@@ -88,9 +136,11 @@ describe('sendFileWithRanges', () => {
   const base = {
     path: '/books/book.epub',
     size: 500,
-    mtimeMs: 1_700_000_000_000,
+    mtimeNs: SETTLED_MTIME_NS,
+    ino: 42n,
     contentType: 'application/epub+zip',
   };
+  const settledEtag = buildFileEtag(base);
 
   it('sends the full file with validators when no range is requested', () => {
     const { reply, headers } = makeReply();
@@ -99,8 +149,8 @@ describe('sendFileWithRanges', () => {
 
     expect(result).toEqual({ status: 200, start: 0, end: 499, partial: false });
     expect(headers['Accept-Ranges']).toBe('bytes');
-    expect(headers['ETag']).toBe(buildFileEtag(500, 1_700_000_000_000));
-    expect(headers['Last-Modified']).toBe(new Date(1_700_000_000_000).toUTCString());
+    expect(headers['ETag']).toBe(settledEtag);
+    expect(headers['Last-Modified']).toBe(new Date(SETTLED_MTIME_MS).toUTCString());
     expect(headers['Content-Disposition']).toBe('attachment; filename="book.epub"');
     expect(headers['Content-Length']).toBe(500);
     expect(reply.type).toHaveBeenCalledWith('application/epub+zip');
@@ -144,9 +194,21 @@ describe('sendFileWithRanges', () => {
 
   it('ignores the range when If-Range arrives repeated', () => {
     const { reply, headers } = makeReply();
-    const etag = buildFileEtag(500, 1_700_000_000_000);
 
-    const result = sendFileWithRanges(reply as never, { ...base, rangeHeader: 'bytes=200-', ifRangeHeader: [etag, etag] });
+    const result = sendFileWithRanges(reply as never, { ...base, rangeHeader: 'bytes=200-', ifRangeHeader: [settledEtag, settledEtag] });
+
+    expect(result).toEqual({ status: 200, start: 0, end: 499, partial: false });
+    expect(headers['Content-Range']).toBeUndefined();
+  });
+
+  it('ignores the range when If-Range carries the Last-Modified date', () => {
+    const { reply, headers } = makeReply();
+
+    const result = sendFileWithRanges(reply as never, {
+      ...base,
+      rangeHeader: 'bytes=200-',
+      ifRangeHeader: new Date(SETTLED_MTIME_MS).toUTCString(),
+    });
 
     expect(result).toEqual({ status: 200, start: 0, end: 499, partial: false });
     expect(headers['Content-Range']).toBeUndefined();
@@ -155,13 +217,43 @@ describe('sendFileWithRanges', () => {
   it('serves the range when If-Range still matches the file', () => {
     const { reply, headers } = makeReply();
 
-    const result = sendFileWithRanges(reply as never, {
-      ...base,
-      rangeHeader: 'bytes=200-',
-      ifRangeHeader: buildFileEtag(500, 1_700_000_000_000),
-    });
+    const result = sendFileWithRanges(reply as never, { ...base, rangeHeader: 'bytes=200-', ifRangeHeader: settledEtag });
 
     expect(result.partial).toBe(true);
+    expect(headers['Content-Range']).toBe('bytes 200-499/500');
+  });
+
+  it('weakens the tag for a file still inside the filesystem tick window', () => {
+    const { reply, headers } = makeReply();
+    const mtimeNs = freshMtimeNs();
+
+    const result = sendFileWithRanges(reply as never, { ...base, mtimeNs });
+
+    expect(result.status).toBe(200);
+    expect(headers['ETag']).toBe(`W/${buildFileEtag({ ...base, mtimeNs })}`);
+  });
+
+  it('declines If-Range while the tick window is open, even for the tag it just sent', () => {
+    const { reply, headers } = makeReply();
+    const mtimeNs = freshMtimeNs();
+
+    const result = sendFileWithRanges(reply as never, {
+      ...base,
+      mtimeNs,
+      rangeHeader: 'bytes=200-',
+      ifRangeHeader: buildFileEtag({ ...base, mtimeNs }),
+    });
+
+    expect(result).toEqual({ status: 200, start: 0, end: 499, partial: false });
+    expect(headers['Content-Range']).toBeUndefined();
+  });
+
+  it('still answers a bare range with 206 inside the tick window', () => {
+    const { reply, headers } = makeReply();
+
+    const result = sendFileWithRanges(reply as never, { ...base, mtimeNs: freshMtimeNs(), rangeHeader: 'bytes=200-' });
+
+    expect(result).toEqual({ status: 206, start: 200, end: 499, partial: true });
     expect(headers['Content-Range']).toBe('bytes 200-499/500');
   });
 });

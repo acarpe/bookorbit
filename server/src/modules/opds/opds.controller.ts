@@ -274,7 +274,7 @@ export class OpdsController {
   ) {
     await this.opdsBookService.validateBookAccess(bookId, user.userId, user.isSuperuser, user.contentFilters);
 
-    const { absolutePath, format, size, mtimeMs } = await this.opdsBookService.getDownloadTarget(bookId, fileId);
+    const { absolutePath, format, size, mtimeNs, ino } = await this.opdsBookService.getDownloadTarget(bookId, fileId);
 
     const filename = await this.bookService.resolveDownloadFilename({
       bookId,
@@ -285,7 +285,8 @@ export class OpdsController {
     sendFileWithRanges(reply, {
       path: absolutePath,
       size,
-      mtimeMs,
+      mtimeNs,
+      ino,
       contentType: fileMimeType(format),
       contentDisposition: contentDispositionHeader('attachment', filename, 'download'),
       rangeHeader,

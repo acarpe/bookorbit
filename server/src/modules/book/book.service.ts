@@ -17,6 +17,7 @@ import { bookCoverDirPath, bookThumbnailPath, findPreferredBookCoverFileName } f
 import { MAX_BOOK_QUERY_OFFSET_ROWS, isBookQueryOffsetWithinLimit } from '../../common/constants/pagination.constants';
 import { resolveIsAudiobook } from '../../common/utils/book-media.utils';
 import { isMissingFilesystemEntry } from '../../common/utils/fs-error.utils';
+import { statFileIdentity, type FileIdentity } from '../../common/utils/http-range.utils';
 import { sanitizeLogValue } from '../../common/utils/log-sanitize.utils';
 import { normalizeMetadataText, normalizeMetadataTextKey } from '../../common/utils/metadata-text-normalize.utils';
 import { naturalCompare } from '../../common/utils/natural-sort.utils';
@@ -1407,12 +1408,11 @@ export class BookService {
   async getFileInfo(
     fileId: number,
     user: RequestUser,
-  ): Promise<{ path: string; size: number; mtimeMs: number; format: string; bookId: number; originalFilename: string }> {
+  ): Promise<FileIdentity & { path: string; format: string; bookId: number; originalFilename: string }> {
     const file = await this.verifyFileAccess(fileId, user);
-    let size: number;
-    let mtimeMs: number;
+    let identity: FileIdentity;
     try {
-      ({ size, mtimeMs } = await stat(file.absolutePath));
+      identity = await statFileIdentity(file.absolutePath);
     } catch (err) {
       if (isMissingFilesystemEntry(err)) {
         throw new NotFoundException(`File ${fileId} not found on disk`);
@@ -1420,7 +1420,7 @@ export class BookService {
       throw err;
     }
     const originalFilename = basename(file.absolutePath);
-    return { path: file.absolutePath, size, mtimeMs, format: file.format ?? 'unknown', bookId: file.bookId, originalFilename };
+    return { ...identity, path: file.absolutePath, format: file.format ?? 'unknown', bookId: file.bookId, originalFilename };
   }
 
   async resolveDownloadFilename(file: { bookId: number; absolutePath: string; format: string | null }): Promise<string> {

@@ -1,11 +1,11 @@
 import { ForbiddenException, Inject, Injectable, Logger, NotFoundException } from '@nestjs/common';
-import { stat } from 'fs/promises';
 import { SQL, and, count, eq, gt, inArray, or, sql } from 'drizzle-orm';
 import { NodePgDatabase } from 'drizzle-orm/node-postgres';
 
 import { DB } from '../../db';
 import { accentInsensitiveIlike, buildSearchPattern } from '../../common/utils/accent-insensitive-search.utils';
 import { isMissingFilesystemEntry } from '../../common/utils/fs-error.utils';
+import { statFileIdentity, type FileIdentity } from '../../common/utils/http-range.utils';
 import { sanitizeLogValue } from '../../common/utils/log-sanitize.utils';
 import * as schema from '../../db/schema';
 import {
@@ -686,14 +686,13 @@ export class OpdsBookService {
     };
   }
 
-  async getDownloadTarget(bookId: number, fileId?: number): Promise<{ absolutePath: string; format: string; size: number; mtimeMs: number }> {
+  async getDownloadTarget(bookId: number, fileId?: number): Promise<FileIdentity & { absolutePath: string; format: string }> {
     const file = await this.getBookFiles(bookId, fileId);
     if (!file) throw new NotFoundException('File not found');
 
     const start = Date.now();
     try {
-      const { size, mtimeMs } = await stat(file.absolutePath);
-      return { absolutePath: file.absolutePath, format: file.format, size, mtimeMs };
+      return { ...(await statFileIdentity(file.absolutePath)), absolutePath: file.absolutePath, format: file.format };
     } catch (err) {
       if (isMissingFilesystemEntry(err)) throw new NotFoundException('File not found on disk');
       const error = err instanceof Error ? err : new Error(String(err));
