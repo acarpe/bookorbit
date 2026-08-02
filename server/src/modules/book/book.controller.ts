@@ -397,12 +397,13 @@ export class BookController {
     @Res() reply: FastifyReply,
     @Headers('if-range') ifRangeHeader?: string,
   ) {
-    const { path, size, mtimeMs, format, originalFilename } = await this.bookService.getFileInfo(fileId, user);
+    const { path, size, mtimeNs, ino, format, originalFilename } = await this.bookService.getFileInfo(fileId, user);
 
     sendFileWithRanges(reply, {
       path,
       size,
-      mtimeMs,
+      mtimeNs,
+      ino,
       contentType: resolveBookMimeType(format),
       contentDisposition: contentDispositionHeader('inline', originalFilename, 'download'),
       rangeHeader,
@@ -423,13 +424,14 @@ export class BookController {
     const startedAt = Date.now();
     this.logger.log(`[${event}] [start] fileId=${fileId} userId=${user.id} range="${sanitizeLogValue(rangeHeader ?? '')}" - download file started`);
     try {
-      const { path, size, mtimeMs, format, bookId } = await this.bookService.getFileInfo(fileId, user);
+      const { path, size, mtimeNs, ino, format, bookId } = await this.bookService.getFileInfo(fileId, user);
       const filename = await this.bookService.resolveDownloadFilename({ bookId, absolutePath: path, format: format === 'unknown' ? null : format });
 
       const result = sendFileWithRanges(reply, {
         path,
         size,
-        mtimeMs,
+        mtimeNs,
+        ino,
         contentType: resolveBookMimeType(format),
         contentDisposition: contentDispositionHeader('attachment', filename, 'download'),
         rangeHeader,

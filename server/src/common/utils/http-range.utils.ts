@@ -1,8 +1,17 @@
 import { createReadStream } from 'fs';
+import { stat } from 'fs/promises';
 
 import type { FastifyReply } from 'fastify';
 
 const MAX_RANGE_DIGITS = 15;
+
+/**
+ * How long a file must have been untouched before its entity tag is advertised
+ * as strong. Filesystem timestamp resolution is 1s on many of the mounts this
+ * project targets and 2s on FAT/exFAT, so a rewrite inside that window can land
+ * on the same recorded mtime as the read that preceded it.
+ */
+const MTIME_TICK_MS = 2000;
 
 export interface ByteRange {
   start: number;
@@ -27,10 +36,30 @@ export interface FileRangeRequest {
   ifRangeHeader?: string | string[];
 }
 
-export interface FileStreamOptions extends FileRangeRequest {
-  path: string;
+/**
+ * Identity of the bytes on disk, read from a single `stat(path, { bigint: true })`.
+ * `size` stays a number because the range arithmetic and `createReadStream` both
+ * reject bigints; the two fields that feed the entity tag stay bigint because
+ * nanosecond timestamps are past `Number.MAX_SAFE_INTEGER`.
+ */
+export interface FileIdentity {
   size: number;
-  mtimeMs: number;
+  mtimeNs: bigint;
+  ino: bigint;
+}
+
+/**
+ * Reads the identity in one syscall. The bigint wrapper is not extra I/O, it is
+ * the same stat surfaced with the nanosecond and inode fields the default one
+ * rounds or narrows away.
+ */
+export async function statFileIdentity(path: string): Promise<FileIdentity> {
+  const { size, mtimeNs, ino } = await stat(path, { bigint: true });
+  return { size: Number(size), mtimeNs, ino };
+}
+
+export interface FileStreamOptions extends FileRangeRequest, FileIdentity {
+  path: string;
   contentType: string;
   contentDisposition?: string;
   cacheControl?: string;
@@ -49,8 +78,34 @@ function parseByteCount(value: string): number | null {
   return Number.isSafeInteger(parsed) ? parsed : null;
 }
 
-export function buildFileEtag(size: number, mtimeMs: number): string {
-  return `"${size.toString(16)}-${Math.floor(mtimeMs).toString(16)}"`;
+/**
+ * Size alone collides on any same-length rewrite, and a millisecond mtime adds
+ * nothing on a mount that records seconds. The inode is the component that moves
+ * for every rewrite this server performs, since they all go through
+ * `replaceFileAtomically`. Rendered unsigned so a mount reporting a 64-bit inode
+ * as negative still produces a canonical tag.
+ */
+export function buildFileEtag({ size, mtimeNs, ino }: FileIdentity): string {
+  return `"${size.toString(16)}-${BigInt.asUintN(64, mtimeNs).toString(16)}-${BigInt.asUintN(64, ino).toString(16)}"`;
+}
+
+function mtimeMsOf(mtimeNs: bigint): number {
+  return Number(mtimeNs / 1_000_000n);
+}
+
+/**
+ * Whether the recorded mtime is old enough that another write cannot still be
+ * hiding inside the same filesystem tick.
+ *
+ * The guard has to run when the tag is minted, not when it is compared. On a
+ * 1s-resolution mount: a GET at 12:00:00.2 reads mtime 12:00:00.0 and mints tag
+ * E; a foreign same-size rewrite at 12:00:00.7 truncates to the same mtime and
+ * keeps the same inode, so the tag is still E; a resume at 12:00:06 is 6s past
+ * the mtime and would pass any compare-time check, then splice. Refusing to
+ * call E strong at 12:00:00.2 is what closes that.
+ */
+export function isMtimeSettled(mtimeMs: number, now: number = Date.now()): boolean {
+  return now - mtimeMs >= MTIME_TICK_MS;
 }
 
 /**
@@ -88,20 +143,22 @@ export function parseRangeHeader(header: string | string[] | undefined, size: nu
 /**
  * If-Range demands strong comparison, so a weak entity tag never authorizes a
  * partial response: the client gets the full file back instead of silently
- * splicing bytes from a representation that may have changed. Only a genuinely
- * absent header skips the check; a repeated one arrives as an array and is
- * unsatisfied, since guessing which value the client meant could splice.
+ * splicing bytes from a representation that may have changed. `strongEtag` is
+ * null while the mtime tick is still open, which declines every If-Range for
+ * the duration.
+ *
+ * Only a genuinely absent header skips the check; a repeated one arrives as an
+ * array and is unsatisfied, since guessing which value the client meant could
+ * splice. The HTTP-date form is refused outright: RFC 9110 13.1.3 admits it
+ * only where the date is itself a strong validator, and a filesystem second is
+ * not, which made the date branch strictly weaker than the tag beside it.
  */
-export function isIfRangeSatisfied(ifRangeHeader: string | string[] | undefined, etag: string, lastModified: string): boolean {
+export function isIfRangeSatisfied(ifRangeHeader: string | string[] | undefined, strongEtag: string | null): boolean {
   if (ifRangeHeader === undefined) return true;
   if (typeof ifRangeHeader !== 'string') return false;
   const value = ifRangeHeader.trim();
   if (value === '') return true;
-  if (value.startsWith('W/')) return false;
-  if (value.startsWith('"')) return value === etag;
-
-  const requested = Date.parse(value);
-  return Number.isFinite(requested) && requested === Date.parse(lastModified);
+  return strongEtag !== null && value === strongEtag;
 }
 
 /**
@@ -109,20 +166,27 @@ export function isIfRangeSatisfied(ifRangeHeader: string | string[] | undefined,
  * caller can log the outcome. Partial responses carry Content-Range, which also
  * keeps @fastify/compress off the payload: its byte offsets describe the
  * unencoded representation.
+ *
+ * A file written within the last MTIME_TICK_MS goes out with a weak tag, which
+ * costs it If-Range resumes until the tick closes. The weak form is still sent
+ * rather than no tag at all, because If-None-Match revalidation is defined on
+ * weak comparison and keeps working. A bare Range with no If-Range is answered
+ * 206 either way, so ordinary streaming is unaffected.
  */
 export function sendFileWithRanges(reply: FastifyReply, options: FileStreamOptions): FileStreamResult {
-  const { path, size, mtimeMs, contentType } = options;
-  const etag = buildFileEtag(size, mtimeMs);
-  const lastModified = new Date(Math.floor(mtimeMs)).toUTCString();
+  const { path, size, mtimeNs, contentType } = options;
+  const etag = buildFileEtag(options);
+  const mtimeMs = mtimeMsOf(mtimeNs);
+  const strongEtag = isMtimeSettled(mtimeMs) ? etag : null;
 
   reply.header('Accept-Ranges', 'bytes');
-  reply.header('ETag', etag);
-  reply.header('Last-Modified', lastModified);
+  reply.header('ETag', strongEtag ?? `W/${etag}`);
+  reply.header('Last-Modified', new Date(mtimeMs).toUTCString());
   if (options.cacheControl) reply.header('Cache-Control', options.cacheControl);
   if (options.contentDisposition) reply.header('Content-Disposition', options.contentDisposition);
   reply.type(contentType);
 
-  const range = isIfRangeSatisfied(options.ifRangeHeader, etag, lastModified) ? parseRangeHeader(options.rangeHeader, size) : null;
+  const range = isIfRangeSatisfied(options.ifRangeHeader, strongEtag) ? parseRangeHeader(options.rangeHeader, size) : null;
 
   if (range === 'unsatisfiable') {
     reply.status(416);

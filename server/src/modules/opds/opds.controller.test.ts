@@ -52,7 +52,8 @@ function makeController() {
       absolutePath: '/books/library/book.epub',
       format: 'epub',
       size: 12345,
-      mtimeMs: 5000,
+      mtimeNs: 5_000_000_000n,
+      ino: 42n,
     }),
   } as never;
   const config = {
@@ -341,7 +342,8 @@ describe('OpdsController', () => {
       absolutePath: '/books/library/book.epub',
       format: 'epub',
       size: 12345,
-      mtimeMs: 5000,
+      mtimeNs: 5_000_000_000n,
+      ino: 42n,
     });
     mockCreateReadStream.mockReturnValue(stream as never);
 
@@ -365,11 +367,12 @@ describe('OpdsController', () => {
       absolutePath: '/books/library/book.epub',
       format: 'epub',
       size: 12345,
-      mtimeMs: 5000,
+      mtimeNs: 5_000_000_000n,
+      ino: 42n,
     });
     mockCreateReadStream.mockReturnValue({} as never);
 
-    await controller.download(99, 0, { userId: 2, isSuperuser: false } as never, reply, 'bytes=12000-', '"3039-1388"');
+    await controller.download(99, 0, { userId: 2, isSuperuser: false } as never, reply, 'bytes=12000-', '"3039-12a05f200-2a"');
 
     expect(reply.status).toHaveBeenCalledWith(206);
     expect(reply.header).toHaveBeenCalledWith('Content-Range', 'bytes 12000-12344/12345');

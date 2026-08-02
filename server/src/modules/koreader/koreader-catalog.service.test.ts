@@ -291,7 +291,7 @@ function makeService(
 describe('KoreaderCatalogService', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockStat.mockResolvedValue({ size: 1234, mtimeMs: 5000 } as never);
+    mockStat.mockResolvedValue({ size: 1234, mtimeMs: 5000, mtimeNs: 5_000_000_000n, ino: 42n } as never);
   });
 
   it('returns root catalog sections', () => {
@@ -884,7 +884,7 @@ describe('KoreaderCatalogService', () => {
     expect(reply.status).toHaveBeenCalledWith(206);
     expect(reply.header).toHaveBeenCalledWith('Content-Range', 'bytes 1000-1233/1234');
     expect(reply.header).toHaveBeenCalledWith('Content-Length', 234);
-    expect(reply.header).toHaveBeenCalledWith('ETag', '"4d2-1388"');
+    expect(reply.header).toHaveBeenCalledWith('ETag', '"4d2-12a05f200-2a"');
     expect(mockCreateReadStream).toHaveBeenCalledWith('/books/dune.epub', { start: 1000, end: 1233 });
   });
 

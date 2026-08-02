@@ -166,7 +166,7 @@ describe('KoboDownloadService', () => {
     const service = makeService(deps);
     const reply = makeReply();
     const stream = {} as never;
-    statMock.mockResolvedValueOnce({ size: 1234, mtimeMs: 1_700_000_000_000 } as never);
+    statMock.mockResolvedValueOnce({ size: 1234n, mtimeNs: 1_700_000_000_000_000_000n, ino: 42n } as never);
     createReadStreamMock.mockReturnValue(stream);
 
     await (service as any).streamFile('/books/book.epub', 99, 'epub', reply, {});
@@ -184,7 +184,7 @@ describe('KoboDownloadService', () => {
     const deps = makeDeps();
     const service = makeService(deps);
     const reply = makeReply();
-    statMock.mockResolvedValueOnce({ size: 4096, mtimeMs: 1_700_000_000_000 } as never);
+    statMock.mockResolvedValueOnce({ size: 4096n, mtimeNs: 1_700_000_000_000_000_000n, ino: 42n } as never);
     createReadStreamMock.mockReturnValue({} as never);
 
     await (service as any).streamFile('/cache/44/hash.kepub.epub', 55, 'kepub.epub', reply, {});
@@ -197,7 +197,7 @@ describe('KoboDownloadService', () => {
     const deps = makeDeps();
     const service = makeService(deps);
     const reply = makeReply();
-    statMock.mockResolvedValueOnce({ size: 100, mtimeMs: 1_700_000_000_000 } as never);
+    statMock.mockResolvedValueOnce({ size: 100n, mtimeNs: 1_700_000_000_000_000_000n, ino: 42n } as never);
     createReadStreamMock.mockReturnValue({} as never);
 
     await (service as any).streamFile('/books/book.xyz', 10, 'xyz', reply, {});
@@ -209,7 +209,7 @@ describe('KoboDownloadService', () => {
     const deps = makeDeps();
     const service = makeService(deps);
     const reply = makeReply();
-    statMock.mockResolvedValueOnce({ size: 1000, mtimeMs: 1_700_000_000_000 } as never);
+    statMock.mockResolvedValueOnce({ size: 1000n, mtimeNs: 1_700_000_000_000_000_000n, ino: 42n } as never);
     createReadStreamMock.mockReturnValue({} as never);
 
     await (service as any).streamFile('/books/book.epub', 99, 'epub', reply, { rangeHeader: 'bytes=400-' });
@@ -266,7 +266,7 @@ describe('KoboDownloadService', () => {
     const deps = makeDeps();
     const service = makeService(deps);
     const reply = makeReply();
-    statMock.mockResolvedValueOnce({ size: 1000, mtimeMs: 1_700_000_000_000 } as never);
+    statMock.mockResolvedValueOnce({ size: 1000n, mtimeNs: 1_700_000_000_000_000_000n, ino: 42n } as never);
     createReadStreamMock.mockReturnValue({} as never);
 
     await (service as any).streamFile('/books/book.epub', 99, 'epub', reply, {
@@ -283,7 +283,7 @@ describe('KoboDownloadService', () => {
     const deps = makeDeps();
     const service = makeService(deps);
     const reply = makeReply();
-    statMock.mockResolvedValueOnce({ size: 1000, mtimeMs: 1_700_000_000_000 } as never);
+    statMock.mockResolvedValueOnce({ size: 1000n, mtimeNs: 1_700_000_000_000_000_000n, ino: 42n } as never);
     createReadStreamMock.mockClear();
 
     await (service as any).streamFile('/books/book.epub', 99, 'epub', reply, { rangeHeader: 'bytes=1000-' });

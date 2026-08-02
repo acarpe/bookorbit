@@ -41,8 +41,8 @@ import { imageContentTypeFromPath } from '../../common/image-content-type';
 import type { RequestUser } from '../../common/types/request-user';
 import { contentDispositionHeader } from '../../common/utils/content-disposition.utils';
 import { isMissingFilesystemEntry } from '../../common/utils/fs-error.utils';
-import { sendFileWithRanges } from '../../common/utils/http-range.utils';
-import type { FileRangeRequest } from '../../common/utils/http-range.utils';
+import { sendFileWithRanges, statFileIdentity } from '../../common/utils/http-range.utils';
+import type { FileIdentity, FileRangeRequest } from '../../common/utils/http-range.utils';
 import { sanitizeLogValue } from '../../common/utils/log-sanitize.utils';
 import { formatSeriesIndex } from '../../common/utils/series-index-format.utils';
 import { storageConfig } from '../../config/config';
@@ -518,19 +518,18 @@ export class KoreaderCatalogService {
         format: file.format,
       });
 
-      let size: number;
-      let mtimeMs: number;
+      let identity: FileIdentity;
       try {
-        ({ size, mtimeMs } = await stat(file.absolutePath));
+        identity = await statFileIdentity(file.absolutePath);
       } catch (err) {
         if (isMissingFilesystemEntry(err)) throw new NotFoundException('File not found on disk');
         throw err;
       }
+      const { size } = identity;
 
       const result = sendFileWithRanges(reply, {
+        ...identity,
         path: file.absolutePath,
-        size,
-        mtimeMs,
         contentType: fileMimeType(format),
         contentDisposition: contentDispositionHeader('attachment', filename, 'download'),
         rangeHeader: options.rangeHeader,
