@@ -76,6 +76,12 @@ describe('isIfRangeSatisfied', () => {
     expect(isIfRangeSatisfied(`W/${etag}`, etag, lastModified)).toBe(false);
     expect(isIfRangeSatisfied('not-a-date', etag, lastModified)).toBe(false);
   });
+
+  it('rejects a repeated header rather than treating it as absent', () => {
+    expect(isIfRangeSatisfied([etag, etag], etag, lastModified)).toBe(false);
+    expect(isIfRangeSatisfied([etag], etag, lastModified)).toBe(false);
+    expect(isIfRangeSatisfied([], etag, lastModified)).toBe(false);
+  });
 });
 
 describe('sendFileWithRanges', () => {
@@ -134,6 +140,16 @@ describe('sendFileWithRanges', () => {
     expect(headers['Content-Range']).toBeUndefined();
     expect(headers['Content-Length']).toBe(500);
     expect(mockCreateReadStream).toHaveBeenCalledWith('/books/book.epub');
+  });
+
+  it('ignores the range when If-Range arrives repeated', () => {
+    const { reply, headers } = makeReply();
+    const etag = buildFileEtag(500, 1_700_000_000_000);
+
+    const result = sendFileWithRanges(reply as never, { ...base, rangeHeader: 'bytes=200-', ifRangeHeader: [etag, etag] });
+
+    expect(result).toEqual({ status: 200, start: 0, end: 499, partial: false });
+    expect(headers['Content-Range']).toBeUndefined();
   });
 
   it('serves the range when If-Range still matches the file', () => {
