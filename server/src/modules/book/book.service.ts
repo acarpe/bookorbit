@@ -17,7 +17,6 @@ import { bookCoverDirPath, bookThumbnailPath, findPreferredBookCoverFileName } f
 import { MAX_BOOK_QUERY_OFFSET_ROWS, isBookQueryOffsetWithinLimit } from '../../common/constants/pagination.constants';
 import { resolveIsAudiobook } from '../../common/utils/book-media.utils';
 import { isMissingFilesystemEntry } from '../../common/utils/fs-error.utils';
-import { statFileIdentity, type FileIdentity } from '../../common/utils/http-range.utils';
 import { sanitizeLogValue } from '../../common/utils/log-sanitize.utils';
 import { normalizeMetadataText, normalizeMetadataTextKey } from '../../common/utils/metadata-text-normalize.utils';
 import { naturalCompare } from '../../common/utils/natural-sort.utils';
@@ -1405,22 +1404,10 @@ export class BookService {
     }
   }
 
-  async getFileInfo(
-    fileId: number,
-    user: RequestUser,
-  ): Promise<FileIdentity & { path: string; format: string; bookId: number; originalFilename: string }> {
+  async getFileInfo(fileId: number, user: RequestUser): Promise<{ path: string; format: string; bookId: number; originalFilename: string }> {
     const file = await this.verifyFileAccess(fileId, user);
-    let identity: FileIdentity;
-    try {
-      identity = await statFileIdentity(file.absolutePath);
-    } catch (err) {
-      if (isMissingFilesystemEntry(err)) {
-        throw new NotFoundException(`File ${fileId} not found on disk`);
-      }
-      throw err;
-    }
     const originalFilename = basename(file.absolutePath);
-    return { ...identity, path: file.absolutePath, format: file.format ?? 'unknown', bookId: file.bookId, originalFilename };
+    return { path: file.absolutePath, format: file.format ?? 'unknown', bookId: file.bookId, originalFilename };
   }
 
   async resolveDownloadFilename(file: { bookId: number; absolutePath: string; format: string | null }): Promise<string> {

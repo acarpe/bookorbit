@@ -1,5 +1,4 @@
-import { createReadStream } from 'fs';
-import { stat } from 'fs/promises';
+import { open } from 'fs/promises';
 
 import type { FastifyReply } from 'fastify';
 
@@ -37,7 +36,7 @@ export interface FileRangeRequest {
 }
 
 /**
- * Identity of the bytes on disk, read from a single `stat(path, { bigint: true })`.
+ * Identity of the bytes on disk, read from a single `stat({ bigint: true })`.
  * `size` stays a number because the range arithmetic and `createReadStream` both
  * reject bigints; the two fields that feed the entity tag stay bigint because
  * nanosecond timestamps are past `Number.MAX_SAFE_INTEGER`.
@@ -48,25 +47,20 @@ export interface FileIdentity {
   ino: bigint;
 }
 
-/**
- * Reads the identity in one syscall. The bigint wrapper is not extra I/O, it is
- * the same stat surfaced with the nanosecond and inode fields the default one
- * rounds or narrows away.
- */
-export async function statFileIdentity(path: string): Promise<FileIdentity> {
-  const { size, mtimeNs, ino } = await stat(path, { bigint: true });
-  return { size: Number(size), mtimeNs, ino };
-}
-
-export interface FileStreamOptions extends FileRangeRequest, FileIdentity {
+export interface FileStreamOptions extends FileRangeRequest {
   path: string;
   contentType: string;
   contentDisposition?: string;
   cacheControl?: string;
 }
 
+/**
+ * `size` is reported back because the helper is now the only place that stats
+ * the file, and every caller logs the served size.
+ */
 export interface FileStreamResult {
   status: 200 | 206 | 416;
+  size: number;
   start: number;
   end: number;
   partial: boolean;
@@ -147,18 +141,19 @@ export function parseRangeHeader(header: string | string[] | undefined, size: nu
  * null while the mtime tick is still open, which declines every If-Range for
  * the duration.
  *
- * Only a genuinely absent header skips the check; a repeated one arrives as an
- * array and is unsatisfied, since guessing which value the client meant could
- * splice. The HTTP-date form is refused outright: RFC 9110 13.1.3 admits it
- * only where the date is itself a strong validator, and a filesystem second is
- * not, which made the date branch strictly weaker than the tag beside it.
+ * Only a genuinely absent header skips the check. Everything else that is not a
+ * matching strong tag is unsatisfied: a repeated header arrives as an array and
+ * guessing which value the client meant could splice, and an empty value is a
+ * validator that parses as nothing, so honouring it would hand a client that
+ * asked for the guarantee exactly none of it. The HTTP-date form is refused
+ * outright: RFC 9110 13.1.3 admits it only where the date is itself a strong
+ * validator, and a filesystem second is not, which made the date branch strictly
+ * weaker than the tag beside it.
  */
 export function isIfRangeSatisfied(ifRangeHeader: string | string[] | undefined, strongEtag: string | null): boolean {
   if (ifRangeHeader === undefined) return true;
   if (typeof ifRangeHeader !== 'string') return false;
-  const value = ifRangeHeader.trim();
-  if (value === '') return true;
-  return strongEtag !== null && value === strongEtag;
+  return strongEtag !== null && ifRangeHeader.trim() === strongEtag;
 }
 
 /**
@@ -167,43 +162,76 @@ export function isIfRangeSatisfied(ifRangeHeader: string | string[] | undefined,
  * keeps @fastify/compress off the payload: its byte offsets describe the
  * unencoded representation.
  *
+ * The descriptor is opened once and both the stat and the read stream hang off
+ * it, so the identity in the headers and the bytes in the body always come from
+ * the same inode. Statting a path and then opening it again leaves a window in
+ * which a rewrite swaps the file underneath: the response would advertise the
+ * old entity tag and Content-Length while streaming the new file, which resumes
+ * a splice for an If-Range client and misframes the body for everyone else.
+ *
+ * Missing paths surface as the raw fs error; callers translate that into a 404,
+ * matching the convention `isMissingFilesystemEntry` documents.
+ *
  * A file written within the last MTIME_TICK_MS goes out with a weak tag, which
  * costs it If-Range resumes until the tick closes. The weak form is still sent
  * rather than no tag at all, because If-None-Match revalidation is defined on
  * weak comparison and keeps working. A bare Range with no If-Range is answered
  * 206 either way, so ordinary streaming is unaffected.
  */
-export function sendFileWithRanges(reply: FastifyReply, options: FileStreamOptions): FileStreamResult {
-  const { path, size, mtimeNs, contentType } = options;
-  const etag = buildFileEtag(options);
-  const mtimeMs = mtimeMsOf(mtimeNs);
-  const strongEtag = isMtimeSettled(mtimeMs) ? etag : null;
+export async function sendFileWithRanges(reply: FastifyReply, options: FileStreamOptions): Promise<FileStreamResult> {
+  const handle = await open(options.path, 'r');
+  let handedOff = false;
 
-  reply.header('Accept-Ranges', 'bytes');
-  reply.header('ETag', strongEtag ?? `W/${etag}`);
-  reply.header('Last-Modified', new Date(mtimeMs).toUTCString());
-  if (options.cacheControl) reply.header('Cache-Control', options.cacheControl);
-  if (options.contentDisposition) reply.header('Content-Disposition', options.contentDisposition);
-  reply.type(contentType);
+  try {
+    const stats = await handle.stat({ bigint: true });
+    const identity: FileIdentity = { size: Number(stats.size), mtimeNs: stats.mtimeNs, ino: stats.ino };
+    const { size } = identity;
+    const etag = buildFileEtag(identity);
+    const mtimeMs = mtimeMsOf(identity.mtimeNs);
+    const strongEtag = isMtimeSettled(mtimeMs) ? etag : null;
 
-  const range = isIfRangeSatisfied(options.ifRangeHeader, strongEtag) ? parseRangeHeader(options.rangeHeader, size) : null;
+    reply.header('Accept-Ranges', 'bytes');
+    reply.header('ETag', strongEtag ?? `W/${etag}`);
+    reply.header('Last-Modified', new Date(mtimeMs).toUTCString());
+    if (options.cacheControl) reply.header('Cache-Control', options.cacheControl);
+    if (options.contentDisposition) reply.header('Content-Disposition', options.contentDisposition);
+    reply.type(options.contentType);
 
-  if (range === 'unsatisfiable') {
-    reply.status(416);
-    reply.header('Content-Range', `bytes */${size}`);
-    reply.send();
-    return { status: 416, start: 0, end: 0, partial: false };
+    const range = isIfRangeSatisfied(options.ifRangeHeader, strongEtag) ? parseRangeHeader(options.rangeHeader, size) : null;
+
+    if (range === 'unsatisfiable') {
+      reply.status(416);
+      reply.header('Content-Range', `bytes */${size}`);
+      reply.send();
+      return { status: 416, size, start: 0, end: 0, partial: false };
+    }
+
+    const start = range ? range.start : 0;
+    const end = range ? range.end : Math.max(0, size - 1);
+
+    if (range) {
+      reply.status(206);
+      reply.header('Content-Range', `bytes ${start}-${end}/${size}`);
+      reply.header('Content-Length', end - start + 1);
+    } else {
+      reply.header('Content-Length', size);
+    }
+
+    // `start` is explicit on both paths: without it the stream reads from the
+    // descriptor's current position rather than the head of the file.
+    const stream = range ? handle.createReadStream({ start, end }) : handle.createReadStream({ start: 0 });
+    handedOff = true;
+    try {
+      reply.send(stream);
+    } catch (err) {
+      stream.destroy();
+      throw err;
+    }
+
+    return { status: range ? 206 : 200, size, start, end, partial: Boolean(range) };
+  } finally {
+    // Once the stream owns the descriptor it closes it on both end and destroy,
+    // and closing here would truncate a body Fastify has not written yet.
+    if (!handedOff) await handle.close();
   }
-
-  if (range) {
-    reply.status(206);
-    reply.header('Content-Range', `bytes ${range.start}-${range.end}/${size}`);
-    reply.header('Content-Length', range.end - range.start + 1);
-    reply.send(createReadStream(path, { start: range.start, end: range.end }));
-    return { status: 206, start: range.start, end: range.end, partial: true };
-  }
-
-  reply.header('Content-Length', size);
-  reply.send(createReadStream(path));
-  return { status: 200, start: 0, end: Math.max(0, size - 1), partial: false };
 }

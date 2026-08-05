@@ -1,19 +1,21 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-vi.mock('fs', () => ({ createReadStream: vi.fn((path: string, options?: unknown) => ({ path, options })) }));
+vi.mock('fs/promises', () => ({ open: vi.fn() }));
 
-import { createReadStream } from 'fs';
+import { open } from 'fs/promises';
 
 import { buildFileEtag, isIfRangeSatisfied, isMtimeSettled, parseRangeHeader, sendFileWithRanges } from './http-range.utils';
 
-const mockCreateReadStream = vi.mocked(createReadStream);
+const mockOpen = vi.mocked(open);
 
-const SETTLED_MTIME_NS = 1_700_000_000_000_000_000n;
+// The send tests run against a frozen clock: `isMtimeSettled` compares the
+// recorded mtime to `Date.now()`, so a fixture derived from the real clock would
+// cross the tick boundary mid-suite and flip the tag it asserts on.
+const NOW_MS = 1_700_000_010_000;
 const SETTLED_MTIME_MS = 1_700_000_000_000;
-
-function freshMtimeNs() {
-  return BigInt(Date.now()) * 1_000_000n;
-}
+const SETTLED_MTIME_NS = 1_700_000_000_000_000_000n;
+const OPEN_TICK_MTIME_MS = NOW_MS - 500;
+const OPEN_TICK_MTIME_NS = BigInt(OPEN_TICK_MTIME_MS) * 1_000_000n;
 
 function makeReply() {
   const headers: Record<string, string | number> = {};
@@ -27,6 +29,25 @@ function makeReply() {
     send: vi.fn(() => reply),
   };
   return { reply, headers };
+}
+
+type StubIdentity = { size?: number; mtimeNs?: bigint; ino?: bigint };
+
+function stubOpen(identity: StubIdentity = {}) {
+  const stream = { destroy: vi.fn() };
+  const handle = {
+    stat: vi.fn(() =>
+      Promise.resolve({
+        size: BigInt(identity.size ?? 500),
+        mtimeNs: identity.mtimeNs ?? SETTLED_MTIME_NS,
+        ino: identity.ino ?? 42n,
+      }),
+    ),
+    createReadStream: vi.fn(() => stream),
+    close: vi.fn(() => Promise.resolve(undefined)),
+  };
+  mockOpen.mockResolvedValue(handle as never);
+  return { handle, stream };
 }
 
 describe('parseRangeHeader', () => {
@@ -119,6 +140,11 @@ describe('isIfRangeSatisfied', () => {
     expect(isIfRangeSatisfied('not-a-date', etag)).toBe(false);
   });
 
+  it('rejects an empty validator rather than reading it as an absent header', () => {
+    expect(isIfRangeSatisfied('', etag)).toBe(false);
+    expect(isIfRangeSatisfied('   ', etag)).toBe(false);
+  });
+
   it('rejects every validator while no strong tag exists', () => {
     expect(isIfRangeSatisfied(etag, null)).toBe(false);
     expect(isIfRangeSatisfied(lastModified, null)).toBe(false);
@@ -133,127 +159,194 @@ describe('isIfRangeSatisfied', () => {
 });
 
 describe('sendFileWithRanges', () => {
-  const base = {
-    path: '/books/book.epub',
-    size: 500,
-    mtimeNs: SETTLED_MTIME_NS,
-    ino: 42n,
-    contentType: 'application/epub+zip',
-  };
-  const settledEtag = buildFileEtag(base);
+  const base = { path: '/books/book.epub', contentType: 'application/epub+zip' };
+  const settledEtag = buildFileEtag({ size: 500, mtimeNs: SETTLED_MTIME_NS, ino: 42n });
 
-  it('sends the full file with validators when no range is requested', () => {
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(NOW_MS);
+    stubOpen();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    mockOpen.mockReset();
+  });
+
+  it('sends the full file with validators when no range is requested', async () => {
     const { reply, headers } = makeReply();
+    const { handle } = stubOpen();
 
-    const result = sendFileWithRanges(reply as never, { ...base, contentDisposition: 'attachment; filename="book.epub"' });
+    const result = await sendFileWithRanges(reply as never, { ...base, contentDisposition: 'attachment; filename="book.epub"' });
 
-    expect(result).toEqual({ status: 200, start: 0, end: 499, partial: false });
+    expect(result).toEqual({ status: 200, size: 500, start: 0, end: 499, partial: false });
     expect(headers['Accept-Ranges']).toBe('bytes');
     expect(headers['ETag']).toBe(settledEtag);
     expect(headers['Last-Modified']).toBe(new Date(SETTLED_MTIME_MS).toUTCString());
     expect(headers['Content-Disposition']).toBe('attachment; filename="book.epub"');
     expect(headers['Content-Length']).toBe(500);
     expect(reply.type).toHaveBeenCalledWith('application/epub+zip');
-    expect(mockCreateReadStream).toHaveBeenCalledWith('/books/book.epub');
+    expect(handle.createReadStream).toHaveBeenCalledWith({ start: 0 });
   });
 
-  it('sends partial content for a resume range', () => {
+  it('reads the identity and the bytes from one descriptor, never from the path twice', async () => {
+    const { reply } = makeReply();
+    const { handle, stream } = stubOpen();
+
+    await sendFileWithRanges(reply as never, base);
+
+    expect(mockOpen).toHaveBeenCalledTimes(1);
+    expect(mockOpen).toHaveBeenCalledWith('/books/book.epub', 'r');
+    expect(handle.stat).toHaveBeenCalledWith({ bigint: true });
+    expect(reply.send).toHaveBeenCalledWith(stream);
+  });
+
+  it('leaves the descriptor to the stream once a body is on its way out', async () => {
+    const { reply } = makeReply();
+    const { handle } = stubOpen();
+
+    await sendFileWithRanges(reply as never, base);
+
+    expect(handle.close).not.toHaveBeenCalled();
+  });
+
+  it('sends partial content for a resume range', async () => {
     const { reply, headers } = makeReply();
+    const { handle } = stubOpen();
 
-    const result = sendFileWithRanges(reply as never, { ...base, rangeHeader: 'bytes=200-' });
+    const result = await sendFileWithRanges(reply as never, { ...base, rangeHeader: 'bytes=200-' });
 
-    expect(result).toEqual({ status: 206, start: 200, end: 499, partial: true });
+    expect(result).toEqual({ status: 206, size: 500, start: 200, end: 499, partial: true });
     expect(reply.status).toHaveBeenCalledWith(206);
     expect(headers['Content-Range']).toBe('bytes 200-499/500');
     expect(headers['Content-Length']).toBe(300);
-    expect(mockCreateReadStream).toHaveBeenCalledWith('/books/book.epub', { start: 200, end: 499 });
+    expect(handle.createReadStream).toHaveBeenCalledWith({ start: 200, end: 499 });
   });
 
-  it('answers an unsatisfiable range with 416 and no stream', () => {
+  it('answers an unsatisfiable range with 416, no stream, and a closed descriptor', async () => {
     const { reply, headers } = makeReply();
-    mockCreateReadStream.mockClear();
+    const { handle } = stubOpen();
 
-    const result = sendFileWithRanges(reply as never, { ...base, rangeHeader: 'bytes=600-700' });
+    const result = await sendFileWithRanges(reply as never, { ...base, rangeHeader: 'bytes=600-700' });
 
     expect(result.status).toBe(416);
     expect(reply.status).toHaveBeenCalledWith(416);
     expect(headers['Content-Range']).toBe('bytes */500');
-    expect(mockCreateReadStream).not.toHaveBeenCalled();
+    expect(handle.createReadStream).not.toHaveBeenCalled();
+    expect(handle.close).toHaveBeenCalledTimes(1);
   });
 
-  it('ignores the range when If-Range no longer matches the file', () => {
+  it('closes the descriptor when the stat behind it fails', async () => {
+    const { reply } = makeReply();
+    const { handle } = stubOpen();
+    handle.stat.mockRejectedValueOnce(new Error('EIO'));
+
+    await expect(sendFileWithRanges(reply as never, base)).rejects.toThrow('EIO');
+    expect(handle.close).toHaveBeenCalledTimes(1);
+  });
+
+  it('destroys the stream when the reply refuses it, so the descriptor is not orphaned', async () => {
+    const { reply } = makeReply();
+    const { stream } = stubOpen();
+    reply.send.mockImplementationOnce(() => {
+      throw new Error('reply already sent');
+    });
+
+    await expect(sendFileWithRanges(reply as never, base)).rejects.toThrow('reply already sent');
+    expect(stream.destroy).toHaveBeenCalledTimes(1);
+  });
+
+  it('surfaces a missing path as the raw fs error for the caller to map', async () => {
+    const { reply } = makeReply();
+    const missing = Object.assign(new Error('ENOENT'), { code: 'ENOENT' });
+    mockOpen.mockRejectedValueOnce(missing);
+
+    await expect(sendFileWithRanges(reply as never, base)).rejects.toBe(missing);
+  });
+
+  it('ignores the range when If-Range no longer matches the file', async () => {
     const { reply, headers } = makeReply();
+    const { handle } = stubOpen();
 
-    const result = sendFileWithRanges(reply as never, { ...base, rangeHeader: 'bytes=200-', ifRangeHeader: '"stale-1"' });
+    const result = await sendFileWithRanges(reply as never, { ...base, rangeHeader: 'bytes=200-', ifRangeHeader: '"stale-1"' });
 
-    expect(result).toEqual({ status: 200, start: 0, end: 499, partial: false });
+    expect(result).toEqual({ status: 200, size: 500, start: 0, end: 499, partial: false });
     expect(headers['Content-Range']).toBeUndefined();
     expect(headers['Content-Length']).toBe(500);
-    expect(mockCreateReadStream).toHaveBeenCalledWith('/books/book.epub');
+    expect(handle.createReadStream).toHaveBeenCalledWith({ start: 0 });
   });
 
-  it('ignores the range when If-Range arrives repeated', () => {
+  it('ignores the range when If-Range arrives repeated', async () => {
     const { reply, headers } = makeReply();
 
-    const result = sendFileWithRanges(reply as never, { ...base, rangeHeader: 'bytes=200-', ifRangeHeader: [settledEtag, settledEtag] });
+    const result = await sendFileWithRanges(reply as never, { ...base, rangeHeader: 'bytes=200-', ifRangeHeader: [settledEtag, settledEtag] });
 
-    expect(result).toEqual({ status: 200, start: 0, end: 499, partial: false });
+    expect(result).toEqual({ status: 200, size: 500, start: 0, end: 499, partial: false });
     expect(headers['Content-Range']).toBeUndefined();
   });
 
-  it('ignores the range when If-Range carries the Last-Modified date', () => {
+  it('ignores the range when If-Range arrives empty', async () => {
     const { reply, headers } = makeReply();
 
-    const result = sendFileWithRanges(reply as never, {
+    const result = await sendFileWithRanges(reply as never, { ...base, rangeHeader: 'bytes=200-', ifRangeHeader: '' });
+
+    expect(result).toEqual({ status: 200, size: 500, start: 0, end: 499, partial: false });
+    expect(headers['Content-Range']).toBeUndefined();
+  });
+
+  it('ignores the range when If-Range carries the Last-Modified date', async () => {
+    const { reply, headers } = makeReply();
+
+    const result = await sendFileWithRanges(reply as never, {
       ...base,
       rangeHeader: 'bytes=200-',
       ifRangeHeader: new Date(SETTLED_MTIME_MS).toUTCString(),
     });
 
-    expect(result).toEqual({ status: 200, start: 0, end: 499, partial: false });
+    expect(result).toEqual({ status: 200, size: 500, start: 0, end: 499, partial: false });
     expect(headers['Content-Range']).toBeUndefined();
   });
 
-  it('serves the range when If-Range still matches the file', () => {
+  it('serves the range when If-Range still matches the file', async () => {
     const { reply, headers } = makeReply();
 
-    const result = sendFileWithRanges(reply as never, { ...base, rangeHeader: 'bytes=200-', ifRangeHeader: settledEtag });
+    const result = await sendFileWithRanges(reply as never, { ...base, rangeHeader: 'bytes=200-', ifRangeHeader: settledEtag });
 
     expect(result.partial).toBe(true);
     expect(headers['Content-Range']).toBe('bytes 200-499/500');
   });
 
-  it('weakens the tag for a file still inside the filesystem tick window', () => {
+  it('weakens the tag for a file still inside the filesystem tick window', async () => {
     const { reply, headers } = makeReply();
-    const mtimeNs = freshMtimeNs();
+    stubOpen({ mtimeNs: OPEN_TICK_MTIME_NS });
 
-    const result = sendFileWithRanges(reply as never, { ...base, mtimeNs });
+    const result = await sendFileWithRanges(reply as never, base);
 
     expect(result.status).toBe(200);
-    expect(headers['ETag']).toBe(`W/${buildFileEtag({ ...base, mtimeNs })}`);
+    expect(headers['ETag']).toBe(`W/${buildFileEtag({ size: 500, mtimeNs: OPEN_TICK_MTIME_NS, ino: 42n })}`);
   });
 
-  it('declines If-Range while the tick window is open, even for the tag it just sent', () => {
+  it('declines If-Range while the tick window is open, even for the tag it just sent', async () => {
     const { reply, headers } = makeReply();
-    const mtimeNs = freshMtimeNs();
+    stubOpen({ mtimeNs: OPEN_TICK_MTIME_NS });
 
-    const result = sendFileWithRanges(reply as never, {
+    const result = await sendFileWithRanges(reply as never, {
       ...base,
-      mtimeNs,
       rangeHeader: 'bytes=200-',
-      ifRangeHeader: buildFileEtag({ ...base, mtimeNs }),
+      ifRangeHeader: buildFileEtag({ size: 500, mtimeNs: OPEN_TICK_MTIME_NS, ino: 42n }),
     });
 
-    expect(result).toEqual({ status: 200, start: 0, end: 499, partial: false });
+    expect(result).toEqual({ status: 200, size: 500, start: 0, end: 499, partial: false });
     expect(headers['Content-Range']).toBeUndefined();
   });
 
-  it('still answers a bare range with 206 inside the tick window', () => {
+  it('still answers a bare range with 206 inside the tick window', async () => {
     const { reply, headers } = makeReply();
+    stubOpen({ mtimeNs: OPEN_TICK_MTIME_NS });
 
-    const result = sendFileWithRanges(reply as never, { ...base, mtimeNs: freshMtimeNs(), rangeHeader: 'bytes=200-' });
+    const result = await sendFileWithRanges(reply as never, { ...base, rangeHeader: 'bytes=200-' });
 
-    expect(result).toEqual({ status: 206, start: 200, end: 499, partial: true });
+    expect(result).toEqual({ status: 206, size: 500, start: 200, end: 499, partial: true });
     expect(headers['Content-Range']).toBe('bytes 200-499/500');
   });
 });

@@ -3,8 +3,9 @@ import { and, eq } from 'drizzle-orm';
 import type { FastifyReply } from 'fastify';
 import { NodePgDatabase } from 'drizzle-orm/node-postgres';
 
-import { sendFileWithRanges, statFileIdentity } from '../../../common/utils/http-range.utils';
-import type { FileIdentity, FileRangeRequest } from '../../../common/utils/http-range.utils';
+import { isMissingFilesystemEntry } from '../../../common/utils/fs-error.utils';
+import { sendFileWithRanges } from '../../../common/utils/http-range.utils';
+import type { FileRangeRequest } from '../../../common/utils/http-range.utils';
 import { sanitizeLogValue } from '../../../common/utils/log-sanitize.utils';
 import { DB } from '../../../db/db.module';
 import * as schema from '../../../db/schema';
@@ -66,21 +67,18 @@ export class KoboDownloadService {
   }
 
   private async streamFile(absolutePath: string, fileId: number, format: string, reply: FastifyReply, range: FileRangeRequest) {
-    let identity: FileIdentity;
     try {
-      identity = await statFileIdentity(absolutePath);
-    } catch {
-      throw new NotFoundException('File not found on disk');
+      await sendFileWithRanges(reply, {
+        path: absolutePath,
+        contentType: MIME[format] ?? 'application/octet-stream',
+        contentDisposition: `attachment; filename="book-${fileId}.${format}"`,
+        rangeHeader: range.rangeHeader,
+        ifRangeHeader: range.ifRangeHeader,
+      });
+    } catch (err) {
+      if (isMissingFilesystemEntry(err)) throw new NotFoundException('File not found on disk');
+      throw err;
     }
-
-    sendFileWithRanges(reply, {
-      ...identity,
-      path: absolutePath,
-      contentType: MIME[format] ?? 'application/octet-stream',
-      contentDisposition: `attachment; filename="book-${fileId}.${format}"`,
-      rangeHeader: range.rangeHeader,
-      ifRangeHeader: range.ifRangeHeader,
-    });
   }
 
   private async streamKepub(

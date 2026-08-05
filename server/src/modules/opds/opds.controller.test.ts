@@ -3,20 +3,34 @@ vi.mock('fs', () => ({
 }));
 
 vi.mock('fs/promises', () => ({
+  open: vi.fn(),
   readdir: vi.fn(),
   stat: vi.fn(),
 }));
 
 import { createReadStream } from 'fs';
-import { readdir, stat } from 'fs/promises';
+import { open, readdir, stat } from 'fs/promises';
 import { BadRequestException, NotFoundException } from '@nestjs/common';
 import type { MockedFunction } from 'vitest';
 
 import { OpdsController } from './opds.controller';
 
 const mockCreateReadStream = createReadStream as MockedFunction<typeof createReadStream>;
+const mockOpen = open as MockedFunction<typeof open>;
 const mockReaddir = readdir as MockedFunction<typeof readdir>;
 const mockStat = stat as MockedFunction<typeof stat>;
+
+// The download route hands the path to the stream helper, which opens it once and
+// takes both the identity and the bytes from that descriptor.
+function stubOpen(size: number, stream: unknown = { kind: 'download-stream' }) {
+  const handle = {
+    stat: vi.fn(() => Promise.resolve({ size: BigInt(size), mtimeNs: 5_000_000_000n, ino: 42n })),
+    createReadStream: vi.fn(() => stream),
+    close: vi.fn(() => Promise.resolve(undefined)),
+  };
+  mockOpen.mockResolvedValueOnce(handle as never);
+  return { handle, stream };
+}
 
 function makeController() {
   const opdsService = {
@@ -336,16 +350,12 @@ describe('OpdsController', () => {
   it('downloads file with sanitized attachment name', async () => {
     const { controller, opdsBookService } = makeController();
     const reply = makeReply();
-    const stream = { kind: 'download-stream' };
 
     opdsBookService.getDownloadTarget.mockResolvedValue({
       absolutePath: '/books/library/book.epub',
       format: 'epub',
-      size: 12345,
-      mtimeNs: 5_000_000_000n,
-      ino: 42n,
     });
-    mockCreateReadStream.mockReturnValue(stream as never);
+    const { stream } = stubOpen(12345);
 
     await controller.download(99, 0, { userId: 2, isSuperuser: false } as never, reply);
 
@@ -366,18 +376,38 @@ describe('OpdsController', () => {
     opdsBookService.getDownloadTarget.mockResolvedValue({
       absolutePath: '/books/library/book.epub',
       format: 'epub',
-      size: 12345,
-      mtimeNs: 5_000_000_000n,
-      ino: 42n,
     });
-    mockCreateReadStream.mockReturnValue({} as never);
+    const { handle } = stubOpen(12345);
 
     await controller.download(99, 0, { userId: 2, isSuperuser: false } as never, reply, 'bytes=12000-', '"3039-12a05f200-2a"');
 
     expect(reply.status).toHaveBeenCalledWith(206);
     expect(reply.header).toHaveBeenCalledWith('Content-Range', 'bytes 12000-12344/12345');
     expect(reply.header).toHaveBeenCalledWith('Content-Length', 345);
-    expect(mockCreateReadStream).toHaveBeenCalledWith('/books/library/book.epub', { start: 12000, end: 12344 });
+    expect(mockOpen).toHaveBeenCalledWith('/books/library/book.epub', 'r');
+    expect(handle.createReadStream).toHaveBeenCalledWith({ start: 12000, end: 12344 });
+  });
+
+  it('reports a download whose file vanished from disk as not found', async () => {
+    const { controller, opdsBookService } = makeController();
+    opdsBookService.getDownloadTarget.mockResolvedValue({
+      absolutePath: '/books/library/book.epub',
+      format: 'epub',
+    });
+    mockOpen.mockRejectedValueOnce(Object.assign(new Error('missing'), { code: 'ENOENT' }));
+
+    await expect(controller.download(99, 0, { userId: 2, isSuperuser: false } as never, makeReply())).rejects.toThrow(NotFoundException);
+  });
+
+  it('propagates a download failure that is not a missing file', async () => {
+    const { controller, opdsBookService } = makeController();
+    opdsBookService.getDownloadTarget.mockResolvedValue({
+      absolutePath: '/books/library/book.epub',
+      format: 'epub',
+    });
+    mockOpen.mockRejectedValueOnce(Object.assign(new Error('denied'), { code: 'EACCES' }));
+
+    await expect(controller.download(99, 0, { userId: 2, isSuperuser: false } as never, makeReply())).rejects.toThrow('denied');
   });
 
   it('propagates the not-found the download target lookup raises', async () => {

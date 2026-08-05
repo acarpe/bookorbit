@@ -4,6 +4,7 @@ import {
   DefaultValuePipe,
   Get,
   Headers,
+  Logger,
   NotFoundException,
   Param,
   ParseIntPipe,
@@ -22,7 +23,9 @@ import { MAX_OFFSET_ROWS, isOffsetWithinLimit } from '../../common/constants/pag
 import { Public } from '../../common/decorators/public.decorator';
 import { imageContentTypeFromPath } from '../../common/image-content-type';
 import { contentDispositionHeader } from '../../common/utils/content-disposition.utils';
+import { isMissingFilesystemEntry } from '../../common/utils/fs-error.utils';
 import { sendFileWithRanges } from '../../common/utils/http-range.utils';
+import { sanitizeLogValue } from '../../common/utils/log-sanitize.utils';
 import { OPDS_MIME_ACQ, OPDS_MIME_NAV, OPDS_MIME_SEARCH, fileMimeType } from './opds-xml.helpers';
 import { OpdsAuthGuard } from './opds-auth.guard';
 import type { OpdsRequestUser } from './opds-auth.guard';
@@ -36,6 +39,7 @@ import { BookService } from '../book/book.service';
 @Public()
 @UseGuards(OpdsEnabledGuard, OpdsAuthGuard)
 export class OpdsController {
+  private readonly logger = new Logger(OpdsController.name);
   private readonly appDataPath: string;
 
   constructor(
@@ -274,7 +278,7 @@ export class OpdsController {
   ) {
     await this.opdsBookService.validateBookAccess(bookId, user.userId, user.isSuperuser, user.contentFilters);
 
-    const { absolutePath, format, size, mtimeNs, ino } = await this.opdsBookService.getDownloadTarget(bookId, fileId);
+    const { absolutePath, format } = await this.opdsBookService.getDownloadTarget(bookId, fileId);
 
     const filename = await this.bookService.resolveDownloadFilename({
       bookId,
@@ -282,16 +286,23 @@ export class OpdsController {
       format: format === 'unknown' ? null : format,
     });
 
-    sendFileWithRanges(reply, {
-      path: absolutePath,
-      size,
-      mtimeNs,
-      ino,
-      contentType: fileMimeType(format),
-      contentDisposition: contentDispositionHeader('attachment', filename, 'download'),
-      rangeHeader,
-      ifRangeHeader,
-    });
+    const startedAt = Date.now();
+    try {
+      await sendFileWithRanges(reply, {
+        path: absolutePath,
+        contentType: fileMimeType(format),
+        contentDisposition: contentDispositionHeader('attachment', filename, 'download'),
+        rangeHeader,
+        ifRangeHeader,
+      });
+    } catch (err) {
+      if (isMissingFilesystemEntry(err)) throw new NotFoundException('File not found on disk');
+      const error = err instanceof Error ? err : new Error(String(err));
+      this.logger.error(
+        `[opds.download] [fail] bookId=${bookId} fileId=${fileId} durationMs=${Date.now() - startedAt} errorClass=${error.constructor.name} error="${sanitizeLogValue(error.message)}" - download file failed`,
+      );
+      throw err;
+    }
   }
 
   private sendXml(reply: FastifyReply, xml: string, mimeType: string) {

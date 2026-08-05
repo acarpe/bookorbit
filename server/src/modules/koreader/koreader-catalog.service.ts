@@ -42,8 +42,8 @@ import { imageContentTypeFromPath } from '../../common/image-content-type';
 import type { RequestUser } from '../../common/types/request-user';
 import { contentDispositionHeader } from '../../common/utils/content-disposition.utils';
 import { isMissingFilesystemEntry } from '../../common/utils/fs-error.utils';
-import { sendFileWithRanges, statFileIdentity } from '../../common/utils/http-range.utils';
-import type { FileIdentity, FileRangeRequest } from '../../common/utils/http-range.utils';
+import { sendFileWithRanges } from '../../common/utils/http-range.utils';
+import type { FileRangeRequest, FileStreamResult } from '../../common/utils/http-range.utils';
 import { sanitizeLogValue } from '../../common/utils/log-sanitize.utils';
 import { storageConfig } from '../../config/config';
 import { BookReadService } from '../book/book-read.service';
@@ -519,25 +519,21 @@ export class KoreaderCatalogService {
         format: file.format,
       });
 
-      let identity: FileIdentity;
+      let result: FileStreamResult;
       try {
-        identity = await statFileIdentity(file.absolutePath);
+        result = await sendFileWithRanges(reply, {
+          path: file.absolutePath,
+          contentType: fileMimeType(format),
+          contentDisposition: contentDispositionHeader('attachment', filename, 'download'),
+          rangeHeader: options.rangeHeader,
+          ifRangeHeader: options.ifRangeHeader,
+        });
       } catch (err) {
         if (isMissingFilesystemEntry(err)) throw new NotFoundException('File not found on disk');
         throw err;
       }
-      const { size } = identity;
-
-      const result = sendFileWithRanges(reply, {
-        ...identity,
-        path: file.absolutePath,
-        contentType: fileMimeType(format),
-        contentDisposition: contentDispositionHeader('attachment', filename, 'download'),
-        rangeHeader: options.rangeHeader,
-        ifRangeHeader: options.ifRangeHeader,
-      });
       this.logger.log(
-        `[${event}] [end] fileId=${fileId} userId=${user.id} durationMs=${Date.now() - startedAt} status=${result.status} sizeBytes=${size} sentBytes=${result.status === 416 ? 0 : result.end - result.start + 1} partial=${result.partial} - catalog download completed`,
+        `[${event}] [end] fileId=${fileId} userId=${user.id} durationMs=${Date.now() - startedAt} status=${result.status} sizeBytes=${result.size} sentBytes=${result.status === 416 ? 0 : result.end - result.start + 1} partial=${result.partial} - catalog download completed`,
       );
     } catch (err) {
       const error = err instanceof Error ? err : new Error(String(err));
