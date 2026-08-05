@@ -23,7 +23,9 @@ import type { FastifyReply } from 'fastify';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { RequirePermission } from '../../common/decorators/require-permission.decorator';
 import { contentDispositionHeader } from '../../common/utils/content-disposition.utils';
+import { isMissingFilesystemEntry } from '../../common/utils/fs-error.utils';
 import { sendFileWithRanges } from '../../common/utils/http-range.utils';
+import type { FileStreamOptions, FileStreamResult } from '../../common/utils/http-range.utils';
 import { sanitizeLogValue } from '../../common/utils/log-sanitize.utils';
 import { Auditable } from '../../common/decorators/auditable.decorator';
 import { ForbidPermission } from '../../common/decorators/forbid-permission.decorator';
@@ -397,13 +399,10 @@ export class BookController {
     @Res() reply: FastifyReply,
     @Headers('if-range') ifRangeHeader?: string,
   ) {
-    const { path, size, mtimeNs, ino, format, originalFilename } = await this.bookService.getFileInfo(fileId, user);
+    const { path, format, originalFilename } = await this.bookService.getFileInfo(fileId, user);
 
-    sendFileWithRanges(reply, {
+    await this.sendBookFile(reply, fileId, {
       path,
-      size,
-      mtimeNs,
-      ino,
       contentType: resolveBookMimeType(format),
       contentDisposition: contentDispositionHeader('inline', originalFilename, 'download'),
       rangeHeader,
@@ -424,21 +423,18 @@ export class BookController {
     const startedAt = Date.now();
     this.logger.log(`[${event}] [start] fileId=${fileId} userId=${user.id} range="${sanitizeLogValue(rangeHeader ?? '')}" - download file started`);
     try {
-      const { path, size, mtimeNs, ino, format, bookId } = await this.bookService.getFileInfo(fileId, user);
+      const { path, format, bookId } = await this.bookService.getFileInfo(fileId, user);
       const filename = await this.bookService.resolveDownloadFilename({ bookId, absolutePath: path, format: format === 'unknown' ? null : format });
 
-      const result = sendFileWithRanges(reply, {
+      const result = await this.sendBookFile(reply, fileId, {
         path,
-        size,
-        mtimeNs,
-        ino,
         contentType: resolveBookMimeType(format),
         contentDisposition: contentDispositionHeader('attachment', filename, 'download'),
         rangeHeader,
         ifRangeHeader,
       });
       this.logger.log(
-        `[${event}] [end] fileId=${fileId} userId=${user.id} durationMs=${Date.now() - startedAt} status=${result.status} sizeBytes=${size} partial=${result.partial} - download file completed`,
+        `[${event}] [end] fileId=${fileId} userId=${user.id} durationMs=${Date.now() - startedAt} status=${result.status} sizeBytes=${result.size} partial=${result.partial} - download file completed`,
       );
     } catch (err) {
       const errorClass = err instanceof Error ? err.name : 'Error';
@@ -446,6 +442,15 @@ export class BookController {
       this.logger.warn(
         `[${event}] [fail] fileId=${fileId} userId=${user.id} durationMs=${Date.now() - startedAt} errorClass=${errorClass} error="${errorMessage}" - download file failed`,
       );
+      throw err;
+    }
+  }
+
+  private async sendBookFile(reply: FastifyReply, fileId: number, options: FileStreamOptions): Promise<FileStreamResult> {
+    try {
+      return await sendFileWithRanges(reply, options);
+    } catch (err) {
+      if (isMissingFilesystemEntry(err)) throw new NotFoundException(`File ${fileId} not found on disk`);
       throw err;
     }
   }

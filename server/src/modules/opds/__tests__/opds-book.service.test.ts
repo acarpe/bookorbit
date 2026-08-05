@@ -269,7 +269,10 @@ describe('OpdsBookService', () => {
     });
   });
 
-  it('resolves getDownloadTarget with the identity of the file on disk', async () => {
+  // The identity used to come from a stat here, which left a window for the file
+  // to be replaced before the stream opened it. The stream helper now opens the
+  // path itself, so this resolves to the target only and never touches the disk.
+  it('resolves getDownloadTarget to the path and format without touching the filesystem', async () => {
     const { service } = makeService();
     vi.spyOn(service, 'getBookFiles').mockResolvedValue({
       absolutePath: '/books/a.epub',
@@ -277,34 +280,13 @@ describe('OpdsBookService', () => {
       title: 'A',
       authorName: 'B',
     });
-    statMock.mockResolvedValue({ size: 4096n, mtimeNs: 1_700_000_000_000_000_000n, ino: 42n } as never);
+    statMock.mockClear();
 
     await expect(service.getDownloadTarget(7, 42)).resolves.toEqual({
       absolutePath: '/books/a.epub',
       format: 'epub',
-      size: 4096,
-      mtimeNs: 1_700_000_000_000_000_000n,
-      ino: 42n,
     });
-  });
-
-  it('reports a missing download file as not found and propagates every other stat failure', async () => {
-    const { service } = makeService();
-    vi.spyOn(service, 'getBookFiles').mockResolvedValue({
-      absolutePath: '/books/a.epub',
-      format: 'epub',
-      title: 'A',
-      authorName: 'B',
-    });
-
-    statMock.mockRejectedValueOnce(Object.assign(new Error('missing'), { code: 'ENOENT' }));
-    await expect(service.getDownloadTarget(7)).rejects.toThrow(NotFoundException);
-
-    statMock.mockRejectedValueOnce(Object.assign(new Error('missing'), { code: 'ENOTDIR' }));
-    await expect(service.getDownloadTarget(7)).rejects.toThrow(NotFoundException);
-
-    statMock.mockRejectedValueOnce(Object.assign(new Error('denied'), { code: 'EACCES' }));
-    await expect(service.getDownloadTarget(7)).rejects.toThrow('denied');
+    expect(statMock).not.toHaveBeenCalled();
   });
 
   it('reports an unknown download file as not found without touching the filesystem', async () => {

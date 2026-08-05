@@ -1,19 +1,27 @@
 vi.mock('fs/promises', () => ({
-  stat: vi.fn(),
-}));
-
-vi.mock('fs', () => ({
-  createReadStream: vi.fn(),
+  open: vi.fn(),
 }));
 
 import { NotFoundException } from '@nestjs/common';
-import { createReadStream } from 'fs';
-import { stat } from 'fs/promises';
+import { open } from 'fs/promises';
 
 import { KoboDownloadService } from './kobo-download.service';
 
-const statMock = vi.mocked(stat);
-const createReadStreamMock = vi.mocked(createReadStream);
+const openMock = vi.mocked(open);
+
+// The stream helper opens the path and hangs both the stat and the read stream
+// off that one descriptor, so the fixture is a fake FileHandle rather than a
+// stat result plus a path-based createReadStream.
+function stubOpen(size: number) {
+  const stream = { destroy: vi.fn() };
+  const handle = {
+    stat: vi.fn(() => Promise.resolve({ size: BigInt(size), mtimeNs: 1_700_000_000_000_000_000n, ino: 42n })),
+    createReadStream: vi.fn(() => stream),
+    close: vi.fn(() => Promise.resolve(undefined)),
+  };
+  openMock.mockResolvedValueOnce(handle as never);
+  return { handle, stream };
+}
 
 function makeReply() {
   return {
@@ -165,9 +173,7 @@ describe('KoboDownloadService', () => {
     const deps = makeDeps();
     const service = makeService(deps);
     const reply = makeReply();
-    const stream = {} as never;
-    statMock.mockResolvedValueOnce({ size: 1234n, mtimeNs: 1_700_000_000_000_000_000n, ino: 42n } as never);
-    createReadStreamMock.mockReturnValue(stream);
+    const { stream } = stubOpen(1234);
 
     await (service as any).streamFile('/books/book.epub', 99, 'epub', reply, {});
 
@@ -176,16 +182,25 @@ describe('KoboDownloadService', () => {
     expect(reply.type).toHaveBeenCalledWith('application/epub+zip');
     expect(reply.send).toHaveBeenCalledWith(stream);
 
-    statMock.mockRejectedValueOnce(new Error('missing'));
+    openMock.mockRejectedValueOnce(Object.assign(new Error('missing'), { code: 'ENOENT' }));
     await expect((service as any).streamFile('/books/missing.epub', 99, 'epub', reply, {})).rejects.toThrow(NotFoundException);
+  });
+
+  it('streamFile propagates a permission failure instead of reporting it as a missing file', async () => {
+    const deps = makeDeps();
+    const service = makeService(deps);
+    const reply = makeReply();
+    openMock.mockRejectedValueOnce(Object.assign(new Error('denied'), { code: 'EACCES' }));
+
+    await expect((service as any).streamFile('/books/book.epub', 99, 'epub', reply, {})).rejects.toThrow('denied');
+    await expect((service as any).streamFile('/books/book.epub', 99, 'epub', reply, {})).rejects.not.toBeInstanceOf(NotFoundException);
   });
 
   it('streamFile uses application/epub+zip for kepub.epub format', async () => {
     const deps = makeDeps();
     const service = makeService(deps);
     const reply = makeReply();
-    statMock.mockResolvedValueOnce({ size: 4096n, mtimeNs: 1_700_000_000_000_000_000n, ino: 42n } as never);
-    createReadStreamMock.mockReturnValue({} as never);
+    stubOpen(4096);
 
     await (service as any).streamFile('/cache/44/hash.kepub.epub', 55, 'kepub.epub', reply, {});
 
@@ -197,8 +212,7 @@ describe('KoboDownloadService', () => {
     const deps = makeDeps();
     const service = makeService(deps);
     const reply = makeReply();
-    statMock.mockResolvedValueOnce({ size: 100n, mtimeNs: 1_700_000_000_000_000_000n, ino: 42n } as never);
-    createReadStreamMock.mockReturnValue({} as never);
+    stubOpen(100);
 
     await (service as any).streamFile('/books/book.xyz', 10, 'xyz', reply, {});
 
@@ -209,15 +223,14 @@ describe('KoboDownloadService', () => {
     const deps = makeDeps();
     const service = makeService(deps);
     const reply = makeReply();
-    statMock.mockResolvedValueOnce({ size: 1000n, mtimeNs: 1_700_000_000_000_000_000n, ino: 42n } as never);
-    createReadStreamMock.mockReturnValue({} as never);
+    const { handle } = stubOpen(1000);
 
     await (service as any).streamFile('/books/book.epub', 99, 'epub', reply, { rangeHeader: 'bytes=400-' });
 
     expect(reply.status).toHaveBeenCalledWith(206);
     expect(reply.header).toHaveBeenCalledWith('Content-Range', 'bytes 400-999/1000');
     expect(reply.header).toHaveBeenCalledWith('Accept-Ranges', 'bytes');
-    expect(createReadStreamMock).toHaveBeenCalledWith('/books/book.epub', { start: 400, end: 999 });
+    expect(handle.createReadStream).toHaveBeenCalledWith({ start: 400, end: 999 });
   });
 
   it('streamKepub streams the shared conversion path', async () => {
@@ -266,8 +279,7 @@ describe('KoboDownloadService', () => {
     const deps = makeDeps();
     const service = makeService(deps);
     const reply = makeReply();
-    statMock.mockResolvedValueOnce({ size: 1000n, mtimeNs: 1_700_000_000_000_000_000n, ino: 42n } as never);
-    createReadStreamMock.mockReturnValue({} as never);
+    const { handle } = stubOpen(1000);
 
     await (service as any).streamFile('/books/book.epub', 99, 'epub', reply, {
       rangeHeader: 'bytes=400-',
@@ -276,20 +288,20 @@ describe('KoboDownloadService', () => {
 
     expect(reply.status).not.toHaveBeenCalledWith(206);
     expect(reply.header).toHaveBeenCalledWith('Content-Length', 1000);
-    expect(createReadStreamMock).toHaveBeenCalledWith('/books/book.epub');
+    expect(handle.createReadStream).toHaveBeenCalledWith({ start: 0 });
   });
 
   it('streamFile answers 416 for an offset past the end of the file', async () => {
     const deps = makeDeps();
     const service = makeService(deps);
     const reply = makeReply();
-    statMock.mockResolvedValueOnce({ size: 1000n, mtimeNs: 1_700_000_000_000_000_000n, ino: 42n } as never);
-    createReadStreamMock.mockClear();
+    const { handle } = stubOpen(1000);
 
     await (service as any).streamFile('/books/book.epub', 99, 'epub', reply, { rangeHeader: 'bytes=1000-' });
 
     expect(reply.status).toHaveBeenCalledWith(416);
     expect(reply.header).toHaveBeenCalledWith('Content-Range', 'bytes */1000');
-    expect(createReadStreamMock).not.toHaveBeenCalled();
+    expect(handle.createReadStream).not.toHaveBeenCalled();
+    expect(handle.close).toHaveBeenCalledTimes(1);
   });
 });
