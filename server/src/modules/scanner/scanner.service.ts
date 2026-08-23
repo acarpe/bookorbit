@@ -8,8 +8,12 @@ import type {
   BookTransferredEvent,
   CoverRefreshedEvent,
   CoverRefreshProgressEvent,
+  LibraryLastScan,
+  LibraryScanHistoryEntry,
   ScanBooksAddedEvent,
+  ScanJobStatus,
   ScanProgressEvent,
+  ScanTriggeredBy,
 } from '@bookorbit/types';
 import { NotificationType } from '@bookorbit/types';
 import { AchievementEventsService, ACHIEVEMENT_EVENT_LIBRARY_CATALOG_CHANGED } from '../achievement/achievement-events.service';
@@ -185,6 +189,8 @@ function formatBooksRestoredMessage(count: number): string {
   return count === 1 ? '1 book was restored on disk.' : `${count} books were restored on disk.`;
 }
 
+const SCAN_HISTORY_LIMIT = 10;
+
 @Injectable()
 export class ScannerService implements OnApplicationBootstrap {
   private readonly logger = new Logger(ScannerService.name);
@@ -198,6 +204,47 @@ export class ScannerService implements OnApplicationBootstrap {
     @Optional() private readonly autoFetchOrchestrator?: BookMetadataFetchOrchestratorService,
     @Optional() private readonly achievementEvents?: AchievementEventsService,
   ) {}
+
+  /**
+   * Most recent scan per library, keyed by library id. Exposed here rather than on the repository
+   * so the library module keeps talking to the scanner through its service.
+   */
+  async getLatestScans(libraryIds: number[]): Promise<Map<number, LibraryLastScan>> {
+    const rows = await this.scannerRepo.findLatestScanJobs(libraryIds);
+    return new Map(
+      rows.map((row) => [
+        row.libraryId,
+        {
+          status: row.status as ScanJobStatus,
+          triggeredBy: row.triggeredBy as ScanTriggeredBy,
+          startedAt: row.startedAt.toISOString(),
+          completedAt: row.completedAt?.toISOString() ?? null,
+          addedCount: row.addedCount,
+          updatedCount: row.updatedCount,
+          missingCount: row.missingCount,
+          errorMessage: row.errorMessage,
+        },
+      ]),
+    );
+  }
+
+  /** Newest-first scan history for one library, capped so the detail panel stays bounded. */
+  async getScanHistory(libraryId: number, limit = SCAN_HISTORY_LIMIT): Promise<LibraryScanHistoryEntry[]> {
+    // Clamped at both ends: a negative limit would reach SQL as a negative LIMIT.
+    const safeLimit = Math.min(Math.max(Math.trunc(limit) || 1, 1), SCAN_HISTORY_LIMIT);
+    const rows = await this.scannerRepo.findRecentScanJobs(libraryId, safeLimit);
+    return rows.map((row) => ({
+      id: row.id,
+      status: row.status as ScanJobStatus,
+      triggeredBy: row.triggeredBy as ScanTriggeredBy,
+      startedAt: row.startedAt.toISOString(),
+      completedAt: row.completedAt?.toISOString() ?? null,
+      addedCount: row.addedCount,
+      updatedCount: row.updatedCount,
+      missingCount: row.missingCount,
+      errorMessage: row.errorMessage,
+    }));
+  }
 
   // ── Live book emission buffer ──────────────────────────────────────────────
   private readonly bookEmitBuffer = new Map<number, number[]>();

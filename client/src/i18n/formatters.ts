@@ -28,6 +28,18 @@ export function formatNumber(value: number, options: Intl.NumberFormatOptions = 
 }
 
 /**
+ * Percentages of a whole. Takes the fraction (0.128), not the percentage (12.8), so the locale
+ * decides where the sign goes and whether it gets a space.
+ */
+export function formatPercent(fraction: number, fractionDigits = 0): string {
+  return formatNumber(fraction, {
+    style: 'percent',
+    minimumFractionDigits: fractionDigits,
+    maximumFractionDigits: fractionDigits,
+  })
+}
+
+/**
  * Short form for counts in tight spots such as sidebar badges: 1000 becomes 1K, 1234 becomes 1.2K.
  * Locales without a short thousands form (German) keep the grouped number, which is the correct
  * rendering for them.

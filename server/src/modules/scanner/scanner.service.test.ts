@@ -75,6 +75,8 @@ function makeBookFile(overrides: Record<string, unknown> = {}) {
 function makeRepo(overrides: Record<string, unknown> = {}) {
   return {
     failAllRunningJobs: vi.fn().mockResolvedValue(undefined),
+    findRecentScanJobs: vi.fn().mockResolvedValue([]),
+    findLatestScanJobs: vi.fn().mockResolvedValue([]),
     findLibraryFolders: vi.fn().mockResolvedValue([{ id: 1, path: '/library', libraryId: 1 }]),
     findLibrarySettings: vi.fn().mockResolvedValue({
       allowedFormats: [],
@@ -200,6 +202,67 @@ beforeEach(() => {
 });
 
 // ── startScan — precondition checks ──────────────────────────────────────────
+
+describe('scan history', () => {
+  const row = {
+    id: 3,
+    status: 'completed',
+    triggeredBy: 'watcher',
+    startedAt: new Date('2026-08-23T10:00:00.000Z'),
+    completedAt: new Date('2026-08-23T10:00:12.000Z'),
+    addedCount: 4,
+    updatedCount: 1,
+    missingCount: 0,
+    errorMessage: null,
+  };
+
+  it('serialises timestamps and passes the requested limit through', async () => {
+    const repo = makeRepo({ findRecentScanJobs: vi.fn().mockResolvedValue([row]) });
+    const { service } = makeService(repo);
+
+    await expect(service.getScanHistory(7, 5)).resolves.toEqual([
+      {
+        id: 3,
+        status: 'completed',
+        triggeredBy: 'watcher',
+        startedAt: '2026-08-23T10:00:00.000Z',
+        completedAt: '2026-08-23T10:00:12.000Z',
+        addedCount: 4,
+        updatedCount: 1,
+        missingCount: 0,
+        errorMessage: null,
+      },
+    ]);
+    expect(repo.findRecentScanJobs).toHaveBeenCalledWith(7, 5);
+  });
+
+  it('caps an oversized limit so a caller cannot request an unbounded page', async () => {
+    const repo = makeRepo();
+    const { service } = makeService(repo);
+
+    await service.getScanHistory(7, 5000);
+
+    expect(repo.findRecentScanJobs).toHaveBeenCalledWith(7, 10);
+  });
+
+  it('floors a zero or negative limit so it never reaches SQL', async () => {
+    const repo = makeRepo();
+    const { service } = makeService(repo);
+
+    await service.getScanHistory(7, -5);
+    await service.getScanHistory(7, 0);
+
+    expect(repo.findRecentScanJobs).toHaveBeenNthCalledWith(1, 7, 1);
+    expect(repo.findRecentScanJobs).toHaveBeenNthCalledWith(2, 7, 1);
+  });
+
+  it('leaves a never-scanned library with an empty history', async () => {
+    const repo = makeRepo();
+    const { service } = makeService(repo);
+
+    await expect(service.getScanHistory(7)).resolves.toEqual([]);
+  });
+});
 
 describe('startScan — preconditions', () => {
   it('throws ConflictException when a scan is already running for the library', async () => {
