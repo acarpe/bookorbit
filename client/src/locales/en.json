@@ -5098,6 +5098,14 @@
         "twoColumns": "Two columns",
         "twoColumnsDescription": "Show two shelves per row."
       },
+      "libraryScope": {
+        "title": "Dashboard libraries",
+        "description": "Choose which libraries contribute books and reading data to this dashboard.",
+        "allLibraries": "All accessible libraries",
+        "summaryNone": "No libraries selected",
+        "summaryCount": "{count, plural, one {# library} other {# libraries}}",
+        "required": "Select at least one library."
+      },
       "shelfRows": {
         "label": "Rows of books",
         "option": "{count, plural, one {One row of books} other {# rows of books}}",

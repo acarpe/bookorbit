@@ -6,6 +6,7 @@ const numberFormatters = new Map<string, Intl.NumberFormat>()
 const dateTimeFormatters = new Map<string, Intl.DateTimeFormat>()
 const relativeTimeFormatters = new Map<string, Intl.RelativeTimeFormat>()
 const languageNameFormatters = new Map<Locale, Intl.DisplayNames>()
+const listFormatters = new Map<string, Intl.ListFormat>()
 
 function activeLocale(): Locale {
   return (i18n.global.locale as Ref<Locale>).value
@@ -33,6 +34,19 @@ export function formatNumber(value: number, options: Intl.NumberFormatOptions = 
  */
 export function formatCompactNumber(value: number): string {
   return formatNumber(value, { notation: 'compact' })
+}
+
+/** Joins values into a locale-aware list: "Audiobooks, Comics, Novels" in English. */
+export function formatList(values: string[]): string {
+  const locale = activeLocale()
+  const options: Intl.ListFormatOptions = { style: 'short', type: 'unit' }
+  const key = formatterKey(locale, options)
+  let formatter = listFormatters.get(key)
+  if (!formatter) {
+    formatter = new Intl.ListFormat(locale, options)
+    listFormatters.set(key, formatter)
+  }
+  return formatter.format(values)
 }
 
 export function formatDate(value: Date | number, options: Intl.DateTimeFormatOptions = {}): string {
