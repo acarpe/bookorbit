@@ -802,10 +802,9 @@ const koboAnomaly = computed(() => {
   return null
 })
 
-function formatSeriesLabel(seriesName: string, seriesIndex: number | null): string {
+function formatSeriesLabel(seriesName: string, seriesIndex: string | null): string {
   if (seriesIndex == null) return seriesName
-  const formattedIndex = seriesIndex % 1 === 0 ? Math.floor(seriesIndex) : seriesIndex
-  return `${seriesName} #${formattedIndex}`
+  return `${seriesName} #${seriesIndex}`
 }
 
 const seriesLinks = computed<SeriesDisplayLink[]>(() => {

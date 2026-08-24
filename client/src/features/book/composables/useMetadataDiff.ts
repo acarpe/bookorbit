@@ -87,7 +87,7 @@ export interface MetadataPatch {
   pageCount?: number | null
   communityRatings?: Array<Pick<BookCommunityRating, 'provider' | 'rating' | 'ratingCount'>>
   seriesName?: string | null
-  seriesIndex?: number | null
+  seriesIndex?: string | null
   seriesMemberships?: MetadataSeriesMembership[] | null
   isbn10?: string | null
   isbn13?: string | null
@@ -249,7 +249,7 @@ function normalizeSeriesMemberships(values: readonly MetadataSeriesMembership[] 
     seen.add(key)
     out.push({
       seriesName,
-      seriesIndex: typeof value.seriesIndex === 'number' && Number.isFinite(value.seriesIndex) ? value.seriesIndex : null,
+      seriesIndex: value.seriesIndex ?? null,
     })
   }
   return out

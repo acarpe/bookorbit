@@ -13,7 +13,7 @@ import {
 
 export type EditableSeriesMembership = {
   seriesName: string
-  seriesIndex: number | null
+  seriesIndex: string | null
   /** Series-level: saving it changes the total for every book in the series and every user. */
   expectedBookCount: number | null
 }
@@ -138,7 +138,7 @@ export function useMetadataEditor() {
     pageCount: null as number | null,
     communityRatings: [] as BookCommunityRating[],
     seriesName: null as string | null,
-    seriesIndex: null as number | null,
+    seriesIndex: null as string | null,
     seriesMemberships: [] as EditableSeriesMembership[],
     isbn10: null as string | null,
     isbn13: null as string | null,

@@ -72,7 +72,7 @@ describe('mapIssueToCandidate', () => {
         description: 'Fallback synopsis',
         publishedYear: 2024,
         seriesName: 'Series Name',
-        seriesIndex: 12.5,
+        seriesIndex: '12.5',
         coverUrl: 'https://example.com/cover.jpg',
         sourceUrl: 'https://comicvine.gamespot.com/issue',
       }),

@@ -1,4 +1,4 @@
-import { ComicMetadataFields, MetadataCandidate, MetadataProviderKey } from '@bookorbit/types';
+import { ComicMetadataFields, MetadataCandidate, MetadataProviderKey, parseSeriesIndex as parseSeriesIndexLabel } from '@bookorbit/types';
 
 import { parsePublishedDateKey, parsePublishedYear, publishedYearFromDateKey } from '../../../../common/utils/published-date.utils';
 import { normalizeSeriesTotalBooks } from '../../../../common/utils/series-total-books.utils';
@@ -8,9 +8,8 @@ function parseYear(dateStr: string | null | undefined): number | undefined {
   return parsePublishedYear(dateStr ?? undefined);
 }
 
-function parseSeriesIndex(issueNumber: string): number | undefined {
-  const n = parseFloat(issueNumber);
-  return Number.isFinite(n) ? n : undefined;
+function parseSeriesIndex(issueNumber: string): string | undefined {
+  return parseSeriesIndexLabel(issueNumber) ?? undefined;
 }
 
 function extractByRole(credits: ComicVinePersonCredit[], ...roles: string[]): string[] {

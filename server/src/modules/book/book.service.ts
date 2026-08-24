@@ -400,7 +400,7 @@ export class BookService {
     if (r.pageCount !== undefined) preview.pageCount = r.pageCount as number | null;
     if (r.communityRatings !== undefined) preview.communityRatings = r.communityRatings as BookCommunityRating[];
     if (r.seriesName !== undefined) preview.seriesName = r.seriesName as string | null;
-    if (r.seriesIndex !== undefined) preview.seriesIndex = r.seriesIndex as number | null;
+    if (r.seriesIndex !== undefined) preview.seriesIndex = r.seriesIndex as string | null;
     if (r.seriesMemberships !== undefined) preview.seriesMemberships = r.seriesMemberships as BookMetadataRefreshPreviewFields['seriesMemberships'];
     if (r.coverUrl !== undefined) preview.coverUrl = r.coverUrl as string;
     if (r.hardcoverEditionId !== undefined) preview.hardcoverEditionId = r.hardcoverEditionId as string | null;
@@ -2744,7 +2744,7 @@ export class BookService {
       if (r.pageCount !== undefined) dto.pageCount = r.pageCount as number | null;
       if (r.communityRatings !== undefined) dto.communityRatings = r.communityRatings as UpdateBookMetadataDto['communityRatings'];
       if (r.seriesName !== undefined) dto.seriesName = r.seriesName as string | null;
-      if (r.seriesIndex !== undefined) dto.seriesIndex = r.seriesIndex as number | null;
+      if (r.seriesIndex !== undefined) dto.seriesIndex = r.seriesIndex as string | null;
       if (r.seriesMemberships !== undefined) dto.seriesMemberships = r.seriesMemberships as UpdateBookMetadataDto['seriesMemberships'];
       if (r.hardcoverEditionId !== undefined) dto.hardcoverEditionId = r.hardcoverEditionId as string | null;
       if (r.narrators !== undefined || r.duration !== undefined || r.abridged !== undefined || r.chapters !== undefined) {
