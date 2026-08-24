@@ -47,7 +47,13 @@ describe('HardcoverBookMatchService', () => {
       books: [{ id: 100, editions: [{ id: 200, pages: 320 }] }],
     });
     const result = await makeService().matchBook(1, 'tok', baseBook);
-    expect(result).toEqual({ hardcoverBookId: 100, hardcoverEditionId: 200, editionPages: 320, matchMethod: 'cached' });
+    expect(result).toEqual({
+      hardcoverBookId: 100,
+      hardcoverEditionId: 200,
+      editionPages: 320,
+      editionAudioSeconds: null,
+      matchMethod: 'cached',
+    });
     expect(mockClient.query).toHaveBeenCalledTimes(1);
     expect(mockRepo.upsertBookState).not.toHaveBeenCalled();
   });
@@ -72,8 +78,33 @@ describe('HardcoverBookMatchService', () => {
 
     const result = await makeService().matchBook(1, 'tok', baseBook);
 
-    expect(result).toEqual({ hardcoverBookId: 100, hardcoverEditionId: 200, editionPages: null, matchMethod: 'cached' });
+    expect(result).toEqual({
+      hardcoverBookId: 100,
+      hardcoverEditionId: 200,
+      editionPages: null,
+      editionAudioSeconds: null,
+      matchMethod: 'cached',
+    });
     expect(mockRepo.upsertBookState).not.toHaveBeenCalled();
+  });
+
+  it('returns the cached audiobook edition duration for progress sync', async () => {
+    mockRepo.findBookState.mockResolvedValue({
+      hardcoverBookId: 100,
+      hardcoverEditionId: 200,
+      matchError: null,
+    });
+    mockClient.query.mockResolvedValue({
+      books: [{ id: 100, editions: [{ id: 200, pages: null, audio_seconds: 3600 }] }],
+    });
+
+    await expect(makeService().matchBook(1, 'tok', { ...baseBook, format: 'm4b' })).resolves.toEqual({
+      hardcoverBookId: 100,
+      hardcoverEditionId: 200,
+      editionPages: null,
+      editionAudioSeconds: 3600,
+      matchMethod: 'cached',
+    });
   });
 
   it('re-points a cached match when the cached edition no longer exists on Hardcover', async () => {
@@ -118,7 +149,13 @@ describe('HardcoverBookMatchService', () => {
 
     const result = await makeService().matchBook(1, 'tok', book);
 
-    expect(result).toEqual({ hardcoverBookId: 686104, hardcoverEditionId: 30673405, editionPages: 382, matchMethod: 'metadata_id' });
+    expect(result).toEqual({
+      hardcoverBookId: 686104,
+      hardcoverEditionId: 30673405,
+      editionPages: 382,
+      editionAudioSeconds: null,
+      matchMethod: 'metadata_id',
+    });
     expect(mockClient.query).toHaveBeenCalledWith(
       1,
       'tok',
@@ -168,7 +205,13 @@ describe('HardcoverBookMatchService', () => {
 
     const result = await makeService().matchBook(1, 'tok', baseBook);
 
-    expect(result).toEqual({ hardcoverBookId: 123, hardcoverEditionId: 30, editionPages: null, matchMethod: 'title' });
+    expect(result).toEqual({
+      hardcoverBookId: 123,
+      hardcoverEditionId: 30,
+      editionPages: null,
+      editionAudioSeconds: null,
+      matchMethod: 'title',
+    });
   });
 
   it('returns null and stores no_match when all strategies fail', async () => {
@@ -222,7 +265,13 @@ describe('HardcoverBookMatchService', () => {
     const book = { ...baseBook, hardcoverMetadataId: '700', isbn13: '9781234567890', isbn10: null, pageCount: 512, format: 'epub' };
     const result = await makeService().matchBook(1, 'tok', book);
 
-    expect(result).toEqual({ hardcoverBookId: 700, hardcoverEditionId: 901, editionPages: 512, matchMethod: 'metadata_id' });
+    expect(result).toEqual({
+      hardcoverBookId: 700,
+      hardcoverEditionId: 901,
+      editionPages: 512,
+      editionAudioSeconds: null,
+      matchMethod: 'metadata_id',
+    });
   });
 
   it('selects the closest page-count, non-audiobook edition on a title match', async () => {
@@ -243,7 +292,13 @@ describe('HardcoverBookMatchService', () => {
     const book = { ...baseBook, isbn13: null, isbn10: null, pageCount: 400, format: 'epub' };
     const result = await makeService().matchBook(1, 'tok', book);
 
-    expect(result).toEqual({ hardcoverBookId: 123, hardcoverEditionId: 801, editionPages: 405, matchMethod: 'title' });
+    expect(result).toEqual({
+      hardcoverBookId: 123,
+      hardcoverEditionId: 801,
+      editionPages: 405,
+      editionAudioSeconds: null,
+      matchMethod: 'title',
+    });
   });
 
   describe('listEditions', () => {
