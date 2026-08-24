@@ -18,6 +18,7 @@ import { MAX_BOOK_QUERY_OFFSET_ROWS, isBookQueryOffsetWithinLimit } from '../../
 import { resolveIsAudiobook } from '../../common/utils/book-media.utils';
 import { sanitizeLogValue } from '../../common/utils/log-sanitize.utils';
 import { normalizeMetadataText, normalizeMetadataTextKey } from '../../common/utils/metadata-text-normalize.utils';
+import { naturalCompare } from '../../common/utils/natural-sort.utils';
 import { normalizePublishedDate, publishedYearFromDateKey } from '../../common/utils/published-date.utils';
 import { formatSeriesIndex } from '../../common/utils/series-index-format.utils';
 import { SeriesExpectedCountService } from '../../common/services/series-expected-count.service';
@@ -3038,7 +3039,10 @@ export class BookService {
     const meta = book.book_metadata;
     const customMetadata = await this.customMetadataService.getBookValues(id, book.books.libraryId);
     const hasAudioFiles = fileRows.some((f) => f.format && isAudioFormat(f.format));
-    const resolvedChapters = this.resolveChapters(meta?.chapters as AudiobookChapter[] | null | undefined, fileRows);
+    const orderedFileRows = hasAudioFiles
+      ? [...fileRows].sort((a, b) => naturalCompare(basename(a.absolutePath), basename(b.absolutePath)))
+      : fileRows;
+    const resolvedChapters = this.resolveChapters(meta?.chapters as AudiobookChapter[] | null | undefined, orderedFileRows);
     const supplementalFields = buildBookDetailSupplementalFields({
       readStatus,
       hasAudioFiles,
@@ -3099,7 +3103,7 @@ export class BookService {
       authors: authorRows,
       genres: genreRows.map((g) => g.name),
       tags: tagRows.map((t) => t.name),
-      files: fileRows.map((f) => ({
+      files: orderedFileRows.map((f) => ({
         id: f.id,
         format: f.format,
         role: f.id === book.books.primaryFileId ? 'primary' : f.role,
@@ -3113,7 +3117,7 @@ export class BookService {
       metadataScore: meta?.metadataScore ?? null,
       formatPriority: (book.libraries?.formatPriority as string[] | null) ?? [],
       customMetadata,
-      fileWriteStatus: this.fileWriteService?.resolveBookFileWriteStatus(book.libraries, fileRows, book.books.primaryFileId) ?? {
+      fileWriteStatus: this.fileWriteService?.resolveBookFileWriteStatus(book.libraries, orderedFileRows, book.books.primaryFileId) ?? {
         enabled: false,
         reason: 'library_disabled',
         writableFormats: [],
