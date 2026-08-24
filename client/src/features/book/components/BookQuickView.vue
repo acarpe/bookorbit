@@ -67,7 +67,7 @@ const coverPlaceholderTitle = computed(() => (detail.value ? (detail.value.title
 const seriesLine = computed(() => {
   if (!detail.value?.seriesName) return null
   const idx = detail.value.seriesIndex
-  return idx != null ? `${detail.value.seriesName} #${idx % 1 === 0 ? Math.floor(idx) : idx}` : detail.value.seriesName
+  return idx != null ? `${detail.value.seriesName} #${idx}` : detail.value.seriesName
 })
 
 const authorLine = computed(() => detail.value?.authors.map((a) => a.name).join(', ') ?? null)

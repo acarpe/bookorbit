@@ -1,5 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { MetadataCandidate, MetadataProviderKey } from '@bookorbit/types';
+import { MetadataCandidate, MetadataProviderKey, parseSeriesIndex } from '@bookorbit/types';
 
 import { ProviderConfigService } from '../../../metadata-preferences/provider-config.service';
 import { ProviderThrottleTracker } from '../../provider-throttle.tracker';
@@ -46,9 +46,7 @@ function parseIssueTitle(title: string): ParsedIssueTitle | null {
 }
 
 function storedIssueNumber(params: MetadataSearchParams): string | null {
-  const issueNumber = params.seriesIndex;
-  if (issueNumber === undefined || !Number.isFinite(issueNumber) || issueNumber < 0) return null;
-  return String(issueNumber);
+  return parseSeriesIndex(params.seriesIndex);
 }
 
 /**
