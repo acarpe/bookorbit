@@ -32,6 +32,8 @@ export interface ParsedOpf {
   itunesId: string | null;
   customMetadata: Record<string, string>;
   coverHref: string | null;
+  /** Raw `rendition:layout` value; `pre-paginated` marks a fixed-layout book such as a comic. */
+  renditionLayout: string | null;
 }
 
 const parser = new XMLParser({
@@ -551,6 +553,7 @@ export function parseOpf(xml: string): ParsedOpf {
     itunesId,
     customMetadata,
     coverHref,
+    renditionLayout: propertyMeta('rendition:layout'),
   };
 }
 

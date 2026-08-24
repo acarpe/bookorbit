@@ -48,7 +48,11 @@ const displayPath = computed(() => {
       <p class="flex min-w-0 items-center gap-2 text-muted-foreground" :class="prominent ? 'mt-1.5 text-[12.5px]' : 'mt-0.5 text-xs'">
         <span
           class="inline-flex shrink-0 items-center gap-1.5 rounded-md border px-1.5 py-0.5 text-[11px] font-medium"
-          :class="isFileMode ? 'border-[var(--pill-file-as-book)]/40 bg-[var(--pill-file-as-book)]/12 text-[var(--pill-file-as-book)]' : 'border-[var(--pill-folder-as-book)]/40 bg-[var(--pill-folder-as-book)]/12 text-[var(--pill-folder-as-book)]'"
+          :class="
+            isFileMode
+              ? 'border-[var(--pill-file-as-book)]/40 bg-[var(--pill-file-as-book)]/12 text-[var(--pill-file-as-book)]'
+              : 'border-[var(--pill-folder-as-book)]/40 bg-[var(--pill-folder-as-book)]/12 text-[var(--pill-folder-as-book)]'
+          "
         >
           <component :is="modeIcon" :size="11" class="shrink-0" aria-hidden="true" />
           {{ modeLabel }}

@@ -18,7 +18,13 @@ const rows = computed(() => {
   const off = t('settings.admin.libraries.stateOff')
   const on = t('settings.admin.libraries.stateOn')
   return [
-    { key: 'watch', icon: Eye, on: props.library.watch, label: t('settings.admin.libraries.capability.watch'), value: props.library.watch ? on : off },
+    {
+      key: 'watch',
+      icon: Eye,
+      on: props.library.watch,
+      label: t('settings.admin.libraries.capability.watch'),
+      value: props.library.watch ? on : off,
+    },
     { key: 'schedule', icon: CalendarClock, on: Boolean(schedule), label: t('settings.admin.libraries.capability.schedule'), value: schedule ?? off },
     {
       key: 'fileWrite',

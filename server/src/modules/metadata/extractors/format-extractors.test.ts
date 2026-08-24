@@ -4,7 +4,8 @@ vi.mock('fs/promises', () => ({
   readFile: vi.fn(),
 }));
 
-vi.mock('../lib/epub', () => ({
+vi.mock('../lib/epub', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../lib/epub')>()),
   extractEpubMetadata: vi.fn(),
 }));
 

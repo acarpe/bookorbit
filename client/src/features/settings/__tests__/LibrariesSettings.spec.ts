@@ -271,7 +271,7 @@ describe('LibrariesSettings ledger', () => {
       librariesRef.value = [makeLibrary({ watch: true, fileWriteEnabled: false })]
       const wrapper = await mountLoaded()
       const [watchRow, , writeRow] = wrapper.get('[data-testid="libraries-ledger-list"]').findAll('li')
-      const chip = (row: (typeof watchRow)) => row.findAll('span').find((span) => span.classes().includes('rounded-full'))!
+      const chip = (row: typeof watchRow) => row.findAll('span').find((span) => span.classes().includes('rounded-full'))!
       expect(chip(watchRow!).classes().join(' ')).toContain('bg-primary/12')
       expect(chip(writeRow!).classes().join(' ')).toContain('border-dashed')
     })
@@ -350,9 +350,7 @@ describe('LibrariesSettings ledger', () => {
     it('replaces the cell with live progress while a scan runs, without adding a row', async () => {
       librariesRef.value = [makeLibrary({ id: 4 })]
       overviewRef.value = [makeEntry({ libraryId: 4, lastScan: makeScan() })]
-      progressRef.value = new Map([
-        [4, { jobId: 1, libraryId: 4, status: 'running', processed: 620, total: 1000, added: 0, updated: 0, missing: 0 }],
-      ])
+      progressRef.value = new Map([[4, { jobId: 1, libraryId: 4, status: 'running', processed: 620, total: 1000, added: 0, updated: 0, missing: 0 }]])
       const wrapper = await mountLoaded()
       expect(tableText(wrapper)).toContain('Scanning 62%')
       expect(tableText(wrapper)).toContain('620 of 1,000')

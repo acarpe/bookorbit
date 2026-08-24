@@ -905,4 +905,47 @@ describe('parseOpf', () => {
       expect(parseOpf(xml).coverHref).toBe('epub3-cover.jpg');
     });
   });
+
+  describe('rendition layout', () => {
+    it('parses the pre-paginated declaration a comic converter writes', () => {
+      const xml = epub3Opf(`
+        <dc:title>Manga Vol. 1</dc:title>
+        <meta property="rendition:spread">landscape</meta>
+        <meta property="rendition:layout">pre-paginated</meta>
+      `);
+      expect(parseOpf(xml).renditionLayout).toBe('pre-paginated');
+    });
+
+    it('parses a reflowable declaration without confusing it for a fixed layout', () => {
+      const xml = epub3Opf(`
+        <dc:title>Novel</dc:title>
+        <meta property="rendition:layout">reflowable</meta>
+      `);
+      expect(parseOpf(xml).renditionLayout).toBe('reflowable');
+    });
+
+    it('is null when the OPF declares no layout at all', () => {
+      expect(parseOpf(epub3Opf('<dc:title>Novel</dc:title>')).renditionLayout).toBeNull();
+    });
+
+    it('reads the declaration through a namespace-prefixed meta element', () => {
+      const xml = `<?xml version="1.0" encoding="utf-8"?>
+<opf:package xmlns:opf="http://www.idpf.org/2007/opf" version="3.0">
+  <opf:metadata xmlns:dc="http://purl.org/dc/elements/1.1/">
+    <dc:title>Manga Vol. 2</dc:title>
+    <opf:meta property="rendition:layout">pre-paginated</opf:meta>
+  </opf:metadata>
+</opf:package>`;
+      expect(parseOpf(xml).renditionLayout).toBe('pre-paginated');
+    });
+
+    it('ignores a spine-level fixed-layout override so a mostly reflowable book stays reflowable', () => {
+      const xml = `<?xml version="1.0" encoding="utf-8"?>
+<package xmlns="http://www.idpf.org/2007/opf" version="3.0">
+  <metadata xmlns:dc="http://purl.org/dc/elements/1.1/"><dc:title>Novel</dc:title></metadata>
+  <spine><itemref idref="map" properties="rendition:layout-pre-paginated"/></spine>
+</package>`;
+      expect(parseOpf(xml).renditionLayout).toBeNull();
+    });
+  });
 });

@@ -40,9 +40,7 @@ const formatsLabel = computed(() =>
     ? t('settings.admin.libraries.detail.allSupported')
     : formatList(props.library.allowedFormats.map((format) => FORMAT_LABELS[format] ?? format.toUpperCase())),
 )
-const accessLabel = computed(() =>
-  props.accessCount === null ? '' : t('settings.admin.libraries.detail.peopleCount', { count: props.accessCount }),
-)
+const accessLabel = computed(() => (props.accessCount === null ? '' : t('settings.admin.libraries.detail.peopleCount', { count: props.accessCount })))
 
 function requestEdit() {
   emit('edit', props.library)
@@ -50,19 +48,33 @@ function requestEdit() {
 </script>
 
 <template>
-  <section class="border-t border-border bg-background/45 px-5 py-4" role="region" :aria-label="t('settings.admin.libraries.detailRegion', { name: library.name })">
+  <section
+    class="border-t border-border bg-background/45 px-5 py-4"
+    role="region"
+    :aria-label="t('settings.admin.libraries.detailRegion', { name: library.name })"
+  >
     <div class="grid gap-x-8 gap-y-6 lg:grid-cols-3">
       <section>
         <h4 class="mb-2.5 flex items-center gap-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
           <FolderOpen :size="12" aria-hidden="true" />
           {{ t('settings.admin.libraries.detail.foldersTitle') }}
-          <Button variant="ghost" size="sm" type="button" class="ms-auto h-6 px-2 text-xs font-medium normal-case tracking-normal" @click="requestEdit">
+          <Button
+            variant="ghost"
+            size="sm"
+            type="button"
+            class="ms-auto h-6 px-2 text-xs font-medium normal-case tracking-normal"
+            @click="requestEdit"
+          >
             <Pencil :size="12" aria-hidden="true" />
             {{ t('common.edit') }}
           </Button>
         </h4>
         <dl>
-          <div v-for="(folder, index) in library.folders" :key="folder.id" class="flex items-center gap-3 border-t border-border py-1.5 first:border-t-0">
+          <div
+            v-for="(folder, index) in library.folders"
+            :key="folder.id"
+            class="flex items-center gap-3 border-t border-border py-1.5 first:border-t-0"
+          >
             <dt class="shrink-0 text-[12.5px] text-muted-foreground">{{ t('settings.admin.libraries.detail.path', { index: index + 1 }) }}</dt>
             <dd class="ms-auto min-w-0 truncate font-mono text-[11px] text-foreground" dir="ltr" :title="folder.path">{{ folder.path }}</dd>
           </div>
@@ -81,7 +93,13 @@ function requestEdit() {
         <h4 class="mb-2.5 flex items-center gap-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
           <Tags :size="12" aria-hidden="true" />
           {{ t('settings.admin.libraries.detail.metadataTitle') }}
-          <Button variant="ghost" size="sm" type="button" class="ms-auto h-6 px-2 text-xs font-medium normal-case tracking-normal" @click="requestEdit">
+          <Button
+            variant="ghost"
+            size="sm"
+            type="button"
+            class="ms-auto h-6 px-2 text-xs font-medium normal-case tracking-normal"
+            @click="requestEdit"
+          >
             <Pencil :size="12" aria-hidden="true" />
             {{ t('common.edit') }}
           </Button>

@@ -111,7 +111,11 @@ export class MetadataService {
         return false;
       }
 
-      await Promise.all([this.persistMetadata(bookId, data, format), data.cover ? this.persistCover(bookId, data.cover, true) : Promise.resolve()]);
+      await Promise.all([
+        this.persistMetadata(bookId, data, format),
+        data.cover ? this.persistCover(bookId, data.cover, true) : Promise.resolve(),
+        this.persistFixedLayout(bookId, absolutePath, data.isFixedLayout),
+      ]);
 
       await this.scoreService.calculateAndSave(bookId);
 
@@ -254,6 +258,27 @@ export class MetadataService {
   }
 
   // ── Audio helpers ────────────────────────────────────────────────────────────
+
+  /**
+   * Records whether the extracted file is a fixed-layout EPUB. Kobo sync reads this to announce
+   * comics as EPUB3FL so the device renders them full screen instead of adding reflow margins.
+   */
+  private async persistFixedLayout(bookId: number, absolutePath: string, isFixedLayout: boolean | null | undefined): Promise<void> {
+    if (isFixedLayout == null) return;
+    // `is distinct from` keeps a re-extraction of an unchanged file from touching the row at all.
+    // Any write bumps book_files.updatedAt, which feeds the KOReader library token and OPDS entry
+    // timestamps, so a no-op update would invalidate both for nothing.
+    await this.db
+      .update(schema.bookFiles)
+      .set({ isFixedLayout })
+      .where(
+        and(
+          eq(schema.bookFiles.bookId, bookId),
+          eq(schema.bookFiles.absolutePath, absolutePath),
+          sql`${schema.bookFiles.isFixedLayout} is distinct from ${isFixedLayout}`,
+        ),
+      );
+  }
 
   async extractAudioFileDuration(bookId: number, absolutePath: string): Promise<void> {
     const durationSeconds = await parseAudioDuration(absolutePath);

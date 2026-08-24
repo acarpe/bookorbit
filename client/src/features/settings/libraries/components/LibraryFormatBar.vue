@@ -4,10 +4,11 @@ import { useI18n } from 'vue-i18n'
 import { formatNumber } from '@/i18n/formatters'
 import { toFormatSegments } from '../lib/library-formats'
 
-const props = withDefaults(
-  defineProps<{ counts: Record<string, number>; legendLimit?: number; showLegend?: boolean; legendReserve?: boolean }>(),
-  { legendLimit: 3, showLegend: false, legendReserve: false },
-)
+const props = withDefaults(defineProps<{ counts: Record<string, number>; legendLimit?: number; showLegend?: boolean; legendReserve?: boolean }>(), {
+  legendLimit: 3,
+  showLegend: false,
+  legendReserve: false,
+})
 
 const { t } = useI18n()
 

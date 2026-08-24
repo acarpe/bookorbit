@@ -19,7 +19,13 @@ const slots = computed(() => {
     { key: 'watch', icon: Eye, on: props.library.watch, label: t('settings.admin.libraries.capability.watch'), detail: null },
     { key: 'schedule', icon: CalendarClock, on: Boolean(schedule), label: t('settings.admin.libraries.capability.schedule'), detail: schedule },
     { key: 'fileWrite', icon: FileEdit, on: props.library.fileWriteEnabled, label: t('settings.admin.libraries.capability.fileWrite'), detail: null },
-    { key: 'fileRename', icon: Pencil, on: props.library.fileRenameEnabled, label: t('settings.admin.libraries.capability.fileRename'), detail: null },
+    {
+      key: 'fileRename',
+      icon: Pencil,
+      on: props.library.fileRenameEnabled,
+      label: t('settings.admin.libraries.capability.fileRename'),
+      detail: null,
+    },
   ]
 })
 
