@@ -299,6 +299,7 @@ describe('MetadataService', () => {
       seriesName: null,
       seriesIndex: null,
       authors: [],
+      narrators: [],
       genres: [],
       tags: [],
       rating: null,
@@ -435,6 +436,7 @@ describe('MetadataService', () => {
       seriesName: null,
       seriesIndex: null,
       authors: [],
+      narrators: [],
       genres: [],
       tags: [],
       rating: null,
@@ -489,6 +491,7 @@ describe('MetadataService', () => {
       seriesName: null,
       seriesIndex: null,
       authors: [],
+      narrators: [],
       genres: [],
       tags: [],
       rating: null,
@@ -537,6 +540,7 @@ describe('MetadataService', () => {
         seriesName: null,
         seriesIndex: null,
         authors: [],
+        narrators: [],
         genres: [],
         tags: [],
         rating: null,
@@ -577,6 +581,7 @@ describe('MetadataService', () => {
       seriesName: 'Series   Name',
       seriesIndex: 2,
       authors: [{ name: 'Author A', sortName: null }],
+      narrators: [],
       genres: ['Fantasy'],
       tags: ['Shelf'],
       rating: 4.6,
@@ -1114,6 +1119,104 @@ describe('MetadataService', () => {
     expect(insertedTags).toEqual(['Shelf', 'Y'.repeat(200)]);
   });
 
+  describe('narrators from a sidecar OPF', () => {
+    const opfXml = (metadataBody: string) => `
+      <package xmlns="http://www.idpf.org/2007/opf" version="2.0">
+        <metadata xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:opf="http://www.idpf.org/2007/opf">
+          <dc:title>Sidecar Title</dc:title>
+          ${metadataBody}
+        </metadata>
+      </package>`;
+
+    it('persists narrators declared by role nrt on a non-audio source', async () => {
+      const { db } = makeDb();
+      const narratorService = { replaceForBook: vi.fn().mockResolvedValue(undefined) };
+      const service = makeService(db, undefined, { narratorService });
+      mockReadFile.mockResolvedValue(
+        opfXml(`
+          <dc:creator opf:role="nrt">First Narrator</dc:creator>
+          <dc:contributor opf:role="nrt">Second Narrator</dc:contributor>
+        `),
+      );
+
+      await service.extractAndSave(31, '/books/Book/book.opf', 'opf');
+
+      expect(narratorService.replaceForBook).toHaveBeenCalledWith(31, ['First Narrator', 'Second Narrator']);
+    });
+
+    it('leaves narrators untouched when the OPF declares none', async () => {
+      const { db } = makeDb();
+      const narratorService = { replaceForBook: vi.fn().mockResolvedValue(undefined) };
+      const service = makeService(db, undefined, { narratorService });
+      mockReadFile.mockResolvedValue(opfXml(`<dc:publisher>Ace</dc:publisher>`));
+
+      await service.extractAndSave(32, '/books/Book/book.opf', 'opf');
+
+      expect(narratorService.replaceForBook).not.toHaveBeenCalled();
+    });
+
+    it('skips narrators when the field is locked', async () => {
+      const { db } = makeDb();
+      const narratorService = { replaceForBook: vi.fn().mockResolvedValue(undefined) };
+      const lockService = {
+        isFieldLocked: vi.fn().mockResolvedValue(false),
+        filterAutomatedBookUpdate: vi.fn().mockImplementation((_bookId: number, dto: Record<string, unknown>) => {
+          const rest = { ...dto };
+          delete rest.audioMetadata;
+          return Promise.resolve({ dto: rest, skippedFields: ['narrators'] });
+        }),
+      };
+      const service = makeService(db, undefined, { narratorService, bookMetadataLockService: lockService });
+      mockReadFile.mockResolvedValue(opfXml(`<dc:creator opf:role="nrt">First Narrator</dc:creator>`));
+
+      await service.extractAndSave(33, '/books/Book/book.opf', 'opf');
+
+      expect(lockService.filterAutomatedBookUpdate).toHaveBeenCalledWith(
+        33,
+        expect.objectContaining({ audioMetadata: { narrators: ['First Narrator'] } }),
+      );
+      expect(narratorService.replaceForBook).not.toHaveBeenCalled();
+    });
+  });
+
+  it('extractAudioChaptersAndNarrators leaves narrators alone when the audio tags name none', async () => {
+    const { db, updateSet } = makeDb();
+    const narratorService = { replaceForBook: vi.fn().mockResolvedValue(undefined) };
+    const lockService = {
+      isFieldLocked: vi.fn().mockResolvedValue(false),
+      filterAutomatedBookUpdate: vi.fn().mockImplementation((_bookId: number, dto: unknown) => Promise.resolve({ dto, skippedFields: [] })),
+    };
+    const service = makeService(db, undefined, { narratorService, bookMetadataLockService: lockService });
+
+    mockExtractAudioMetadata.mockResolvedValueOnce({
+      title: null,
+      subtitle: null,
+      authors: [],
+      narrators: [],
+      publisher: null,
+      publishedYear: null,
+      description: null,
+      language: null,
+      seriesName: null,
+      seriesIndex: null,
+      genres: [],
+      audibleId: null,
+      librofmId: null,
+      durationSeconds: null,
+      chapters: [{ title: 'Chapter 1', startMs: 0 }],
+      coverBytes: null,
+    } as never);
+
+    await service.extractAudioChaptersAndNarrators(73, '/tmp/audio.m4b', 'm4b');
+
+    expect(lockService.filterAutomatedBookUpdate).toHaveBeenCalledWith(
+      73,
+      expect.objectContaining({ audioMetadata: { chapters: [{ title: 'Chapter 1', startMs: 0 }] } }),
+    );
+    expect(narratorService.replaceForBook).not.toHaveBeenCalled();
+    expect(updateSet).toHaveBeenCalledWith(expect.objectContaining({ chapters: [{ title: 'Chapter 1', startMs: 0 }] }));
+  });
+
   it('extractAudioChaptersAndNarrators updates filtered audio fields and supports early exits', async () => {
     const { db, updateSet } = makeDb();
     const narratorService = {
@@ -1211,6 +1314,7 @@ describe('MetadataService', () => {
         seriesName: null,
         seriesIndex: null,
         authors: [],
+        narrators: [],
         genres: [],
         tags: [],
         customMetadata: {},

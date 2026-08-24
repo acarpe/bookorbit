@@ -1567,7 +1567,8 @@ export class ScannerService implements OnApplicationBootstrap {
     //
     // Design rules:
     //   - Text metadata (title, authors, cover, etc.) comes from the first available configured source.
-    //   - Audio-specific fields (chapters, narrators, duration) always come from audio if present.
+    //   - Audio-specific fields (chapters, narrators, duration) come from audio if present, but a
+    //     configured source that names narrators itself outranks the audio tags.
     //   - Extraction only fires when at least one configured metadata source is new, reassigned, or changed.
 
     const metadataSources = this.buildMetadataExtractionSources(registeredFiles, winner, metadataPrecedence);
@@ -1577,15 +1578,14 @@ export class ScannerService implements OnApplicationBootstrap {
     const changedAudioFiles = audioContentFiles.filter(hasMetadataSourceChanged);
     const winnerIsAudio = winner !== null && winner.format !== null && isAudioFormat(winner.format);
 
-    // 3a: Extract shared metadata from the first available configured source.
-    if (shouldExtractMetadata) {
-      await this.extractFirstAvailableMetadataSource(book.id, metadataSources);
-    }
-
-    // 3b: When winner is not audio, extract audio-specific fields (chapters, narrators)
-    //     from the first audio file if any audio file is new, reassigned, or changed.
-    //     Cover is intentionally skipped here - shared metadata already owns it from step 3a.
-    if (!winnerIsAudio && changedAudioFiles.length > 0) {
+    // 3a: Extract audio-specific fields (chapters, narrators) from the first audio file if any audio
+    //     file is new, reassigned, or changed. Skipped when the audio winner is itself the leading
+    //     metadata source, because shared extraction already reads the same tags from it.
+    //     Cover is intentionally skipped here - shared metadata owns it from step 3b.
+    //     Runs before shared extraction so a source that declares narrators (an OPF carrying
+    //     role="nrt") overwrites the composer tag rather than being overwritten by it.
+    const audioWinnerLeadsMetadata = winnerIsAudio && metadataSources[0]?.key === 'embedded';
+    if (!audioWinnerLeadsMetadata && changedAudioFiles.length > 0) {
       const sortedAudio = [...audioContentFiles].sort((a, b) =>
         basename(a.absolutePath).localeCompare(basename(b.absolutePath), undefined, { numeric: true }),
       );
@@ -1597,6 +1597,11 @@ export class ScannerService implements OnApplicationBootstrap {
           `[scanner.extract_audio_chapters] [fail] bookId=${book.id} path="${sanitizeLogValue(firstAudio.absolutePath)}" format=${firstAudio.format} errorClass=${err instanceof Error ? err.name : 'Error'} error="${sanitizeLogValue(err instanceof Error ? err.message : String(err))}" - audio chapters/narrators extraction failed`,
         );
       }
+    }
+
+    // 3b: Extract shared metadata from the first available configured source.
+    if (shouldExtractMetadata) {
+      await this.extractFirstAvailableMetadataSource(book.id, metadataSources);
     }
 
     // 3c: Write per-file duration to bookFiles for every new/reassigned/changed audio file.

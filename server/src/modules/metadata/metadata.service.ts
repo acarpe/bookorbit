@@ -145,7 +145,9 @@ export class MetadataService {
       audibleId: boundProviderId('audibleId', data.audibleId),
       librofmId: boundProviderId('librofmId', data.librofmId),
       audioMetadata: {
-        narrators: data.narrators,
+        // Omitted when the tags name none: this pass fills in fields the shared metadata source
+        // cannot carry, so an untagged file must not erase narrators another source already set.
+        ...(data.narrators && data.narrators.length > 0 ? { narrators: data.narrators } : {}),
         chapters: data.chapters && data.chapters.length > 0 ? data.chapters : null,
       },
     });
@@ -687,6 +689,9 @@ export class MetadataService {
       aladinId: boundProviderId('aladinId', data.aladinId),
       itunesId: boundProviderId('itunesId', data.itunesId),
       comicMetadata: data.comicMetadata ?? undefined,
+      // A sidecar can name narrators (OPF role="nrt"); only sent when it did, so an extractor that
+      // has no narrator concept never reaches the replace below.
+      audioMetadata: data.narrators && data.narrators.length > 0 ? { narrators: data.narrators } : undefined,
     });
 
     const scalarFields: Partial<typeof schema.bookMetadata.$inferInsert> = {};
@@ -747,6 +752,10 @@ export class MetadataService {
 
     if (filtered.comicMetadata) {
       await this.comicMetadataRepository.upsert(bookId, filtered.comicMetadata);
+    }
+
+    if (filtered.audioMetadata?.narrators !== undefined) {
+      await this.narratorService.replaceForBook(bookId, filtered.audioMetadata.narrators);
     }
 
     // ComicInfo Count describes the series the file names, so it is read from the parsed file
