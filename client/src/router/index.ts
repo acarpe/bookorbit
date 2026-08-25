@@ -654,6 +654,7 @@ export const routes: RouteRecordRaw[] = [
     name: 'reader',
     component: () => import('@/features/reader/ReaderView.vue'),
     meta: {
+      remountOnParamChange: true,
       title: (to) => `${t('titles.readPrefix')} · ${fallbackById('titles.book', numericParam(to, 'bookId'))}`,
     },
   },
