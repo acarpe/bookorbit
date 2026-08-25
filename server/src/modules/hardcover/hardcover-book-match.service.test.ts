@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 import { EDITION_DISPLAY_LIMIT, HardcoverBookMatchService } from './hardcover-book-match.service';
 
@@ -35,6 +35,10 @@ describe('HardcoverBookMatchService', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockRepo.upsertBookState.mockResolvedValue({});
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
   });
 
   it('returns cached match when state exists and no error', async () => {
@@ -188,6 +192,32 @@ describe('HardcoverBookMatchService', () => {
       'tok',
       expect.stringContaining('query SearchBooks'),
       expect.objectContaining({ query: 'Test Book Test Author' }),
+    );
+    const searchQuery = mockClient.query.mock.calls[1]?.[2] as string;
+    expect(searchQuery).toContain('error');
+    expect(searchQuery).not.toContain('fields:');
+    expect(searchQuery).not.toContain('weights:');
+  });
+
+  it('logs payload-level errors returned by Hardcover search', async () => {
+    mockRepo.findBookState.mockResolvedValue(undefined);
+    mockClient.query.mockResolvedValueOnce({ books: [] }).mockResolvedValueOnce({
+      search: {
+        error: 'Number of values in `num_typos` does not match number of `query_by` fields.',
+        ids: null,
+      },
+    });
+    const service = makeService();
+    const logger = Reflect.get(service, 'logger') as { warn: (message: string) => void };
+    const warnSpy = vi.spyOn(logger, 'warn').mockImplementation(() => undefined);
+
+    await expect(service.matchBook(1, 'tok', baseBook)).resolves.toBeNull();
+
+    expect(mockClient.query).toHaveBeenCalledTimes(2);
+    expect(warnSpy).toHaveBeenCalledWith(
+      expect.stringMatching(
+        /^\[hardcover\.book_match\] \[fail\] userId=1 bookId=42 method=title_author durationMs=\d+ errorClass=SearchError error="Number of values in `num_typos` does not match number of `query_by` fields\." - title lookup failed$/,
+      ),
     );
   });
 
