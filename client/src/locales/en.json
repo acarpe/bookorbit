@@ -1433,6 +1433,11 @@
           "description": "Only write if field is currently empty",
           "short": "Fill gaps"
         },
+        "mergeExisting": {
+          "label": "Merge with existing",
+          "description": "Keep stored genres and append new provider genres",
+          "short": "Merge"
+        },
         "overwriteIfProvided": {
           "label": "Overwrite if provided",
           "description": "Write if provider returned a value",
@@ -1598,7 +1603,7 @@
             "overwriteTerm": "Overwrite:",
             "overwriteBody": "Replace whenever a provider has data."
           },
-          "summary": "Providers are tried top to bottom and the first one that returns a value wins. The merge strategy decides whether that value may replace what the book already has. Set defaults here, then override individual fields per library."
+          "summary": "Providers are tried top to bottom and the first one that returns a value wins. The merge strategy decides whether that value may replace what the book already has; genres can also append new unique values. Set defaults here, then override individual fields per library."
         },
         "libraryOverrides": {
           "title": "Library Overrides",
@@ -4482,6 +4487,11 @@
           "pickCoverSource": "Pick cover source",
           "pickFromProvider": "Pick from another provider",
           "pickSource": "Pick source",
+          "genreWriteMode": {
+            "label": "How to apply genres",
+            "merge": "Merge",
+            "replace": "Replace"
+          },
           "empty": "empty",
           "showLess": "Show less",
           "showMore": "Show more",
