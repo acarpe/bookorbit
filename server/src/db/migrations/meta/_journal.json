@@ -547,6 +547,13 @@
       "when": 1787678883089,
       "tag": "0077_add_notification_coalescing",
       "breakpoints": true
+    },
+    {
+      "idx": 78,
+      "version": "7",
+      "when": 1787689487276,
+      "tag": "0078_add_kobo_statistics_cursors",
+      "breakpoints": true
     }
   ]
 }
