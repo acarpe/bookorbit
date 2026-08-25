@@ -46,9 +46,8 @@ query SearchBooks($query: String!) {
     query_type: "Book"
     per_page: 5
     page: 1
-    fields: "title,author_names,alternative_titles"
-    weights: "5,2,1"
   ) {
+    error
     ids
   }
 }`;
@@ -200,7 +199,8 @@ function mapEditionForDisplay(edition: HardcoverEditionDisplayRow): HardcoverEdi
 
 interface SearchBooksResult {
   search?: {
-    ids?: number[];
+    error?: string | null;
+    ids?: number[] | null;
   } | null;
 }
 
@@ -354,10 +354,18 @@ export class HardcoverBookMatchService {
     author: string,
     book: BookSyncData,
   ): Promise<HardcoverBookMatch | null> {
+    const startedAt = Date.now();
     try {
       const searchData = await this.client.query<SearchBooksResult>(userId, token, SEARCH_BOOKS_QUERY, {
         query: `${title} ${author}`,
       });
+      if (searchData.search?.error) {
+        const error = sanitizeLogValue(searchData.search.error);
+        this.logger.warn(
+          `[hardcover.book_match] [fail] userId=${userId} bookId=${book.bookId} method=title_author durationMs=${Date.now() - startedAt} errorClass=SearchError error="${error}" - title lookup failed`,
+        );
+        return null;
+      }
       const ids = searchData.search?.ids?.filter((id) => Number.isInteger(id)).slice(0, 5) ?? [];
       if (ids.length === 0) return null;
 
@@ -374,9 +382,10 @@ export class HardcoverBookMatchService {
         matchMethod: 'title',
       };
     } catch (err) {
+      const errorClass = err instanceof Error ? err.constructor.name : 'Error';
       const error = sanitizeLogValue(err instanceof Error ? err.message : String(err));
       this.logger.warn(
-        `[hardcover.book_match] [fail] userId=${userId} bookId=${book.bookId} method=title_author error="${error}" - title lookup failed`,
+        `[hardcover.book_match] [fail] userId=${userId} bookId=${book.bookId} method=title_author durationMs=${Date.now() - startedAt} errorClass=${errorClass} error="${error}" - title lookup failed`,
       );
       return null;
     }
