@@ -5000,6 +5000,7 @@
     "apply": "Apply",
     "done": "Done",
     "discard": "Discard",
+    "deselect": "Deselect",
     "finalize": "Finalize",
     "rescan": "Rescan",
     "uploadAction": "Upload",
@@ -5009,6 +5010,12 @@
     "bulkEditAction": "Bulk Edit",
     "applyFetched": "Apply Fetched",
     "retryErrors": "Retry Errors",
+    "discardDialog": {
+      "title": "{count, plural, =0 {Discard no files?} one {Discard the selected file?} other {Discard the # selected files?}}",
+      "description": "{count, plural, =0 {No files are selected.} one {This permanently deletes the selected file from disk. This action cannot be undone.} other {This permanently deletes the # selected files from disk. This action cannot be undone.}}",
+      "confirm": "{count, plural, one {Delete file} other {Delete # files}}",
+      "failed": "The selected files could not be deleted. Try again."
+    },
     "commaSeparated": "comma-separated",
     "destinationLibrary": "Destination Library",
     "destinationFolder": "Destination Folder",
