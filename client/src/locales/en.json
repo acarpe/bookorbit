@@ -3561,7 +3561,10 @@
       "EmailRecipientGroupUpdate": "Update recipient group",
       "EmailRecipientGroupDelete": "Delete recipient group",
       "EmailRecipientGroupMemberAdd": "Add recipient to group",
-      "EmailRecipientGroupMemberRemove": "Remove recipient from group"
+      "EmailRecipientGroupMemberRemove": "Remove recipient from group",
+      "MaintenanceMissingBooksClean": "Cleaned missing books",
+      "MaintenanceBrokenCoversClean": "Cleaned broken covers",
+      "MaintenanceOrphanedCoversClean": "Cleaned orphaned cover folders"
     }
   },
   "auth": {
@@ -7398,7 +7401,8 @@
     "header": {
       "entityManager": "Entity Manager",
       "bulkRename": "Bulk Rename",
-      "duplicateBooks": "Duplicate Books"
+      "duplicateBooks": "Duplicate Books",
+      "missingResources": "Missing Resources"
     },
     "entityTypes": {
       "authors": "Authors",
@@ -7639,6 +7643,77 @@
       "mergeModal": {
         "title": "Merge Entities",
         "description": "Select which entity to keep. The others will be merged into it and removed."
+      }
+    },
+    "missingResources": {
+      "title": "Missing Resources",
+      "accessDenied": "You do not have permission to clean up missing resources.",
+      "categoriesLabel": "Cleanup category",
+      "untitled": "Untitled",
+      "clearSelection": "Clear selection",
+      "cleanSelected": "Clean {count} selected",
+      "selectAllMatching": "Select all {count} matching entries",
+      "allSelected": "All {count} matching entries are selected.",
+      "sweep": {
+        "title": "Cover check",
+        "description": "Checks every book that claims a cover against the files on disk, and looks for cover folders left behind by deleted books. Nothing is removed during the check.",
+        "run": "Run check",
+        "running": "Checking",
+        "progress": "Checked {processed} of {total} books",
+        "lastRun": "Last checked {at}",
+        "truncated": "Only the first results are listed. Clean these, then run the check again to see the rest."
+      },
+      "categories": {
+        "missing_books": "Missing books",
+        "broken_covers": "Broken covers",
+        "orphaned_cover_dirs": "Orphaned cover folders"
+      },
+      "found": {
+        "missing_books": "{count, plural, =0 {No books with missing files} one {One book with missing files} other {# books with missing files}}",
+        "broken_covers": "{count, plural, =0 {No broken cover references} one {One broken cover reference} other {# broken cover references}}",
+        "orphaned_cover_dirs": "{count, plural, =0 {No orphaned cover folders} one {One orphaned cover folder} other {# orphaned cover folders}}"
+      },
+      "empty": {
+        "missing_books": "No missing books",
+        "broken_covers": "No broken cover references",
+        "orphaned_cover_dirs": "No orphaned cover folders",
+        "description": "Everything in this category is accounted for."
+      },
+      "needsSweep": {
+        "title": "Run the cover check first",
+        "description": "Cover results come from a disk check. Run it to see broken references and orphaned folders."
+      },
+      "coverSource": {
+        "extracted": "Extracted",
+        "custom": "Custom"
+      },
+      "table": {
+        "selectPage": "Select everything on this page",
+        "coverFolder": "Cover folder for book #{bookId}",
+        "fileCount": "{count, plural, one {# file} other {# files}}"
+      },
+      "confirm": {
+        "title": "Clean missing resources?",
+        "action": "Clean",
+        "missing_books": "{count, plural, one {Deletes the database record for one book whose files are gone. The book, its metadata, reading progress, and cover are removed. This cannot be undone.} other {Deletes the database records for # books whose files are gone. The books, their metadata, reading progress, and covers are removed. This cannot be undone.}}",
+        "broken_covers": "{count, plural, one {Clears the cover reference for one book so it shows as having no cover. Metadata is not otherwise changed.} other {Clears the cover references for # books so they show as having no cover. Metadata is not otherwise changed.}}",
+        "orphaned_cover_dirs": "{count, plural, one {Deletes one cover folder from disk. Its book is no longer in the database. This cannot be undone.} other {Deletes # cover folders from disk. Their books are no longer in the database. This cannot be undone.}}"
+      },
+      "cleaned": {
+        "missing_books": "{count, plural, =0 {Nothing to clean} one {Removed one missing book} other {Removed # missing books}}",
+        "broken_covers": "{count, plural, =0 {Nothing to clean} one {Cleared one broken cover reference} other {Cleared # broken cover references}}",
+        "orphaned_cover_dirs": "{count, plural, =0 {Nothing to clean} one {Removed one orphaned cover folder} other {Removed # orphaned cover folders}}"
+      },
+      "pagination": {
+        "label": "Missing resource pages",
+        "page": "Page {page} of {total}"
+      },
+      "errors": {
+        "summary": "Could not load the missing resource summary.",
+        "sweepStart": "Could not start the cover check.",
+        "sweep": "The cover check failed.",
+        "list": "Could not load these entries.",
+        "clean": "Cleanup failed."
       }
     }
   },
@@ -7916,6 +7991,7 @@
       "restrictions": "Content Restrictions"
     },
     "smartScopes": "Smart Scopes",
-    "collections": "Collections"
+    "collections": "Collections",
+    "missingResources": "Missing Resources"
   }
 }

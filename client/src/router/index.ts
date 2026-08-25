@@ -608,6 +608,12 @@ export const routes: RouteRecordRaw[] = [
             meta: { title: () => t('titles.duplicateBooks') },
           },
           {
+            path: 'missing-resources',
+            name: 'tools-missing-resources',
+            component: () => import('@/features/tools/missing-resources/views/MissingResourcesView.vue'),
+            meta: { title: () => t('titles.missingResources') },
+          },
+          {
             path: ':pathMatch(.*)*',
             redirect: { name: 'tools-entity-manager' },
           },
