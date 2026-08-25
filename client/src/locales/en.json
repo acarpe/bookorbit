@@ -4732,6 +4732,7 @@
           "colProgressChangeMobile": "Delta",
           "colEndProgress": "End Progress",
           "colEndProgressMobile": "End",
+          "jumpToProgress": "Jump to {progress}%",
           "empty": "No reading sessions recorded yet.",
           "emptyHint": "Add a session to start building this book's reading history.",
           "colPace": "Pace",
