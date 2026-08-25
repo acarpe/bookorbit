@@ -28,7 +28,7 @@ import type {
   ComicMetadataFields,
   MetadataSeriesMembership,
 } from '@bookorbit/types';
-import { MetadataProviderKey, NotificationType, parseSeriesIndex, resolveDownloadFilename, resolveUploadPath } from '@bookorbit/types';
+import { MetadataProviderKey, NotificationType, Permission, parseSeriesIndex, resolveDownloadFilename, resolveUploadPath } from '@bookorbit/types';
 import { BookReadService } from '../book/book-read.service';
 import { NotificationService } from '../notification/notification.service';
 import { SeriesIdentityService } from '../../common/services/series-identity.service';
@@ -248,8 +248,8 @@ export class BookDockFinalizeService implements OnModuleInit, OnApplicationBoots
 
     this.notificationService
       .notify({
-        type: NotificationType.BookDockFinalized,
-        title: 'Book Dock finalization completed',
+        type: failed > 0 ? NotificationType.BookDockFinalizedWithErrors : NotificationType.BookDockFinalized,
+        title: failed > 0 ? 'Book Dock finalization completed with errors' : 'Book Dock finalization completed',
         message: `${succeeded} succeeded, ${failed} failed`,
         scope: { kind: 'user', userId },
         meta: { total: results.length, succeeded, failed },
@@ -650,7 +650,7 @@ export class BookDockFinalizeService implements OnModuleInit, OnApplicationBoots
           type: NotificationType.BookDockFinalized,
           title: 'Book auto-finalized',
           message: `"${row.fileName}" was added to your library`,
-          scope: row.uploadedBy ? { kind: 'user', userId: row.uploadedBy } : { kind: 'all' },
+          scope: row.uploadedBy ? { kind: 'user', userId: row.uploadedBy } : { kind: 'permission', permission: Permission.ManageBookDock },
           meta: { fileId, bookId: result.bookId },
         })
         .catch(() => {});
