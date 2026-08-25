@@ -6733,6 +6733,9 @@
     "clear": "Clear",
     "empty": "No notifications yet",
     "loadMore": "Load more notifications",
+    "dismiss": "Dismiss notification",
+    "occurrences": "Happened {count} times",
+    "occurrencesShort": "x{count}",
     "preferences": {
       "title": "Notifications",
       "subtitle": "Choose which notification categories you want to receive.",
@@ -6751,6 +6754,20 @@
         "app": "App updates"
       },
       "enabledCount": "{enabled} of {total} enabled",
+      "levels": {
+        "off": {
+          "short": "Off",
+          "description": "Never notify me about this."
+        },
+        "problems": {
+          "short": "Problems",
+          "description": "Only notify me when something fails or needs attention."
+        },
+        "all": {
+          "short": "All",
+          "description": "Notify me every time, including successes."
+        }
+      },
       "categories": {
         "scanning": {
           "label": "Library scanning",
@@ -6774,7 +6791,7 @@
         },
         "bulkRename": {
           "label": "Bulk rename",
-          "description": "When a bulk rename across many books completes or fails."
+          "description": "When a bulk rename or a move of books between libraries completes or fails."
         },
         "migration": {
           "label": "Data migration",
@@ -6782,7 +6799,7 @@
         },
         "bookDock": {
           "label": "Book Dock",
-          "description": "When files dropped into the dock are ready to review or finalized."
+          "description": "When Book Dock finalization completes or encounters problems."
         },
         "koboSync": {
           "label": "Kobo sync",
