@@ -10,7 +10,7 @@ vi.mock('fs/promises', () => ({
 
 import { createReadStream } from 'fs';
 import { open, readdir, stat } from 'fs/promises';
-import { BadRequestException, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Logger, NotFoundException } from '@nestjs/common';
 import type { MockedFunction } from 'vitest';
 
 import { OpdsController } from './opds.controller';
@@ -408,6 +408,22 @@ describe('OpdsController', () => {
     mockOpen.mockRejectedValueOnce(Object.assign(new Error('denied'), { code: 'EACCES' }));
 
     await expect(controller.download(99, 0, { userId: 2, isSuperuser: false } as never, makeReply())).rejects.toThrow('denied');
+  });
+
+  it('logs a download failure that rejected with something other than an Error', async () => {
+    const { controller, opdsBookService } = makeController();
+    const errorSpy = vi.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined);
+    opdsBookService.getDownloadTarget.mockResolvedValue({
+      absolutePath: '/books/library/book.epub',
+      format: 'epub',
+    });
+    mockOpen.mockRejectedValueOnce('socket hang up');
+
+    await expect(controller.download(99, 0, { userId: 2, isSuperuser: false } as never, makeReply())).rejects.toBe('socket hang up');
+
+    expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining('errorClass=Error error="socket hang up"'));
+
+    errorSpy.mockRestore();
   });
 
   it('propagates the not-found the download target lookup raises', async () => {
