@@ -4562,7 +4562,22 @@
           "searchPrompt": "Search above, then click a result to start comparing metadata."
         },
         "writeAndRename": "Write to File & Rename",
-        "writeAndRenameShort": "Write & Rename"
+        "writeAndRenameShort": "Write & Rename",
+        "identityCard": "Identity",
+        "catalogCard": "Catalog",
+        "sourceCard": "Source",
+        "score": "Score",
+        "scoreTooltip": "Metadata score {score} out of 100",
+        "emptyFields": "{count, plural, one {empty field} other {empty fields}}",
+        "emptyFieldsTooltip": "Not filled in yet: {fields}. Search online to look them up.",
+        "libraryRow": "Library",
+        "primaryRow": "Primary",
+        "writeBackRow": "Write-back",
+        "writeBackOff": "Off",
+        "lastWrittenRow": "Last written",
+        "neverWritten": "Never",
+        "fileCount": "{count, plural, =0 {no files} one {one file} other {# files}}",
+        "unknownFormat": "Unknown"
       },
       "files": {
         "title": "Book files",
