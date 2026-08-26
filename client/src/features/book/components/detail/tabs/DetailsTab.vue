@@ -1186,7 +1186,7 @@ watch(
     that runs long scrolls inside itself so the page itself never does.
   -->
   <div
-    class="flex flex-col gap-5 xl:grid xl:h-full xl:min-h-0 xl:grid-cols-[19rem_minmax(0,1fr)_21.25rem] xl:grid-rows-[minmax(0,1fr)_clamp(11.25rem,29%,17.5rem)] xl:gap-x-6 xl:gap-y-5"
+    class="flex flex-col gap-5 xl:grid xl:h-full xl:min-h-0 xl:grid-cols-[17rem_minmax(0,1fr)_19.25rem] xl:grid-rows-[minmax(0,1fr)_clamp(11.25rem,29%,17.5rem)] xl:gap-x-6 xl:gap-y-5"
   >
     <!-- Cover column -->
     <div class="flex min-w-0 flex-col gap-3 xl:min-h-0 xl:col-start-1 xl:row-start-1">
