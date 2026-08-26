@@ -144,6 +144,31 @@ describe('KoboDownloadService', () => {
     expect(streamKepubSpy).toHaveBeenCalledWith('/books/file.epub', 'h1', 11, 22, true, expect.anything(), {});
   });
 
+  it('converts an unhashed epub under a placeholder cache key', async () => {
+    const deps = makeDeps();
+    deps.db.query.books.findFirst.mockResolvedValue({ id: 11, primaryFileId: 22 });
+    deps.db.query.bookFiles.findFirst.mockResolvedValue({
+      id: 22,
+      format: 'epub',
+      absolutePath: '/books/file.epub',
+      fileHash: null,
+      sizeBytes: 5 * 1024 * 1024,
+    });
+    deps.bookAccessService.assertBookAccessible.mockResolvedValue(undefined);
+    deps.settingsService.getSettings.mockResolvedValue({
+      convertToKepub: true,
+      forceEnableHyphenation: false,
+      kepubConversionLimitMb: 10,
+      twoWayProgressSync: false,
+    });
+    const service = makeService(deps);
+    const streamKepubSpy = vi.spyOn(service as any, 'streamKepub').mockResolvedValue(undefined);
+
+    await service.streamBook(7, 11, makeReply() as never, { rangeHeader: 'bytes=100-' });
+
+    expect(streamKepubSpy).toHaveBeenCalledWith('/books/file.epub', 'nohash', 11, 22, false, expect.anything(), { rangeHeader: 'bytes=100-' });
+  });
+
   it('falls back to epub stream when conversion is disabled or over limit', async () => {
     const deps = makeDeps();
     deps.db.query.books.findFirst.mockResolvedValue({ id: 11, primaryFileId: 22 });

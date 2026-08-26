@@ -340,6 +340,17 @@ describe('sendFileWithRanges', () => {
     expect(headers['Content-Range']).toBeUndefined();
   });
 
+  it('sends an empty file as a zero-length body rather than a negative end offset', async () => {
+    const { reply, headers } = makeReply();
+    const { handle } = stubOpen({ size: 0 });
+
+    const result = await sendFileWithRanges(reply as never, base);
+
+    expect(result).toEqual({ status: 200, size: 0, start: 0, end: 0, partial: false });
+    expect(headers['Content-Length']).toBe(0);
+    expect(handle.createReadStream).toHaveBeenCalledWith({ start: 0 });
+  });
+
   it('still answers a bare range with 206 inside the tick window', async () => {
     const { reply, headers } = makeReply();
     stubOpen({ mtimeNs: OPEN_TICK_MTIME_NS });

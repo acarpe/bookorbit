@@ -956,6 +956,18 @@ describe('KoreaderCatalogService', () => {
     warnSpy.mockRestore();
   });
 
+  it('logs a download failure that rejected with something other than an Error', async () => {
+    const { service, bookService } = makeService();
+    const warnSpy = vi.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
+    bookService.verifyFileAccess.mockRejectedValueOnce('socket hang up');
+
+    await expect(service.streamFile(makeUser(), 100, makeReply() as never)).rejects.toBe('socket hang up');
+
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('errorClass=Error error="socket hang up"'));
+
+    warnSpy.mockRestore();
+  });
+
   it('encodes non-ASCII content file download filenames for Content-Disposition', async () => {
     const { service, bookService } = makeService();
     const reply = makeReply();
