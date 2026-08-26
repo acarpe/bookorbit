@@ -261,7 +261,7 @@ const quickFilters = computed<{ label: string; value: QuickFilter }[]>(() => [
                 v-for="quick in quickFilters"
                 :key="quick.value"
                 :data-quick-filter="quick.value"
-                class="h-5 rounded-md px-2 text-[11px] font-medium transition-colors"
+                class="h-6 rounded-md px-2 text-[11px] font-medium transition-colors"
                 :class="
                   activeQuick === quick.value ? 'bg-card text-foreground shadow-[var(--elevation-xs)]' : 'text-muted-foreground hover:text-foreground'
                 "

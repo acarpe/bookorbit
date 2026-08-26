@@ -314,7 +314,7 @@ function handleAddSession() {
 
 <template>
   <section class="flex min-h-0 flex-col rounded-xl border border-border bg-card px-3.5 py-3" :aria-label="t('book.detail.readingLog.vitals.aria')">
-    <div class="flex items-center gap-3">
+    <div class="flex shrink-0 items-center gap-3">
       <div class="relative flex size-15 shrink-0 items-center justify-center">
         <AchievementProgressRing :percent="currentProgress" color="text-primary" :size="58" />
         <span class="absolute inset-0 flex items-center justify-center text-xs font-semibold text-foreground">
@@ -346,17 +346,17 @@ function handleAddSession() {
           </DropdownMenuContent>
         </DropdownMenu>
 
-        <p v-if="etaLabel" class="mt-1 flex items-center gap-1 text-[11px] text-muted-foreground">
+        <p v-if="etaLabel" class="mt-1 flex items-center gap-1 text-xs text-muted-foreground">
           <Clock class="size-3 shrink-0" />
           <span class="truncate">{{ etaLabel }}</span>
         </p>
-        <p v-else-if="formatLine" class="mt-1 truncate text-[11px] text-muted-foreground">{{ formatLine }}</p>
+        <p v-else-if="formatLine" class="mt-1 truncate text-xs text-muted-foreground">{{ formatLine }}</p>
       </div>
     </div>
 
-    <dl class="mt-3">
-      <div class="flex h-6 items-center gap-2">
-        <dt class="text-[11px] leading-4 text-muted-foreground">{{ t('book.detail.readingLog.vitals.started') }}</dt>
+    <dl class="mt-3 shrink-0">
+      <div class="flex h-[26px] items-center gap-2">
+        <dt class="text-xs leading-4 text-muted-foreground">{{ t('book.detail.readingLog.vitals.started') }}</dt>
         <dd class="ml-auto flex items-center">
           <input
             v-if="activeDateField === 'startedAt'"
@@ -381,8 +381,8 @@ function handleAddSession() {
           </button>
         </dd>
       </div>
-      <div class="flex h-6 items-center gap-2 border-t border-border/60">
-        <dt class="text-[11px] leading-4 text-muted-foreground">{{ t('book.detail.readingLog.vitals.finished') }}</dt>
+      <div class="flex h-[26px] items-center gap-2 border-t border-border/60">
+        <dt class="text-xs leading-4 text-muted-foreground">{{ t('book.detail.readingLog.vitals.finished') }}</dt>
         <dd class="ml-auto flex items-center">
           <input
             v-if="activeDateField === 'finishedAt'"
@@ -408,12 +408,12 @@ function handleAddSession() {
         </dd>
       </div>
     </dl>
-    <p v-if="datesError" role="alert" class="mt-1 text-[11px] text-destructive">{{ datesError }}</p>
+    <p v-if="datesError" role="alert" class="mt-1 text-xs text-destructive">{{ datesError }}</p>
 
-    <div class="mt-2.5 border-t border-border pt-1" :class="{ 'opacity-50': loading && stats !== null }">
+    <div class="mt-2.5 min-h-0 flex-1 overflow-y-auto border-t border-border pt-1" :class="{ 'opacity-50': loading && stats !== null }">
       <dl>
-        <div v-for="row in ledgerRows" :key="row.key" class="flex h-[22px] items-center gap-2 border-t border-border/60 first:border-t-0">
-          <dt class="text-[11px] leading-4 text-muted-foreground">{{ row.label }}</dt>
+        <div v-for="row in ledgerRows" :key="row.key" class="flex h-[26px] items-center gap-2 border-t border-border/60 first:border-t-0">
+          <dt class="text-xs leading-4 text-muted-foreground">{{ row.label }}</dt>
           <dd class="ml-auto flex items-center gap-1 text-xs font-semibold leading-4 tabular-nums text-foreground">
             <span v-if="row.withMomentum" :title="momentumTitle" class="inline-flex">
               <TrendingUp v-if="momentum.direction === 'up'" class="size-3.5 text-primary" />
@@ -426,9 +426,7 @@ function handleAddSession() {
       </dl>
     </div>
 
-    <div class="min-h-0 flex-1" />
-
-    <div v-if="(stats?.bySource.length ?? 0) >= 2" class="mt-3">
+    <div v-if="(stats?.bySource.length ?? 0) >= 2" class="mt-3 shrink-0">
       <h3 class="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
         {{ t('book.detail.readingLog.vitals.whereYouRead') }}
       </h3>
@@ -437,7 +435,7 @@ function handleAddSession() {
 
     <button
       v-if="!hideAddSession"
-      class="mt-3 inline-flex h-8 w-full items-center justify-center gap-1.5 rounded-md bg-primary text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
+      class="mt-3 inline-flex h-8 w-full shrink-0 items-center justify-center gap-1.5 rounded-md bg-primary text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
       @click="handleAddSession"
     >
       <Plus class="size-3.5" />

@@ -260,7 +260,7 @@ function handleLoadMore() {
       <div :class="[ROW_GRID, 'group/ledgerhead flex-none border-b border-border bg-muted/40 px-3 py-1.5']">
         <button
           :data-sort-column="columnFor('day').id"
-          class="flex items-center gap-1 text-[9px] font-semibold uppercase tracking-wider transition-colors"
+          class="flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wider transition-colors"
           :class="sortBy === columnFor('day').id ? 'text-foreground' : 'text-muted-foreground hover:text-foreground'"
           @click="handleSortClick"
         >
@@ -269,10 +269,10 @@ function handleLoadMore() {
           <ChevronDown v-else-if="sortBy === columnFor('day').id" :size="10" />
           <ChevronsUpDown v-else :size="10" class="opacity-0 transition-opacity group-hover/ledgerhead:opacity-50" />
         </button>
-        <span class="text-[9px] font-semibold uppercase tracking-wider text-muted-foreground">{{ t('book.detail.readingLog.ledger.colTime') }}</span>
+        <span class="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">{{ t('book.detail.readingLog.ledger.colTime') }}</span>
         <button
           :data-sort-column="columnFor('length').id"
-          class="flex items-center gap-1 text-[9px] font-semibold uppercase tracking-wider transition-colors"
+          class="flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wider transition-colors"
           :class="sortBy === columnFor('length').id ? 'text-foreground' : 'text-muted-foreground hover:text-foreground'"
           @click="handleSortClick"
         >
@@ -283,7 +283,7 @@ function handleLoadMore() {
         </button>
         <button
           :data-sort-column="columnFor('change').id"
-          class="hidden items-center gap-1 text-[9px] font-semibold uppercase tracking-wider transition-colors sm:flex"
+          class="hidden items-center gap-1 text-[10px] font-semibold uppercase tracking-wider transition-colors sm:flex"
           :class="sortBy === columnFor('change').id ? 'text-foreground' : 'text-muted-foreground hover:text-foreground'"
           @click="handleSortClick"
         >
@@ -292,12 +292,12 @@ function handleLoadMore() {
           <ChevronDown v-else-if="sortBy === columnFor('change').id" :size="10" />
           <ChevronsUpDown v-else :size="10" class="opacity-0 transition-opacity group-hover/ledgerhead:opacity-50" />
         </button>
-        <span class="text-[9px] font-semibold uppercase tracking-wider text-muted-foreground">{{
+        <span class="truncate text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">{{
           t('book.detail.readingLog.ledger.colPosition')
         }}</span>
         <button
           :data-sort-column="columnFor('reached').id"
-          class="flex items-center justify-end gap-1 text-[9px] font-semibold uppercase tracking-wider transition-colors"
+          class="flex items-center justify-end gap-1 text-[10px] font-semibold uppercase tracking-wider transition-colors"
           :class="sortBy === columnFor('reached').id ? 'text-foreground' : 'text-muted-foreground hover:text-foreground'"
           @click="handleSortClick"
         >
@@ -306,7 +306,7 @@ function handleLoadMore() {
           <ChevronDown v-else-if="sortBy === columnFor('reached').id" :size="10" />
           <ChevronsUpDown v-else :size="10" class="opacity-0 transition-opacity group-hover/ledgerhead:opacity-50" />
         </button>
-        <span class="hidden text-[9px] font-semibold uppercase tracking-wider text-muted-foreground lg:block">{{
+        <span class="hidden text-[10px] font-semibold uppercase tracking-wider text-muted-foreground lg:block">{{
           t('book.detail.readingLog.ledger.colSource')
         }}</span>
         <span />
@@ -317,7 +317,7 @@ function handleLoadMore() {
         :class="{ 'pointer-events-none opacity-50': loading }"
       >
         <template v-for="row in rows" :key="row.key">
-          <p v-if="row.kind === 'gap'" class="flex items-center gap-2.5 px-3 py-1 text-[10px] font-medium text-muted-foreground">
+          <p v-if="row.kind === 'gap'" class="flex items-center gap-2.5 px-3 py-1.5 text-[11px] font-medium text-muted-foreground">
             <span class="h-px flex-1 bg-border" aria-hidden="true" />
             {{ t('book.detail.readingLog.ledger.gapDays', { count: row.days }, row.days) }}
             <span class="h-px flex-1 bg-border" aria-hidden="true" />
@@ -325,7 +325,7 @@ function handleLoadMore() {
 
           <p
             v-else-if="row.kind === 'attempt'"
-            class="flex items-center gap-2 border-t border-primary/40 bg-primary/5 px-3 py-1 text-[10px] font-semibold tracking-wide text-primary"
+            class="flex items-center gap-2 border-t border-primary/40 bg-primary/5 px-3 py-1.5 text-[11px] font-semibold tracking-wide text-primary"
           >
             <RotateCcw class="size-3 shrink-0" aria-hidden="true" />
             {{ attemptLabel(row.attemptId) }}
@@ -336,22 +336,22 @@ function handleLoadMore() {
             v-else
             :class="[
               ROW_GRID,
-              'h-7 border-t px-3 transition-colors hover:bg-muted/40',
+              'h-[30px] border-t px-3 transition-colors hover:bg-muted/40',
               row.startsDay && chronological ? 'border-border' : 'border-border/50',
             ]"
           >
-            <span class="truncate text-[10.5px] font-semibold leading-4 text-foreground" :class="{ invisible: !row.showDay }">
+            <span class="truncate text-[11px] font-semibold leading-4 text-foreground" :class="{ invisible: !row.showDay }">
               {{ formatDayLabel(localDayKey(row.session.startedAt)) }}
               <span class="font-normal text-muted-foreground">{{ formatWeekday(localDayKey(row.session.startedAt)) }}</span>
             </span>
             <span class="truncate whitespace-nowrap text-[11px] leading-4 tabular-nums text-muted-foreground">{{
               formatTime(row.session.startedAt)
             }}</span>
-            <span class="whitespace-nowrap text-[11.5px] font-semibold leading-4 tabular-nums text-foreground">{{
+            <span class="whitespace-nowrap text-xs font-semibold leading-4 tabular-nums text-foreground">{{
               formatDuration(row.session.durationSeconds)
             }}</span>
             <span
-              class="hidden whitespace-nowrap text-[11.5px] font-semibold leading-4 tabular-nums sm:block"
+              class="hidden whitespace-nowrap text-xs font-semibold leading-4 tabular-nums sm:block"
               :class="
                 (row.session.progressDelta ?? 0) > 0.05
                   ? 'text-primary'
@@ -370,7 +370,7 @@ function handleLoadMore() {
               />
               <span class="absolute inset-y-0 w-0.5 bg-foreground/70" :style="{ left: positionBar(row.session).end }" />
             </span>
-            <span class="whitespace-nowrap text-right text-[11px] font-semibold leading-4 tabular-nums text-muted-foreground">
+            <span class="whitespace-nowrap text-right text-xs font-semibold leading-4 tabular-nums text-muted-foreground">
               <RouterLink
                 v-if="checkpointRoute(row.session)"
                 :to="checkpointRoute(row.session)!"
@@ -385,7 +385,7 @@ function handleLoadMore() {
               <span class="size-1.5 shrink-0 rounded-full" :style="{ backgroundColor: sourceColor(row.session) }" :title="sourceLabel(row.session)" />
               <span
                 v-if="row.session.format"
-                class="inline-flex h-4 shrink-0 items-center rounded border px-1 text-[9px] font-bold uppercase leading-none tracking-wider"
+                class="inline-flex h-4 shrink-0 items-center rounded border px-1 text-[10px] font-bold uppercase leading-none tracking-wider"
                 :style="formatBadgeStyle(row.session.format)"
               >
                 {{ row.session.format }}
