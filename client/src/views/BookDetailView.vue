@@ -119,7 +119,7 @@ function onCoverChanged(source: 'extracted' | 'custom' | null) {
 <template>
   <BookDetailLayout :book-id="bookId" :cover-tint="coverTint">
     <Transition name="content" mode="out-in">
-      <div v-if="detail" key="detail">
+      <div v-if="detail" key="detail" class="h-full">
         <DetailsTab v-if="tab === 'details'" :book="detail" @saved="onMetadataSaved" @moved="handleMovedToLibrary" />
         <EditMetadataTab
           v-else-if="tab === 'edit' && hasPermission('library_edit_metadata')"
