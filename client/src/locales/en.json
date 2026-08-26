@@ -3323,7 +3323,16 @@
         "noMatch": "No highlights match your filters.",
         "resetFilters": "Reset filters",
         "trashEmpty": "Trash is empty",
-        "noAnnotations": "No annotations yet. Highlights you create on the web or your e-reader appear here."
+        "noAnnotations": "No annotations yet. Highlights you create on the web or your e-reader appear here.",
+        "noMatchHint": "Try a shorter phrase, or clear the colour and book filters.",
+        "noAnnotationsBody": "Everything you mark, in any book and on any device, collects here.",
+        "readHere": "Read here",
+        "readHereBody": "Select text in the reader and pick a colour.",
+        "syncKobo": "Sync a Kobo",
+        "syncKoboBody": "Marks made on the device arrive on the next sync.",
+        "syncKoreader": "Sync KOReader",
+        "syncKoreaderBody": "The plugin uploads annotations with their positions.",
+        "goToLibrary": "Go to the library"
       },
       "toast": {
         "movedToTrash": "Moved to trash",
@@ -3333,8 +3342,70 @@
         "bulkTrashed": "{count, plural, =0 {Moved no annotations to trash} one {Moved # annotation to trash} other {Moved # annotations to trash}}",
         "bulkRestored": "{count, plural, =0 {Restored no annotations} one {Restored # annotation} other {Restored # annotations}}",
         "bulkRecolored": "{count, plural, =0 {Recolored no annotations} one {Recolored # annotation} other {Recolored # annotations}}",
-        "bulkRestyled": "{count, plural, =0 {Restyled no annotations} one {Restyled # annotation} other {Restyled # annotations}}"
-      }
+        "bulkRestyled": "{count, plural, =0 {Restyled no annotations} one {Restyled # annotation} other {Restyled # annotations}}",
+        "noteSaved": "Note saved"
+      },
+      "railTitle": "{marks} marks · {books} books",
+      "lastTwelveMonths": "Last 12 months",
+      "colour": "Colour",
+      "whereFrom": "Where they came from",
+      "theShelf": "The shelf",
+      "devices": "Devices",
+      "allBooks": "All {count} books",
+      "behindCount": "{count, plural, one {# behind} other {# behind}}",
+      "busiestWeek": "Busiest week",
+      "longestQuiet": "Longest quiet stretch",
+      "mostMarked": "Most marked",
+      "weekCount": "{count, plural, one {# week} other {# weeks}}",
+      "anchorsUnplaced": "{count, plural, one {# anchor could not be placed} other {# anchors could not be placed}}",
+      "reviewThem": "Review them",
+      "anchorLost": "Anchor lost",
+      "anchorRepaired": "Repaired",
+      "notes": "Notes",
+      "review": "Review",
+      "viewLabel": "Group and sort",
+      "views": {
+        "newest": "Newest first",
+        "oldest": "Oldest first",
+        "book": "By book",
+        "color": "By colour",
+        "source": "By source"
+      },
+      "matchCount": "{shown} of {total}",
+      "moreActions": "More actions",
+      "loadMore": "{count, plural, one {Load 1 more} other {Load # more}}",
+      "openBook": "Open book",
+      "noteLabel": "Note",
+      "yourNote": "Your note",
+      "notePlaceholder": "Say why this mattered.",
+      "openAtThisPage": "Open at this page",
+      "positionAndSync": "Position & sync",
+      "loadFailed": "Could not load your highlights. Try again in a moment.",
+      "chips": {
+        "dateBetween": "{from} to {to}",
+        "dateFrom": "From {from}",
+        "dateUntil": "Until {to}"
+      },
+      "activitySummary": "{count, plural, one {# highlight between {from} and {to}} other {# highlights between {from} and {to}}}",
+      "book": "Book",
+      "needsReview": "Needs review"
+    },
+    "sources": {
+      "web": "Web",
+      "koreader": "KOReader",
+      "kobo": "Kobo"
+    },
+    "colors": {
+      "yellow": "Yellow",
+      "green": "Green",
+      "blue": "Blue",
+      "pink": "Pink",
+      "orange": "Orange",
+      "red": "Red",
+      "olive": "Olive",
+      "cyan": "Cyan",
+      "purple": "Purple",
+      "gray": "Gray"
     }
   },
   "audit": {
@@ -4866,6 +4937,17 @@
           "regroup": "Regroup the stream",
           "copy": "Copy the quote",
           "reader": "Open in the reader"
+        },
+        "railTitle": "{marks} marks · {chapters} chapters",
+        "whenMarked": "When they were marked",
+        "chapters": "Chapters",
+        "noChapter": "No chapter",
+        "views": {
+          "position": "In reading order",
+          "newest": "Newest first",
+          "oldest": "Oldest first",
+          "colour": "By colour",
+          "source": "By source"
         }
       },
       "readingLog": {
