@@ -4751,7 +4751,122 @@
           "hint": "Select text while reading to create highlights"
         },
         "uncategorized": "Uncategorized",
-        "paginationUnit": "highlights"
+        "paginationUnit": "highlights",
+        "rail": {
+          "title": "Marks",
+          "unit": "{count, plural, one {highlight} other {highlights}}",
+          "withNotes": "carry a note",
+          "chaptersMarked": "chapters marked",
+          "ofChaptersMarked": "of {total} chapters marked",
+          "colour": "Colour",
+          "showOnly": "Show only {colour}",
+          "source": "Where they came from",
+          "health": "Position health",
+          "needsAttention": "{count, plural, one {# needs attention} other {# need attention}}",
+          "anchorLost": "{count, plural, one {one lost its anchor when the file changed} other {# lost their anchor when the file changed}}",
+          "reAnchored": "{count, plural, one {one was re-anchored automatically} other {# were re-anchored automatically}}",
+          "reviewPositions": "Review positions",
+          "span": "Span",
+          "firstMark": "First mark",
+          "lastMark": "Last mark",
+          "markingDays": "Marking days",
+          "exportCount": "Export {count}"
+        },
+        "row": {
+          "select": "Select this highlight",
+          "showMore": "Show more",
+          "showLess": "Show less",
+          "note": "Note",
+          "addNote": "Add a note",
+          "page": "p.{page}",
+          "anchorLost": "Anchor lost",
+          "reAnchored": "Re-anchored"
+        },
+        "stream": {
+          "title": "The stream",
+          "searchPlaceholder": "Search {count} highlights and notes",
+          "all": "All",
+          "notes": "Notes",
+          "review": "Review",
+          "density": "Switch between comfortable and compact rows",
+          "matchCount": "{shown} of {total} match",
+          "textChip": "text “{query}”",
+          "marks": "{count, plural, one {# mark} other {# marks}}",
+          "loadingMore": "Loading more"
+        },
+        "bulk": {
+          "selected": "{count} selected",
+          "selectAll": "Select all {count}",
+          "recolour": "Recolour the selection",
+          "recolourTo": "Recolour to {colour}",
+          "clear": "Clear the selection"
+        },
+        "index": {
+          "title": "Index",
+          "groupBy": "Group the stream by",
+          "byChapter": "Chapters",
+          "byColour": "Colours",
+          "byDay": "Days"
+        },
+        "activity": {
+          "title": "Marking activity",
+          "days": "{count, plural, one {# day} other {# days}}",
+          "showAll": "Show all {count} days",
+          "showFewer": "Show fewer"
+        },
+        "inspector": {
+          "title": "Highlight detail",
+          "back": "Back to the index",
+          "counter": "Mark {position} of {total}",
+          "previous": "Previous mark",
+          "next": "Next mark",
+          "notePrompt": "Why did this one matter? Notes are searchable and travel with the export.",
+          "style": "Style",
+          "position": "Position and sync",
+          "openHere": "Open here"
+        },
+        "band": {
+          "title": "Where the marks are",
+          "subtitle": "every marked chapter in reading order, coloured as you marked it",
+          "barTitle": "{chapter}, {count} marks",
+          "start": "Start",
+          "densest": "Densest",
+          "marks": "{count, plural, one {# mark} other {# marks}}",
+          "longestGap": "Longest run without a mark",
+          "chapters": "{count, plural, one {# chapter} other {# chapters}}",
+          "end": "End"
+        },
+        "emptyStage": {
+          "title": "No highlights in {title} yet",
+          "body": "Highlights arrive from three places, and this page collects all of them in one spine.",
+          "openReader": "Open the reader",
+          "web": {
+            "title": "Read it here",
+            "body": "Select text in the built-in reader and pick a colour."
+          },
+          "kobo": {
+            "title": "Sync a Kobo",
+            "body": "Highlights made on the device come across on the next sync."
+          },
+          "koreader": {
+            "title": "Sync KOReader",
+            "body": "The plugin uploads annotations with their exact positions."
+          }
+        },
+        "shortcuts": {
+          "title": "Keyboard",
+          "description": "Keyboard shortcuts for the highlights list.",
+          "move": "Next / previous mark",
+          "open": "Open the inspector",
+          "back": "Back to the index",
+          "search": "Search",
+          "note": "Write a note",
+          "recolour": "Recolour",
+          "select": "Select this mark",
+          "regroup": "Regroup the stream",
+          "copy": "Copy the quote",
+          "reader": "Open in the reader"
+        }
       },
       "readingLog": {
         "resetReadingState": "Reset reading state",

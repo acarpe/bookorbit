@@ -50,6 +50,16 @@
 
   --star-highlight: oklch(0.76 0.18 90);
 
+  /* Metadata score ramp: red at 0, through orange and yellow, to green at 100. Consumers
+     interpolate between these four with color-mix in oklch, so the whole spectrum follows
+     from four tokens. Tuned per theme like every other text colour here: on a light card the
+     yellow middle has to sit darker than the red and green ends to clear AA, and on a dark
+     card it has to sit lighter. */
+  --score-red: oklch(0.55 0.19 25);
+  --score-orange: oklch(0.55 0.16 55);
+  --score-yellow: oklch(0.54 0.13 95);
+  --score-green: oklch(0.5 0.15 148);
+
   --border: oklch(0.878 var(--tint-c-surface) var(--tint-h));
   --input: oklch(0.878 var(--tint-c-surface) var(--tint-h));
   --ring: oklch(0.65 var(--tint-c-surface) var(--tint-h));
@@ -221,6 +231,13 @@
   --warning-foreground: oklch(0.145 0 0);
 
   --star-highlight: oklch(0.84 0.17 95);
+
+  /* Lifted the way the pills are, with the yellow middle highest so the ramp holds an even
+     weight across the spectrum on a dark card */
+  --score-red: oklch(0.72 0.18 25);
+  --score-orange: oklch(0.78 0.15 55);
+  --score-yellow: oklch(0.85 0.15 95);
+  --score-green: oklch(0.78 0.16 148);
 
   --border: oklch(1 0 0 / 10%);
   --input: oklch(1 0 0 / 15%);

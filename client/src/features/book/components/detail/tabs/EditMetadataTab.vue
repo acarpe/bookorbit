@@ -27,6 +27,7 @@ import type {
 import { BOOK_FILE_WRITE_FIELD_LABELS, FORMAT_TO_GROUP, isValidSeriesIndex, parseSeriesIndex } from '@bookorbit/types'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { api } from '@/lib/api'
+import { metadataScoreColor } from '@/lib/metadata-score-color'
 import ChipInput from '@/components/ui/ChipInput.vue'
 import CoverEditorPanel from './CoverEditorPanel.vue'
 import MetadataSearchDrawer from './MetadataSearchDrawer.vue'
@@ -300,6 +301,7 @@ const emptyFields = computed(() => {
 })
 const emptyFieldsTitle = computed(() => t('book.detail.editMetadata.emptyFieldsTooltip', { fields: formatList(emptyFields.value) }))
 const metadataScore = computed(() => props.book.metadataScore)
+const metadataScoreColour = computed(() => (metadataScore.value == null ? null : metadataScoreColor(metadataScore.value)))
 
 function controlClass(isEmpty: boolean, mono = false): string {
   const base = mono ? FIELD_CONTROL_MONO_CLASS : FIELD_CONTROL_CLASS
@@ -843,9 +845,9 @@ function handleCoverChanged(source: 'extracted' | 'custom' | null) {
           :title="t('book.detail.editMetadata.scoreTooltip', { score: metadataScore })"
         >
           <span class="text-[10px] font-bold tracking-[0.11em] text-muted-foreground uppercase">{{ t('book.detail.editMetadata.score') }}</span>
-          <span class="text-sm font-bold">{{ metadataScore }}</span>
+          <span class="text-sm font-bold tabular-nums" :style="{ color: metadataScoreColour ?? undefined }">{{ metadataScore }}</span>
           <span class="h-1 w-12 overflow-hidden rounded-full bg-muted" aria-hidden="true">
-            <span class="block h-full rounded-full bg-primary" :style="{ width: `${metadataScore}%` }" />
+            <span class="block h-full rounded-full" :style="{ width: `${metadataScore}%`, backgroundColor: metadataScoreColour ?? undefined }" />
           </span>
         </div>
 

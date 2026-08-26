@@ -135,7 +135,7 @@ function formatBadgeStyle(format: string) {
 
       <ul v-if="recentSessions.length > 0" class="mt-2.5 min-h-0 flex-1 overflow-y-auto">
         <li v-for="session in recentSessions" :key="session.id" class="flex items-center gap-2.5 border-t border-border py-1.5 first:border-t-0">
-          <span class="w-18 shrink-0 text-[11px] text-muted-foreground">{{ relative(session.startedAt) }}</span>
+          <span class="w-24 shrink-0 truncate text-[11px] text-muted-foreground">{{ relative(session.startedAt) }}</span>
           <span class="w-12 shrink-0 text-[11px] font-semibold tabular-nums">{{ formatDuration(session.durationSeconds) }}</span>
           <span class="min-w-0 flex-1 truncate text-[11px] tabular-nums text-muted-foreground">
             {{ t('book.detail.details.activityReached', { percent: formatPercent((session.endProgress ?? 0) / 100) }) }}
