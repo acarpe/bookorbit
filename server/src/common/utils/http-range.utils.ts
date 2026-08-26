@@ -51,7 +51,6 @@ export interface FileStreamOptions extends FileRangeRequest {
   path: string;
   contentType: string;
   contentDisposition?: string;
-  cacheControl?: string;
 }
 
 /**
@@ -66,10 +65,15 @@ export interface FileStreamResult {
   partial: boolean;
 }
 
+/**
+ * The digit cap is what keeps the result exact: the caller only ever passes a
+ * run of digits, and 15 of them cannot reach `Number.MAX_SAFE_INTEGER`, so
+ * anything that clears the length check parses to an offset the range
+ * arithmetic can hold.
+ */
 function parseByteCount(value: string): number | null {
   if (value.length === 0 || value.length > MAX_RANGE_DIGITS) return null;
-  const parsed = Number.parseInt(value, 10);
-  return Number.isSafeInteger(parsed) ? parsed : null;
+  return Number.parseInt(value, 10);
 }
 
 /**
@@ -193,7 +197,6 @@ export async function sendFileWithRanges(reply: FastifyReply, options: FileStrea
     reply.header('Accept-Ranges', 'bytes');
     reply.header('ETag', strongEtag ?? `W/${etag}`);
     reply.header('Last-Modified', new Date(mtimeMs).toUTCString());
-    if (options.cacheControl) reply.header('Cache-Control', options.cacheControl);
     if (options.contentDisposition) reply.header('Content-Disposition', options.contentDisposition);
     reply.type(options.contentType);
 
