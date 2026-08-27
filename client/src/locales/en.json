@@ -3776,19 +3776,16 @@
       "refreshMetadata": "Refresh Metadata",
       "deleteAuthor": "Delete Author"
     },
-    "listRow": {
-      "noRecentAdditions": "No recent additions",
-      "portraitAlt": "{name} portrait"
-    },
     "filters": {
-      "title": "Author Filters",
-      "clearAll": "Clear all",
       "allLibraries": "All Libraries",
-      "allAuthors": "All authors",
-      "hasPhoto": "Has photo",
-      "missingPhoto": "Missing photo",
-      "minBooks": "Min books",
-      "anyPlaceholder": "Any"
+      "chips": {
+        "groupLabel": "Filter authors",
+        "all": "All",
+        "noPortrait": "No portrait",
+        "multipleBooks": "2+ books",
+        "recentlyAdded": "Added this week",
+        "noSortName": "No sort name"
+      }
     },
     "header": {
       "never": "Never",
@@ -3935,6 +3932,16 @@
         "deleteSuccess": "Deleted author; affected {books} books",
         "deleteFailed": "Failed to delete author"
       }
+    },
+    "portrait": {
+      "fromTheirBook": "Cover of one of their books; no portrait on file"
+    },
+    "index": {
+      "bookCount": "{count, plural, =0 {no books} one {# book} other {# books}}",
+      "rowLabel": "{name}, {count, plural, =0 {no books} one {# book} other {# books}}",
+      "actionsFor": "Actions for {name}",
+      "refreshing": "Refreshing metadata for {name}",
+      "deleting": "Deleting {name}"
     }
   },
   "book": {
@@ -5844,7 +5851,17 @@
         "columnsHint": "Use the column visibility panel in the table header to show or hide columns.",
         "coverShape": "Cover shape",
         "circle": "Circle",
-        "square": "Square"
+        "square": "Square",
+        "rowDensity": "Row height",
+        "densityCompact": "Compact",
+        "densityComfortable": "Cosy",
+        "densityRoomy": "Roomy",
+        "coverFallback": "Use book covers for missing portraits"
+      },
+      "viewModes": {
+        "grid": "Grid view",
+        "list": "List view",
+        "table": "Table view"
       }
     },
     "iconPicker": {
