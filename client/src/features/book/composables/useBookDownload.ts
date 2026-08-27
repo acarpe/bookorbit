@@ -1,21 +1,9 @@
 import { ref } from 'vue'
 import { toast } from 'vue-sonner'
 
-type ExportScope = 'primary' | 'all' | 'audio'
+import { downloadFromUrl } from '@/lib/download'
 
-async function triggerBrowserDownload(url: string, filename?: string): Promise<void> {
-  const response = await fetch(url, { credentials: 'same-origin' })
-  const blob = await response.blob()
-  const objectUrl = URL.createObjectURL(blob)
-  const anchor = document.createElement('a')
-  anchor.href = objectUrl
-  anchor.download = filename ?? 'download'
-  anchor.rel = 'noopener'
-  document.body.append(anchor)
-  anchor.click()
-  anchor.remove()
-  setTimeout(() => URL.revokeObjectURL(objectUrl), 30_000)
-}
+type ExportScope = 'primary' | 'all' | 'audio'
 
 export function useBookDownload() {
   const isDownloading = ref(false)
@@ -23,7 +11,7 @@ export function useBookDownload() {
   async function downloadFile(fileId: number): Promise<void> {
     isDownloading.value = true
     try {
-      await triggerBrowserDownload(`/api/v1/books/files/${fileId}/download`)
+      await downloadFromUrl(`/api/v1/books/files/${fileId}/download`, 'book')
     } catch {
       toast.error('Download failed')
     } finally {
@@ -42,12 +30,11 @@ export function useBookDownload() {
         bookIds: bookIds.join(','),
         scope,
       })
-      toast.dismiss(toastId)
-      await triggerBrowserDownload(`/api/v1/books/export/download?${params.toString()}`)
+      await downloadFromUrl(`/api/v1/books/export/download?${params.toString()}`, 'bookorbit-export.zip')
     } catch {
-      toast.dismiss(toastId)
       toast.error('Export failed')
     } finally {
+      toast.dismiss(toastId)
       isDownloading.value = false
     }
   }
