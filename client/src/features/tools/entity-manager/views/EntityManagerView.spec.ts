@@ -145,7 +145,7 @@ describe('EntityManagerView selection', () => {
     const wrapper = shallowMount(EntityManagerView)
     entityManager.fetchBrowse.mockClear()
 
-    wrapper.findComponent({ name: 'EntityBrowseTable' }).vm.$emit('update:bookCount', 'empty')
+    wrapper.findComponent({ name: 'EntityBrowseToolbar' }).vm.$emit('update:bookCount', 'empty')
 
     expect(entityManager.browseBookCount.value).toBe('empty')
     expect(entityManager.browsePage.value).toBe(1)
@@ -159,7 +159,7 @@ describe('EntityManagerView selection', () => {
     const wrapper = shallowMount(EntityManagerView)
     entityManager.fetchBrowse.mockClear()
 
-    wrapper.findComponent({ name: 'EntityBrowseTable' }).vm.$emit('update:bookCount', 'empty')
+    wrapper.findComponent({ name: 'EntityBrowseToolbar' }).vm.$emit('update:bookCount', 'empty')
 
     expect(entityManager.browseBookCount.value).toBe('empty')
     expect(entityManager.fetchBrowse).toHaveBeenCalledTimes(1)
@@ -210,7 +210,7 @@ describe('EntityManagerView selection', () => {
     mocks.useEntityManager.mockReturnValue(entityManager)
     const wrapper = shallowMount(EntityManagerView)
 
-    wrapper.findComponent({ name: 'EntityBrowseTable' }).vm.$emit('bulkDelete')
+    wrapper.findComponent({ name: 'EntityBrowseToolbar' }).vm.$emit('bulkDelete')
     await nextTick()
 
     expect(wrapper.findComponent({ name: 'BulkDeleteModal' }).props('defaultMode')).toBe('hard')
@@ -226,7 +226,7 @@ describe('EntityManagerView selection', () => {
     mocks.useEntityManager.mockReturnValue(entityManager)
     const wrapper = shallowMount(EntityManagerView)
 
-    wrapper.findComponent({ name: 'EntityBrowseTable' }).vm.$emit('bulkDelete')
+    wrapper.findComponent({ name: 'EntityBrowseToolbar' }).vm.$emit('bulkDelete')
     await nextTick()
 
     expect(wrapper.findComponent({ name: 'BulkDeleteModal' }).props('defaultMode')).toBe('soft')
@@ -239,7 +239,7 @@ describe('EntityManagerView selection', () => {
     const wrapper = shallowMount(EntityManagerView)
     entityManager.fetchBrowse.mockClear()
 
-    wrapper.findComponent({ name: 'EntityBrowseTable' }).vm.$emit('update:bookCount', 'empty')
+    wrapper.findComponent({ name: 'EntityBrowseToolbar' }).vm.$emit('update:bookCount', 'empty')
 
     expect(entityManager.browseBookCount.value).toBe('any')
     expect(entityManager.fetchBrowse).toHaveBeenCalledTimes(1)
@@ -363,7 +363,7 @@ describe('EntityManagerView selection', () => {
     mocks.useEntityManager.mockReturnValue(entityManager)
     const wrapper = shallowMount(EntityManagerView)
 
-    wrapper.findComponent({ name: 'EntityBrowseTable' }).vm.$emit('bulkDelete')
+    wrapper.findComponent({ name: 'EntityBrowseToolbar' }).vm.$emit('bulkDelete')
     await nextTick()
     wrapper.findComponent({ name: 'BulkDeleteModal' }).vm.$emit('confirm', 'soft', false)
     await flushPromises()
@@ -383,7 +383,7 @@ describe('EntityManagerView selection', () => {
     mocks.useEntityManager.mockReturnValue(entityManager)
     const wrapper = shallowMount(EntityManagerView)
 
-    wrapper.findComponent({ name: 'EntityBrowseTable' }).vm.$emit('bulkMerge')
+    wrapper.findComponent({ name: 'EntityBrowseToolbar' }).vm.$emit('bulkMerge')
     await nextTick()
     wrapper.findComponent({ name: 'BrowseMergeModal' }).vm.$emit('confirm', 1, [2], true)
     await flushPromises()

@@ -16,12 +16,11 @@ function mountTable(overrides: Partial<InstanceType<typeof EntityBrowseTable>['$
       page: 1,
       pageSize: 25,
       totalPages: 1,
-      search: '',
       sortBy: 'name',
       sortOrder: 'asc',
-      bookCount: 'any',
       density: 'comfortable',
       loading: false,
+      hasActiveFilters: false,
       selectedIds: new Set<number | string>(),
       capabilities: ENTITY_CAPABILITIES.author,
       isInline: false,
@@ -57,25 +56,6 @@ describe('EntityBrowseTable', () => {
     expect(wrapper.emitted('clearFilters')).toHaveLength(1)
   })
 
-  it('forwards toolbar events to the parent', () => {
-    const wrapper = mountTable()
-    const toolbar = wrapper.findComponent({ name: 'EntityBrowseToolbar' })
-
-    toolbar.vm.$emit('update:search', 'tolkien')
-    toolbar.vm.$emit('update:bookCount', 'empty')
-    toolbar.vm.$emit('update:density', 'compact')
-    toolbar.vm.$emit('bulkMerge')
-    toolbar.vm.$emit('bulkDelete')
-    toolbar.vm.$emit('clearSelection')
-
-    expect(wrapper.emitted('update:search')?.[0]).toEqual(['tolkien'])
-    expect(wrapper.emitted('update:bookCount')?.[0]).toEqual(['empty'])
-    expect(wrapper.emitted('update:density')?.[0]).toEqual(['compact'])
-    expect(wrapper.emitted('bulkMerge')).toHaveLength(1)
-    expect(wrapper.emitted('bulkDelete')).toHaveLength(1)
-    expect(wrapper.emitted('clearSelection')).toHaveLength(1)
-  })
-
   it('forwards pager events to the parent', () => {
     const wrapper = mountTable()
     const pager = wrapper.findComponent({ name: 'EntityBrowsePager' })
@@ -87,15 +67,15 @@ describe('EntityBrowseTable', () => {
     expect(wrapper.emitted('update:pageSize')?.[0]).toEqual([50])
   })
 
-  it('passes the current selection size to the toolbar', () => {
-    const wrapper = mountTable({ selectedIds: new Set([1, 2]) })
-
-    expect(wrapper.findComponent({ name: 'EntityBrowseToolbar' }).props('selectedCount')).toBe(2)
+  it('passes the filter state through to the grid empty state', () => {
+    expect(grid(mountTable()).props('hasActiveFilters')).toBe(false)
+    expect(grid(mountTable({ hasActiveFilters: true })).props('hasActiveFilters')).toBe(true)
   })
 
-  it('treats a search term or an empty-only filter as an active filter', () => {
-    expect(grid(mountTable()).props('hasActiveFilters')).toBe(false)
-    expect(grid(mountTable({ search: 'tolkien' })).props('hasActiveFilters')).toBe(true)
-    expect(grid(mountTable({ bookCount: 'empty' })).props('hasActiveFilters')).toBe(true)
+  it('leaves search and filter controls to the page toolbar', () => {
+    const wrapper = mountTable()
+
+    expect(wrapper.findComponent({ name: 'EntityBrowseToolbar' }).exists()).toBe(false)
+    expect(wrapper.find('input[type="search"]').exists()).toBe(false)
   })
 })
