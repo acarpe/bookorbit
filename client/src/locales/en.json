@@ -3991,7 +3991,13 @@
       "action": "Download",
       "audiobookZip": "Audiobook (ZIP)",
       "allFormatsZip": "All formats (ZIP)",
-      "primaryOnlyZip": "Primary only (ZIP)"
+      "primaryOnlyZip": "Primary only (ZIP)",
+      "preparing": "Preparing download...",
+      "preparingExport": "Preparing {count, plural, one {# book} other {# books}} for download...",
+      "progressPercent": "Downloading {percent} of {total}",
+      "progressBytes": "Downloading {transferred}",
+      "failed": "Download failed",
+      "exportFailed": "Export failed"
     },
     "sort": {
       "moveUp": "Move up",
