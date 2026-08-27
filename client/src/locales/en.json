@@ -8134,7 +8134,8 @@
       },
       "actions": {
         "rename": "Rename",
-        "split": "Split"
+        "split": "Split",
+        "merge": "Merge"
       },
       "duplicates": {
         "similarity": "Similarity:",
@@ -8178,7 +8179,44 @@
           "nameDesc": "Name Z-A",
           "fewestBooks": "Fewest books",
           "mostBooks": "Most books"
-        }
+        },
+        "sortByLabel": "Sort by",
+        "entityTypeLabel": "Entity type",
+        "resultCount": "{count, plural, =0 {no entities} one {# entity} other {# entities}}",
+        "selectedCount": "{count, plural, one {# selected} other {# selected}}",
+        "columns": {
+          "name": "Name",
+          "sortName": "Sort name",
+          "books": "Books",
+          "status": "Status",
+          "actions": "Actions"
+        },
+        "selectAllOnPage": "Select all entities on this page",
+        "selectEntity": "Select {name}",
+        "actionsFor": "Actions for {name}",
+        "status": {
+          "noBooks": "No books"
+        },
+        "filters": {
+          "all": "All",
+          "noBooks": "No books"
+        },
+        "density": {
+          "label": "Row height",
+          "comfortable": "Comfortable",
+          "compact": "Compact"
+        },
+        "rowsPerPage": "Rows per page",
+        "range": "Showing {from}-{to} of {total}",
+        "pagination": "Pagination",
+        "previousPage": "Previous page",
+        "nextPage": "Next page",
+        "goToPage": "Go to page {page}",
+        "morePages": "More pages",
+        "noEntitiesDescription": "Nothing has been added to this entity type yet.",
+        "noMatchesTitle": "No matches",
+        "noMatchesDescription": "No entities match your current search and filters.",
+        "clearFilters": "Clear filters"
       },
       "deleteMode": {
         "label": "Delete mode",
