@@ -3,14 +3,18 @@ import { toast } from 'vue-sonner'
 
 type ExportScope = 'primary' | 'all' | 'audio'
 
-function triggerBrowserDownload(url: string, filename?: string): void {
+async function triggerBrowserDownload(url: string, filename?: string): Promise<void> {
+  const response = await fetch(url, { credentials: 'same-origin' })
+  const blob = await response.blob()
+  const objectUrl = URL.createObjectURL(blob)
   const anchor = document.createElement('a')
-  anchor.href = url
-  if (filename) anchor.download = filename
+  anchor.href = objectUrl
+  anchor.download = filename ?? 'download'
   anchor.rel = 'noopener'
   document.body.append(anchor)
   anchor.click()
   anchor.remove()
+  setTimeout(() => URL.revokeObjectURL(objectUrl), 30_000)
 }
 
 export function useBookDownload() {
@@ -19,7 +23,7 @@ export function useBookDownload() {
   async function downloadFile(fileId: number): Promise<void> {
     isDownloading.value = true
     try {
-      triggerBrowserDownload(`/api/v1/books/files/${fileId}/download`)
+      await triggerBrowserDownload(`/api/v1/books/files/${fileId}/download`)
     } catch {
       toast.error('Download failed')
     } finally {
@@ -39,7 +43,7 @@ export function useBookDownload() {
         scope,
       })
       toast.dismiss(toastId)
-      triggerBrowserDownload(`/api/v1/books/export/download?${params.toString()}`)
+      await triggerBrowserDownload(`/api/v1/books/export/download?${params.toString()}`)
     } catch {
       toast.dismiss(toastId)
       toast.error('Export failed')
