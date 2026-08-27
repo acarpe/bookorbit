@@ -231,6 +231,37 @@ describe('schedule() debounce', () => {
     expect(processSpy).toHaveBeenCalledWith('create', '/books/file.epub', 1);
   });
 
+  it("ignores a hidden entry below the library root - the write path's own temp file", async () => {
+    const { service } = makeService();
+    (service as any).subscriptions.set(1, []);
+    (service as any).watchedLibraryPaths.set(1, ['/books']);
+    const processSpy = vi.spyOn(service as any, 'process').mockResolvedValue(undefined);
+
+    (service as any).schedule('create', '/books/Author/Book/.bookorbit-write-abc.mp3', 1);
+    (service as any).schedule('delete', '/books/Author/Book/.bookorbit-write-abc.mp3', 1);
+    (service as any).schedule('create', '/books/Author/.hidden/book.mp3', 1);
+    (service as any).schedule('create', '/books/Author/Book/.DS_Store', 1);
+
+    vi.runAllTimers();
+    await Promise.resolve();
+
+    expect(processSpy).not.toHaveBeenCalled();
+  });
+
+  it('still processes events under a library root that is itself hidden', async () => {
+    const { service } = makeService();
+    (service as any).subscriptions.set(1, []);
+    (service as any).watchedLibraryPaths.set(1, ['/mnt/.private/books']);
+    const processSpy = vi.spyOn(service as any, 'process').mockResolvedValue(undefined);
+
+    (service as any).schedule('create', '/mnt/.private/books/Author/book.mp3', 1);
+
+    vi.runAllTimers();
+    await Promise.resolve();
+
+    expect(processSpy).toHaveBeenCalledWith('create', '/mnt/.private/books/Author/book.mp3', 1);
+  });
+
   it('does not debounce events for different paths', async () => {
     const { service } = makeService();
     (service as any).subscriptions.set(1, []);
