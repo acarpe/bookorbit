@@ -363,9 +363,26 @@ export class FileWatcherService implements OnApplicationBootstrap, OnModuleDestr
     return false;
   }
 
+  // The candidate walk skips every hidden entry, so an event for one can never describe a book
+  // file. Reacting to them only produces spurious work, and the write path's own
+  // .bookorbit-write-* temp file would otherwise schedule a rescan of the very book being written.
+  private isHiddenLibraryPath(path: string, libraryId: number): boolean {
+    for (const root of this.watchedLibraryPaths.get(libraryId) ?? []) {
+      if (path === root) return false;
+      if (!path.startsWith(root + sep)) continue;
+      return path
+        .slice(root.length + 1)
+        .split(sep)
+        .some((segment) => segment.startsWith('.'));
+    }
+    return false;
+  }
+
   private schedule(type: EventType, path: string, libraryId: number): void {
     // Guard orphaned timers - ignore events for unwatched libraries
     if (!this.subscriptions.has(libraryId)) return;
+
+    if (this.isHiddenLibraryPath(path, libraryId)) return;
 
     // Dir-level coalescing - if there's already a pending folder scan
     // for this file's directory, don't schedule individual file processing
