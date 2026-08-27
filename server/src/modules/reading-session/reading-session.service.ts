@@ -11,7 +11,13 @@ import { AchievementEventsService, ACHIEVEMENT_EVENT_READING_SESSION_SAVED } fro
 import type { CreateManualReadingSessionDto } from './dto/create-manual-reading-session.dto';
 import type { ListBookReadingSessionsDto } from './dto/list-book-reading-sessions.dto';
 import type { SaveReadingSessionDto } from './dto/save-reading-session.dto';
-import { ReadingSessionRepository } from './reading-session.repository';
+import {
+  ReadingSessionRepository,
+  type ReadingSessionSyncOptions,
+  type RecordCumulativeReadingSessionParams,
+  type RecordCumulativeReadingSessionResult,
+  type SaveReadingSessionResult,
+} from './reading-session.repository';
 
 @Injectable()
 export class ReadingSessionService {
@@ -27,7 +33,13 @@ export class ReadingSessionService {
     return resolveTimeZone((user.settings as { timezone?: unknown } | undefined)?.timezone, 'UTC');
   }
 
-  async save(fileId: number, dto: SaveReadingSessionDto, user: RequestUser, source: ReadingSessionSource = 'web'): Promise<void> {
+  async save(
+    fileId: number,
+    dto: SaveReadingSessionDto,
+    user: RequestUser,
+    source: ReadingSessionSource = 'web',
+    sync?: ReadingSessionSyncOptions,
+  ): Promise<void> {
     const event = 'reading_session.save';
     const startedAtMs = Date.now();
     this.logger.log(
@@ -52,7 +64,7 @@ export class ReadingSessionService {
       // span to prevent the client from reporting more time than physically elapsed.
       const durationSeconds = Math.min(dto.durationSeconds, wallClockSeconds);
 
-      const result = await this.repo.saveSession(
+      const saveArgs = [
         user.id,
         fileId,
         dto.sessionId,
@@ -63,7 +75,8 @@ export class ReadingSessionService {
         dto.endProgress ?? null,
         source,
         this.resolveUserTimeZone(user),
-      );
+      ] as const;
+      const result = sync ? await this.repo.saveSession(...saveArgs, sync) : await this.repo.saveSession(...saveArgs);
 
       this.logger.log(
         `[${event}] [end] fileId=${fileId} userId=${user.id} sessionId=${dto.sessionId} durationMs=${Date.now() - startedAtMs} outcome=${result.kind}${result.kind === 'skipped' ? ` reason=${result.reason}` : ''} - reading session save completed`,
@@ -97,6 +110,102 @@ export class ReadingSessionService {
       );
       throw error;
     }
+  }
+
+  /**
+   * Stores a session a device reported over a sync protocol rather than through the reader.
+   *
+   * Deliberately not `save()`: the caller resolved the file through the user's own accessible
+   * libraries and has already applied the position and the status change that came with it, so
+   * repeating the access check here would re-run one just done and the status update would run
+   * twice for a single push.
+   */
+  async recordSyncedSession(params: {
+    userId: number;
+    bookFileId: number;
+    sessionId: string;
+    startedAt: Date;
+    endedAt: Date;
+    durationSeconds: number;
+    progressDelta: number | null;
+    endProgress: number | null;
+    source: ReadingSessionSource;
+    timeZone: string;
+  }): Promise<SaveReadingSessionResult> {
+    const result = await this.repo.saveSession(
+      params.userId,
+      params.bookFileId,
+      params.sessionId,
+      params.startedAt,
+      params.endedAt,
+      params.durationSeconds,
+      params.progressDelta,
+      params.endProgress,
+      params.source,
+      params.timeZone,
+    );
+
+    if (result.kind === 'saved') {
+      this.achievementEvents.emit(ACHIEVEMENT_EVENT_READING_SESSION_SAVED, {
+        userId: params.userId,
+        bookFileId: params.bookFileId,
+        durationSeconds: params.durationSeconds,
+        startedAt: params.startedAt,
+        endedAt: params.endedAt,
+        progressDelta: params.progressDelta,
+        endProgress: params.endProgress,
+        timezone: params.timeZone,
+      });
+    }
+
+    return result;
+  }
+
+  async recordCumulativeSyncedSession(params: RecordCumulativeReadingSessionParams): Promise<RecordCumulativeReadingSessionResult> {
+    const result = await this.repo.recordCumulativeSyncedSession(params);
+
+    if (result.kind === 'saved' && params.bookFileId !== null) {
+      const startedAt = new Date(params.endedAt.getTime() - result.durationSeconds * 1000);
+      this.achievementEvents.emit(ACHIEVEMENT_EVENT_READING_SESSION_SAVED, {
+        userId: params.userId,
+        bookFileId: params.bookFileId,
+        durationSeconds: result.durationSeconds,
+        startedAt,
+        endedAt: params.endedAt,
+        progressDelta: params.progressDelta,
+        endProgress: params.endProgress,
+        timezone: params.timeZone,
+      });
+    }
+
+    return result;
+  }
+
+  /**
+   * Retires the estimates a device made for reading the same device has since reported real
+   * page timings for. Prefixes are supplied by the caller, which owns both id formats.
+   */
+  async discardSupersededSyncEstimates(
+    user: RequestUser,
+    prefixes: { estimateSessionIdPrefix: string; measuredSessionIdPrefix: string },
+  ): Promise<{ deleted: number }> {
+    const event = 'reading_session.discard_sync_estimates';
+    const startedAtMs = Date.now();
+
+    const result = await this.repo.deleteSupersededSyncEstimates(
+      user.id,
+      prefixes.estimateSessionIdPrefix,
+      prefixes.measuredSessionIdPrefix,
+      this.resolveUserTimeZone(user),
+    );
+
+    if (result.deleted > 0) {
+      this.logger.log(
+        `[${event}] [end] userId=${user.id} durationMs=${Date.now() - startedAtMs} deleted=${result.deleted} - estimated sessions superseded by measured page timings`,
+      );
+    }
+
+    return result;
   }
 
   async createManualSession(bookId: number, dto: CreateManualReadingSessionDto, user: RequestUser): Promise<BookReadingSession> {
@@ -168,6 +277,7 @@ export class ReadingSessionService {
 
       return {
         id: created.id,
+        bookFileId,
         startedAt: startedAt.toISOString(),
         endedAt: endedAt.toISOString(),
         durationSeconds,
@@ -175,6 +285,7 @@ export class ReadingSessionService {
         endProgress,
         format,
         source: 'manual',
+        attemptId: created.attemptId,
       };
     } catch (error) {
       const errorClass = error instanceof Error ? error.constructor.name : 'UnknownError';

@@ -1075,9 +1075,9 @@
         "syncMetadataToFiles": "Sinhroniziraj metapodatke z datotekami",
         "deleteLibrary": "Izbriši knjižnico",
         "bookCount": "{count, plural, =0 {ni knjig} one {# knjiga} two {# knjig} few {# knjig} other {# knjig}}",
+        "folderCount": "{count, plural, =0 {ni map} one {# mapa} two {# map} few {# map} other {# map}}",
         "fileMode": "Način datotek",
         "folderMode": "Način map",
-        "folderCount": "{count, plural, =0 {ni map} one {# mapa} two {# map} few {# map} other {# map}}",
         "emptyTitle": "Še ni knjižnic",
         "emptyHint": "Dodajte knjižnico, da začnete organizirati svoje knjige.",
         "addFirstLibrary": "Dodajte svojo prvo knjižnico",
@@ -3227,19 +3227,8 @@
       "refreshMetadata": "Osveži metapodatke",
       "deleteAuthor": "Izbriši avtorja"
     },
-    "listRow": {
-      "noRecentAdditions": "Ni nedavnih dodatkov",
-      "portraitAlt": "Portret avtorja {name}"
-    },
     "filters": {
-      "title": "Filtri avtorjev",
-      "clearAll": "Počisti vse",
-      "allLibraries": "Vse knjižnice",
-      "allAuthors": "Vsi avtorji",
-      "hasPhoto": "Ima fotografijo",
-      "missingPhoto": "Manjka fotografija",
-      "minBooks": "Najm. knjig",
-      "anyPlaceholder": "Katerakoli"
+      "allLibraries": "Vse knjižnice"
     },
     "header": {
       "never": "Nikoli",

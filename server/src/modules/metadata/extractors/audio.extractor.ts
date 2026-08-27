@@ -1,6 +1,6 @@
 import { execFile as execFileCallback, spawn } from 'child_process';
 import { promisify } from 'util';
-import type { AudiobookChapter } from '@bookorbit/types';
+import { parseSeriesIndex as parseSeriesIndexLabel, type AudiobookChapter } from '@bookorbit/types';
 import { parsePublishedDateKey, parsePublishedYear, publishedYearFromDateKey } from '../../../common/utils/published-date.utils';
 
 const execFile = promisify(execFileCallback);
@@ -19,13 +19,18 @@ export interface AudioExtractResult {
   description: string | null;
   language: string | null;
   seriesName: string | null;
-  seriesIndex: number | null;
+  seriesIndex: string | null;
   genres: string[];
   audibleId: string | null;
   librofmId: string | null;
   durationSeconds: number | null;
   chapters: AudiobookChapter[];
   coverBytes: Buffer | null;
+}
+
+export interface AudioChapterProbe {
+  chapters: AudiobookChapter[];
+  durationMs: number | null;
 }
 
 interface FfprobeStream {
@@ -106,11 +111,7 @@ export async function extractAudioMetadata(absolutePath: string): Promise<AudioE
     const librofmId = tagValue(tags, 'librofm_isbn');
     const durationSeconds = parseDurationSeconds(data.format?.duration);
 
-    const mappedChapters: AudiobookChapter[] = chapters.flatMap((ch) => {
-      const startMs = parseChapterStartMs(ch.start_time);
-      if (startMs === null) return [];
-      return [{ title: ch.tags?.title ?? '', startMs }];
-    });
+    const mappedChapters = mapChapters(chapters);
 
     const coverBytes = await extractCoverBytes(absolutePath, streams);
 
@@ -146,6 +147,26 @@ export async function parseAudioDuration(absolutePath: string): Promise<number |
   } catch {
     return null;
   }
+}
+
+// Chapters and length only: the merge pass for multi-file audiobooks needs both from every file,
+// and a full extract would also pull tags and cover art it has no use for.
+export async function probeAudioChapters(absolutePath: string): Promise<AudioChapterProbe> {
+  try {
+    const { stdout } = await execFile(FFPROBE_PATH, ['-v', 'quiet', '-print_format', 'json', '-show_format', '-show_chapters', absolutePath]);
+    const data: FfprobeOutput = JSON.parse(stdout);
+    return { chapters: mapChapters(data.chapters ?? []), durationMs: parseDurationMs(data.format?.duration) };
+  } catch {
+    return { chapters: [], durationMs: null };
+  }
+}
+
+function mapChapters(chapters: FfprobeChapter[]): AudiobookChapter[] {
+  return chapters.flatMap((ch) => {
+    const startMs = parseChapterStartMs(ch.start_time);
+    if (startMs === null) return [];
+    return [{ title: ch.tags?.title ?? '', startMs }];
+  });
 }
 
 async function extractCoverBytes(absolutePath: string, streams: FfprobeStream[]): Promise<Buffer | null> {
@@ -219,15 +240,22 @@ function parseDurationSeconds(raw: string | undefined): number | null {
   return Number.isFinite(parsed) ? Math.round(parsed) : null;
 }
 
+// Milliseconds, not the rounded seconds stored per file: chapter offsets accumulate across files,
+// so half-second rounding errors would compound down the book.
+function parseDurationMs(raw: string | undefined): number | null {
+  if (!raw) return null;
+  const parsed = Number.parseFloat(raw);
+  return Number.isFinite(parsed) ? Math.round(parsed * 1000) : null;
+}
+
 function parseChapterStartMs(raw: string): number | null {
   const parsed = Number.parseFloat(raw);
   return Number.isFinite(parsed) ? Math.round(parsed * 1000) : null;
 }
 
-function parseSeriesIndex(raw: string | null): number | null {
+function parseSeriesIndex(raw: string | null): string | null {
   if (!raw) return null;
-  const parsed = Number(raw);
-  return Number.isFinite(parsed) ? parsed : null;
+  return parseSeriesIndexLabel(raw);
 }
 
 function resolveDescription(...values: (string | null)[]): string | null {

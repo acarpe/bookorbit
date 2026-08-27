@@ -515,7 +515,7 @@ describe('OpdsBookService', () => {
           description: 'Desc',
           seriesId: 42,
           seriesName: 'Series',
-          seriesIndex: 1,
+          seriesIndex: '1',
           language: 'en',
           publisher: 'Pub',
           isbn13: '123',
@@ -571,7 +571,7 @@ describe('OpdsBookService', () => {
           description: null,
           seriesId: 10,
           seriesName: 'Primary Saga',
-          seriesIndex: 1,
+          seriesIndex: '1',
           language: 'en',
           publisher: null,
           isbn13: null,
@@ -580,7 +580,7 @@ describe('OpdsBookService', () => {
       ],
       [{ bookId: 1, name: 'Author One' }],
       [{ bookId: 1, id: 10, format: 'epub', role: 'content' }],
-      [{ bookId: 1, seriesId: 42, seriesName: 'Secondary Arc', seriesIndex: 3 }],
+      [{ bookId: 1, seriesId: 42, seriesName: 'Secondary Arc', seriesIndex: '3' }],
     ]);
 
     await expect(testable(service).fetchBookEntries([1], { contextSeries: { seriesId: 42 } })).resolves.toEqual([
@@ -588,7 +588,7 @@ describe('OpdsBookService', () => {
         id: 1,
         seriesId: 42,
         seriesName: 'Secondary Arc',
-        seriesIndex: 3,
+        seriesIndex: '3',
       }),
     ]);
   });

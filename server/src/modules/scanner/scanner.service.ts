@@ -1,6 +1,7 @@
 import { ConflictException, Injectable, Logger, NotFoundException, OnApplicationBootstrap, Optional } from '@nestjs/common';
 import { createHash } from 'crypto';
 import { sanitizeLogValue } from '../../common/utils/log-sanitize.utils';
+import { naturalCompare } from '../../common/utils/natural-sort.utils';
 import { pathsReferToSameEntry } from '../../common/utils/path-identity.utils';
 
 import type {
@@ -588,7 +589,7 @@ export class ScannerService implements OnApplicationBootstrap {
     await this.scannerRepo.failAllRunningJobs('Server restarted during scan');
   }
 
-  async startScan(libraryId: number, triggeredBy: 'manual' | 'watcher' | 'schedule', forceFullScan = false): Promise<{ jobId: number }> {
+  async startScan(libraryId: number, triggeredBy: ScanTriggeredBy, forceFullScan = false): Promise<{ jobId: number }> {
     const event = 'scanner.start_scan';
     const startedAt = Date.now();
     this.logger.log(`[${event}] [start] libraryId=${libraryId} triggeredBy=${triggeredBy} forceFullScan=${forceFullScan} - scan start requested`);
@@ -627,7 +628,7 @@ export class ScannerService implements OnApplicationBootstrap {
 
       const job = await this.scannerRepo.createScanJob(libraryId, triggeredBy);
 
-      this.scanJobStore.create(job.id, libraryId, 0);
+      this.scanJobStore.create(job.id, libraryId, 0, triggeredBy);
       this.emitFromStore(libraryId, job.id, 'running');
 
       this.runScan(
@@ -1313,17 +1314,24 @@ export class ScannerService implements OnApplicationBootstrap {
       this.scanJobStore.increment(libraryId, { added: totals.addedCount, updated: totals.updatedCount });
       this.emitFromStore(libraryId, jobId, 'completed');
 
-      this.notificationService
-        .notify({
-          type: NotificationType.ScanCompleted,
-          title: 'Library scan completed',
-          message: `Added ${totals.addedCount} books, updated ${totals.updatedCount}, ${totals.missingCount} missing`,
-          scope: { kind: 'library', libraryId },
-          meta: { libraryId, jobId, ...totals },
-        })
-        .catch(() => {});
+      const scanChangedSomething = totals.addedCount > 0 || totals.updatedCount > 0 || totals.missingCount > 0;
+      // A scheduled scan that found nothing has nothing to report; announcing it every cron tick is
+      // what buried real failures under ~96 notifications a day. A manual scan still confirms, because
+      // the user asked a question and the live progress toast only fires when books were added.
+      const triggeredBy = this.scanJobStore.get(libraryId)?.triggeredBy ?? 'manual';
+      if (scanChangedSomething || triggeredBy === 'manual') {
+        this.notificationService
+          .notify({
+            type: NotificationType.ScanCompleted,
+            title: 'Library scan completed',
+            message: `Added ${totals.addedCount} books, updated ${totals.updatedCount}, ${totals.missingCount} missing`,
+            scope: { kind: 'library', libraryId },
+            meta: { libraryId, jobId, ...totals, triggeredBy },
+          })
+          .catch(() => {});
+      }
 
-      if (totals.addedCount > 0 || totals.updatedCount > 0 || totals.missingCount > 0) {
+      if (scanChangedSomething) {
         this.emitLibraryCatalogChangedForLibrary(libraryId);
       }
     } catch (err) {
@@ -1628,6 +1636,25 @@ export class ScannerService implements OnApplicationBootstrap {
       } catch (err) {
         this.logger.warn(
           `[scanner.aggregate_audio_duration] [fail] bookId=${book.id} errorClass=${err instanceof Error ? err.name : 'Error'} error="${sanitizeLogValue(err instanceof Error ? err.message : String(err))}" - audio duration aggregation failed`,
+        );
+      }
+    }
+
+    // 3e: Rebuild chapters across every audio file. Steps 3a and 3b read chapters from one file, and
+    //     each file of a multi-file audiobook embeds only its own chapters starting at zero, so on
+    //     its own that leaves the later files with no chapters at all and the last chapter of the
+    //     first file stretched over the rest of the book. Runs for unchanged books too, which is
+    //     what repairs the ones scanned before chapters were merged; it settles after one pass.
+    if (audioContentFiles.length > 1) {
+      const orderedAudioPaths = [...audioContentFiles]
+        .sort((a, b) => naturalCompare(basename(a.absolutePath), basename(b.absolutePath)))
+        .map((file) => file.absolutePath);
+      const filesChanged = shouldExtractMetadata || changedAudioFiles.length > 0;
+      try {
+        await this.metadataService.extractMergedAudioChapters(book.id, orderedAudioPaths, { filesChanged });
+      } catch (err) {
+        this.logger.warn(
+          `[scanner.merge_audio_chapters] [fail] bookId=${book.id} files=${orderedAudioPaths.length} errorClass=${err instanceof Error ? err.name : 'Error'} error="${sanitizeLogValue(err instanceof Error ? err.message : String(err))}" - audio chapter merge failed`,
         );
       }
     }

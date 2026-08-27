@@ -1433,6 +1433,11 @@
           "description": "Only write if field is currently empty",
           "short": "Fill gaps"
         },
+        "mergeExisting": {
+          "label": "Merge with existing",
+          "description": "Keep stored genres and append new provider genres",
+          "short": "Merge"
+        },
         "overwriteIfProvided": {
           "label": "Overwrite if provided",
           "description": "Write if provider returned a value",
@@ -1598,7 +1603,7 @@
             "overwriteTerm": "Overwrite:",
             "overwriteBody": "Replace whenever a provider has data."
           },
-          "summary": "Providers are tried top to bottom and the first one that returns a value wins. The merge strategy decides whether that value may replace what the book already has. Set defaults here, then override individual fields per library."
+          "summary": "Providers are tried top to bottom and the first one that returns a value wins. The merge strategy decides whether that value may replace what the book already has; genres can also append new unique values. Set defaults here, then override individual fields per library."
         },
         "libraryOverrides": {
           "title": "Library Overrides",
@@ -1982,6 +1987,8 @@
         "widePageDisable": "Disable",
         "forceTwoPage": "Force two-page on small screens",
         "forceTwoPageHint": "Bypass mobile auto-fallback when paginated two-page mode is selected",
+        "autoAdvance": "Auto-advance to next book",
+        "autoAdvanceHint": "Turn past the last page to open the next book in the series",
         "off": "Off",
         "on": "On",
         "display": "Display",
@@ -2119,6 +2126,7 @@
         "modSort": "Last, First format",
         "modInitial": "First letter only",
         "modFixed2": "Two decimal places",
+        "modMax3": "Up to three values, otherwise nothing",
         "folderOnlyPrefix": "End a pattern with",
         "folderOnlySuffix": "to specify a folder only. The original filename will be preserved inside it.",
         "conditionalLogic": "Conditional Logic",
@@ -2174,6 +2182,7 @@
         "tokenTitle": "Book title",
         "tokenSubtitle": "Book subtitle",
         "tokenAuthors": "Author(s), comma-separated",
+        "tokenNarrators": "Narrator(s), comma-separated",
         "tokenYear": "Publication year",
         "tokenSeries": "Series name",
         "tokenSeriesIndex": "Series index (zero-padded)",
@@ -3314,7 +3323,16 @@
         "noMatch": "No highlights match your filters.",
         "resetFilters": "Reset filters",
         "trashEmpty": "Trash is empty",
-        "noAnnotations": "No annotations yet. Highlights you create on the web or your e-reader appear here."
+        "noAnnotations": "No annotations yet. Highlights you create on the web or your e-reader appear here.",
+        "noMatchHint": "Try a shorter phrase, or clear the colour and book filters.",
+        "noAnnotationsBody": "Everything you mark, in any book and on any device, collects here.",
+        "readHere": "Read here",
+        "readHereBody": "Select text in the reader and pick a colour.",
+        "syncKobo": "Sync a Kobo",
+        "syncKoboBody": "Marks made on the device arrive on the next sync.",
+        "syncKoreader": "Sync KOReader",
+        "syncKoreaderBody": "The plugin uploads annotations with their positions.",
+        "goToLibrary": "Go to the library"
       },
       "toast": {
         "movedToTrash": "Moved to trash",
@@ -3324,8 +3342,70 @@
         "bulkTrashed": "{count, plural, =0 {Moved no annotations to trash} one {Moved # annotation to trash} other {Moved # annotations to trash}}",
         "bulkRestored": "{count, plural, =0 {Restored no annotations} one {Restored # annotation} other {Restored # annotations}}",
         "bulkRecolored": "{count, plural, =0 {Recolored no annotations} one {Recolored # annotation} other {Recolored # annotations}}",
-        "bulkRestyled": "{count, plural, =0 {Restyled no annotations} one {Restyled # annotation} other {Restyled # annotations}}"
-      }
+        "bulkRestyled": "{count, plural, =0 {Restyled no annotations} one {Restyled # annotation} other {Restyled # annotations}}",
+        "noteSaved": "Note saved"
+      },
+      "railTitle": "{marks} marks · {books} books",
+      "lastTwelveMonths": "Last 12 months",
+      "colour": "Colour",
+      "whereFrom": "Where they came from",
+      "theShelf": "The shelf",
+      "devices": "Devices",
+      "allBooks": "All {count} books",
+      "behindCount": "{count, plural, one {# behind} other {# behind}}",
+      "busiestWeek": "Busiest week",
+      "longestQuiet": "Longest quiet stretch",
+      "mostMarked": "Most marked",
+      "weekCount": "{count, plural, one {# week} other {# weeks}}",
+      "anchorsUnplaced": "{count, plural, one {# anchor could not be placed} other {# anchors could not be placed}}",
+      "reviewThem": "Review them",
+      "anchorLost": "Anchor lost",
+      "anchorRepaired": "Repaired",
+      "notes": "Notes",
+      "review": "Review",
+      "viewLabel": "Group and sort",
+      "views": {
+        "newest": "Newest first",
+        "oldest": "Oldest first",
+        "book": "By book",
+        "color": "By colour",
+        "source": "By source"
+      },
+      "matchCount": "{shown} of {total}",
+      "moreActions": "More actions",
+      "loadMore": "{count, plural, one {Load 1 more} other {Load # more}}",
+      "openBook": "Open book",
+      "noteLabel": "Note",
+      "yourNote": "Your note",
+      "notePlaceholder": "Say why this mattered.",
+      "openAtThisPage": "Open at this page",
+      "positionAndSync": "Position & sync",
+      "loadFailed": "Could not load your highlights. Try again in a moment.",
+      "chips": {
+        "dateBetween": "{from} to {to}",
+        "dateFrom": "From {from}",
+        "dateUntil": "Until {to}"
+      },
+      "activitySummary": "{count, plural, one {# highlight between {from} and {to}} other {# highlights between {from} and {to}}}",
+      "book": "Book",
+      "needsReview": "Needs review"
+    },
+    "sources": {
+      "web": "Web",
+      "koreader": "KOReader",
+      "kobo": "Kobo"
+    },
+    "colors": {
+      "yellow": "Yellow",
+      "green": "Green",
+      "blue": "Blue",
+      "pink": "Pink",
+      "orange": "Orange",
+      "red": "Red",
+      "olive": "Olive",
+      "cyan": "Cyan",
+      "purple": "Purple",
+      "gray": "Gray"
     }
   },
   "audit": {
@@ -3554,7 +3634,10 @@
       "EmailRecipientGroupUpdate": "Update recipient group",
       "EmailRecipientGroupDelete": "Delete recipient group",
       "EmailRecipientGroupMemberAdd": "Add recipient to group",
-      "EmailRecipientGroupMemberRemove": "Remove recipient from group"
+      "EmailRecipientGroupMemberRemove": "Remove recipient from group",
+      "MaintenanceMissingBooksClean": "Cleaned missing books",
+      "MaintenanceBrokenCoversClean": "Cleaned broken covers",
+      "MaintenanceOrphanedCoversClean": "Cleaned orphaned cover folders"
     }
   },
   "auth": {
@@ -3693,19 +3776,16 @@
       "refreshMetadata": "Refresh Metadata",
       "deleteAuthor": "Delete Author"
     },
-    "listRow": {
-      "noRecentAdditions": "No recent additions",
-      "portraitAlt": "{name} portrait"
-    },
     "filters": {
-      "title": "Author Filters",
-      "clearAll": "Clear all",
       "allLibraries": "All Libraries",
-      "allAuthors": "All authors",
-      "hasPhoto": "Has photo",
-      "missingPhoto": "Missing photo",
-      "minBooks": "Min books",
-      "anyPlaceholder": "Any"
+      "chips": {
+        "groupLabel": "Filter authors",
+        "all": "All",
+        "noPortrait": "No portrait",
+        "multipleBooks": "2+ books",
+        "recentlyAdded": "Added this week",
+        "noSortName": "No sort name"
+      }
     },
     "header": {
       "never": "Never",
@@ -3852,6 +3932,16 @@
         "deleteSuccess": "Deleted author; affected {books} books",
         "deleteFailed": "Failed to delete author"
       }
+    },
+    "portrait": {
+      "fromTheirBook": "Cover of one of their books; no portrait on file"
+    },
+    "index": {
+      "bookCount": "{count, plural, =0 {no books} one {# book} other {# books}}",
+      "rowLabel": "{name}, {count, plural, =0 {no books} one {# book} other {# books}}",
+      "actionsFor": "Actions for {name}",
+      "refreshing": "Refreshing metadata for {name}",
+      "deleting": "Deleting {name}"
     }
   },
   "book": {
@@ -4364,7 +4454,33 @@
         "resetHoldNotice": "{device} still has the old position ({percent})",
         "resetHoldRelease": "Use this device's position",
         "resetHoldReleasing": "Releasing...",
-        "resetHoldReleaseFailed": "Could not use this position. Try again."
+        "resetHoldReleaseFailed": "Could not use this position. Try again.",
+        "editions": "Editions",
+        "editionsSummary": "{count} · {size}",
+        "moreFormats": "+{count} more",
+        "filesOnDisk": "Files on disk",
+        "yourReading": "Your reading",
+        "lastRead": "last read {when}",
+        "notStarted": "not started",
+        "noSessionsYet": "No reading sessions yet. Opening this book in the reader tracks time, pace and per-device progress.",
+        "activitySessions": "Sessions",
+        "activityTime": "Time",
+        "activityAverage": "Avg",
+        "activityProgress": "Progress",
+        "activityDayTooltip": "{day}: {minutes} min",
+        "activityReached": "{percent} reached",
+        "durationS": "{seconds}s",
+        "durationM": "{minutes}m",
+        "durationHm": "{hours}h {minutes}m",
+        "yourReview": "Your review",
+        "reviewNotWritten": "Not written yet",
+        "writeReview": "Write",
+        "collections": "Collections",
+        "noCollections": "None",
+        "onDisk": "On disk",
+        "detailsHeading": "Details",
+        "percentUnderOne": "<1%",
+        "percentOverNinetyNine": ">99%"
       },
       "editMetadata": {
         "fieldCount": "{count, plural, =0 {no fields} one {one field} other {# fields}}",
@@ -4482,6 +4598,11 @@
           "pickCoverSource": "Pick cover source",
           "pickFromProvider": "Pick from another provider",
           "pickSource": "Pick source",
+          "genreWriteMode": {
+            "label": "How to apply genres",
+            "merge": "Merge",
+            "replace": "Replace"
+          },
           "empty": "empty",
           "showLess": "Show less",
           "showMore": "Show more",
@@ -4519,7 +4640,22 @@
           "searchPrompt": "Search above, then click a result to start comparing metadata."
         },
         "writeAndRename": "Write to File & Rename",
-        "writeAndRenameShort": "Write & Rename"
+        "writeAndRenameShort": "Write & Rename",
+        "identityCard": "Identity",
+        "catalogCard": "Catalog",
+        "sourceCard": "Source",
+        "score": "Score",
+        "scoreTooltip": "Metadata score {score} out of 100",
+        "emptyFields": "{count, plural, one {empty field} other {empty fields}}",
+        "emptyFieldsTooltip": "Not filled in yet: {fields}. Search online to look them up.",
+        "libraryRow": "Library",
+        "primaryRow": "Primary",
+        "writeBackRow": "Write-back",
+        "writeBackOff": "Off",
+        "lastWrittenRow": "Last written",
+        "neverWritten": "Never",
+        "fileCount": "{count, plural, =0 {no files} one {one file} other {# files}}",
+        "unknownFormat": "Unknown"
       },
       "files": {
         "title": "Book files",
@@ -4573,7 +4709,93 @@
           "title": "Delete file?",
           "description": "Are you sure you want to delete \"{filename}\"? This action cannot be undone."
         },
-        "deleting": "Deleting..."
+        "deleting": "Deleting...",
+        "folderAria": "Folder location",
+        "folderContents": "Folder contents",
+        "inspectorAria": "Selected file",
+        "libraryRoot": "library root",
+        "onDisk": "On disk",
+        "missing": "Missing",
+        "backToFolder": "Back to folder",
+        "copyPath": "Copy full path",
+        "pathCopied": "Path copied to clipboard",
+        "resume": "Resume",
+        "audiobook": "Audiobook",
+        "writeTarget": "Write target",
+        "enabled": "Enabled",
+        "disabled": "Off",
+        "notSet": "not set",
+        "sortAdded": "Added",
+        "formatCount": "{count, plural, one {# format} other {# formats}}",
+        "trackCount": "{count, plural, one {# track} other {# tracks}}",
+        "formatsInFolder": "{count, plural, one {# format here} other {# formats here}}",
+        "compositionAria": "Share of folder size by format",
+        "percentRead": "{percent} read",
+        "trackOf": "Track {track} of {total}",
+        "groups": {
+          "ebook": "Ebook",
+          "document": "Document",
+          "comic": "Comic",
+          "audio": "Audio",
+          "extras": "Extras"
+        },
+        "roles": {
+          "primary": "Primary",
+          "content": "Alternate",
+          "supplement": "Supplement",
+          "cover": "Cover"
+        },
+        "reader": {
+          "none": "No reader",
+          "ebook": "Ebook reader",
+          "document": "PDF reader",
+          "comic": "Comic reader",
+          "audio": "Audio player"
+        },
+        "spec": {
+          "format": "Format",
+          "role": "Role",
+          "size": "Size",
+          "length": "Length",
+          "added": "Added",
+          "indexed": "Indexed",
+          "opensIn": "Opens in",
+          "writeBack": "Write-back",
+          "track": "Track",
+          "targetFile": "Target file",
+          "notWritten": "Not written"
+        },
+        "duration": {
+          "hoursMinutes": "{hours}h {minutes}m",
+          "minutes": "{minutes}m",
+          "minutesSeconds": "{minutes}m {seconds}s",
+          "seconds": "{seconds}s"
+        },
+        "positionHeading": "Your position in this copy",
+        "copiesStarted": "{started} of {total} copies started",
+        "nothingStarted": "Nothing started yet",
+        "throughFile": "{percent} through this file",
+        "notOpened": "Not opened yet",
+        "lastRead": "Last read {time}",
+        "noPosition": "No reading position stored",
+        "trackPositionHeading": "Where this track sits",
+        "totalRuntime": "{duration} total",
+        "startsAt": "Starts at {time}",
+        "trackLength": "{duration} long",
+        "switchFileHeading": "Switch file",
+        "writeBackHeading": "Written into this file",
+        "fieldsWithValue": "{filled} of {total} fields have a value",
+        "lastRun": "Last run {time}",
+        "neverRun": "Never run",
+        "historyHeading": "History",
+        "timeline": {
+          "written": "Metadata written to {format}",
+          "writtenMany": "Metadata written to {format} ×{count}",
+          "writeDetail": "{count, plural, one {# field} other {# fields}} · {ms}ms · {trigger}",
+          "failed": "Write failed",
+          "indexed": "{name} indexed",
+          "indexedMany": "{count} {format} files indexed"
+        }
       },
       "highlights": {
         "note": {
@@ -4607,9 +4829,247 @@
           "hint": "Select text while reading to create highlights"
         },
         "uncategorized": "Uncategorized",
-        "paginationUnit": "highlights"
+        "paginationUnit": "highlights",
+        "rail": {
+          "title": "Marks",
+          "unit": "{count, plural, one {highlight} other {highlights}}",
+          "withNotes": "carry a note",
+          "chaptersMarked": "chapters marked",
+          "ofChaptersMarked": "of {total} chapters marked",
+          "colour": "Colour",
+          "showOnly": "Show only {colour}",
+          "source": "Where they came from",
+          "health": "Position health",
+          "needsAttention": "{count, plural, one {# needs attention} other {# need attention}}",
+          "anchorLost": "{count, plural, one {one lost its anchor when the file changed} other {# lost their anchor when the file changed}}",
+          "reAnchored": "{count, plural, one {one was re-anchored automatically} other {# were re-anchored automatically}}",
+          "reviewPositions": "Review positions",
+          "span": "Span",
+          "firstMark": "First mark",
+          "lastMark": "Last mark",
+          "markingDays": "Marking days",
+          "exportCount": "Export {count}"
+        },
+        "row": {
+          "select": "Select this highlight",
+          "showMore": "Show more",
+          "showLess": "Show less",
+          "note": "Note",
+          "addNote": "Add a note",
+          "page": "p.{page}",
+          "anchorLost": "Anchor lost",
+          "reAnchored": "Re-anchored"
+        },
+        "stream": {
+          "title": "The stream",
+          "searchPlaceholder": "Search {count} highlights and notes",
+          "all": "All",
+          "notes": "Notes",
+          "review": "Review",
+          "density": "Switch between comfortable and compact rows",
+          "matchCount": "{shown} of {total} match",
+          "textChip": "text “{query}”",
+          "marks": "{count, plural, one {# mark} other {# marks}}",
+          "loadingMore": "Loading more"
+        },
+        "bulk": {
+          "selected": "{count} selected",
+          "selectAll": "Select all {count}",
+          "recolour": "Recolour the selection",
+          "recolourTo": "Recolour to {colour}",
+          "clear": "Clear the selection"
+        },
+        "index": {
+          "title": "Index",
+          "groupBy": "Group the stream by",
+          "byChapter": "Chapters",
+          "byColour": "Colours",
+          "byDay": "Days"
+        },
+        "activity": {
+          "title": "Marking activity",
+          "days": "{count, plural, one {# day} other {# days}}",
+          "showAll": "Show all {count} days",
+          "showFewer": "Show fewer"
+        },
+        "inspector": {
+          "title": "Highlight detail",
+          "back": "Back to the index",
+          "counter": "Mark {position} of {total}",
+          "previous": "Previous mark",
+          "next": "Next mark",
+          "notePrompt": "Why did this one matter? Notes are searchable and travel with the export.",
+          "style": "Style",
+          "position": "Position and sync",
+          "openHere": "Open here"
+        },
+        "band": {
+          "title": "Where the marks are",
+          "subtitle": "every marked chapter in reading order, coloured as you marked it",
+          "barTitle": "{chapter}, {count} marks",
+          "start": "Start",
+          "densest": "Densest",
+          "marks": "{count, plural, one {# mark} other {# marks}}",
+          "longestGap": "Longest run without a mark",
+          "chapters": "{count, plural, one {# chapter} other {# chapters}}",
+          "end": "End"
+        },
+        "emptyStage": {
+          "title": "No highlights in {title} yet",
+          "body": "Highlights arrive from three places, and this page collects all of them in one spine.",
+          "openReader": "Open the reader",
+          "web": {
+            "title": "Read it here",
+            "body": "Select text in the built-in reader and pick a colour."
+          },
+          "kobo": {
+            "title": "Sync a Kobo",
+            "body": "Highlights made on the device come across on the next sync."
+          },
+          "koreader": {
+            "title": "Sync KOReader",
+            "body": "The plugin uploads annotations with their exact positions."
+          }
+        },
+        "shortcuts": {
+          "title": "Keyboard",
+          "description": "Keyboard shortcuts for the highlights list.",
+          "move": "Next / previous mark",
+          "open": "Open the inspector",
+          "back": "Back to the index",
+          "search": "Search",
+          "note": "Write a note",
+          "recolour": "Recolour",
+          "select": "Select this mark",
+          "regroup": "Regroup the stream",
+          "copy": "Copy the quote",
+          "reader": "Open in the reader"
+        },
+        "railTitle": "{marks} marks · {chapters} chapters",
+        "whenMarked": "When they were marked",
+        "chapters": "Chapters",
+        "noChapter": "No chapter",
+        "views": {
+          "position": "In reading order",
+          "newest": "Newest first",
+          "oldest": "Oldest first",
+          "colour": "By colour",
+          "source": "By source"
+        }
       },
       "readingLog": {
+        "resetReadingState": "Reset reading state",
+        "vitals": {
+          "aria": "Reading summary",
+          "notSet": "Not set",
+          "started": "Started",
+          "finished": "Finished",
+          "editStarted": "Edit the date you started this book",
+          "editFinished": "Edit the date you finished this book",
+          "totalTime": "Total time",
+          "sessions": "Sessions",
+          "avgSession": "Average session",
+          "activeDays": "Active days",
+          "activeDaysOf": "{active} of {total}",
+          "pace": "Pace",
+          "pacePerHour": "{percent}%/h",
+          "lastRead": "Last read",
+          "whereYouRead": "Where you read it",
+          "addSession": "Add session",
+          "durationHm": "{hours}h {minutes}m",
+          "durationM": "{minutes}m",
+          "durationS": "{seconds}s"
+        },
+        "ledger": {
+          "title": "Sessions",
+          "none": "none",
+          "colDay": "Day",
+          "colTime": "Time",
+          "colLength": "Length",
+          "colChange": "Change",
+          "colPosition": "Position in book",
+          "colReached": "Reached",
+          "colSource": "Source",
+          "colFormat": "Format",
+          "gapDays": "{count, plural, one {# day without reading} other {# days without reading}}",
+          "attemptBegan": "Attempt {index} began",
+          "attemptOutsideAny": "Outside any attempt",
+          "empty": "No sessions recorded yet",
+          "emptyHint": "Open the book in the reader, sync a device, or add a session by hand."
+        },
+        "attempts": {
+          "title": "Attempts",
+          "none": "none",
+          "ordinal": "Attempt {index}",
+          "addPast": "Add a past attempt",
+          "reread": "Reread",
+          "rereadPrompt": "Start a new reading attempt?",
+          "rereadResetProgress": "Reset the reading position to the beginning. Synchronized devices may receive this reset.",
+          "rereadConfirm": "Start reread",
+          "fieldStarted": "Started",
+          "fieldEnded": "Ended",
+          "fieldOutcome": "Outcome",
+          "outcome": {
+            "completed": "Completed",
+            "skimmed": "Skimmed",
+            "abandoned": "Abandoned",
+            "inProgress": "In progress"
+          },
+          "spanRange": "{from} to {to}",
+          "spanSince": "since {from}",
+          "spanEnded": "ended {to}",
+          "spanUnknown": "No dates recorded",
+          "sessionCount": "{count, plural, one {# session} other {# sessions}}",
+          "endBeforeStart": "The end date must be on or after the start date.",
+          "editAria": "Edit this attempt",
+          "deleteAria": "Delete this attempt",
+          "cancelDeleteAria": "Cancel deleting this attempt",
+          "confirmDeleteAria": "Confirm deleting this attempt",
+          "empty": "No attempts recorded",
+          "emptyHint": "Start a reread, or add an attempt you finished before this library existed."
+        },
+        "records": {
+          "title": "Records",
+          "longestSession": "Longest session",
+          "bestDay": "Best day",
+          "longestStreak": "Longest streak",
+          "streakDays": "{count, plural, one {# day} other {# days}}",
+          "pace": "Reading pace",
+          "jumpedBack": "Jumped back",
+          "jumpedBackTimes": "{count, plural, one {# time} other {# times}}",
+          "firstOpened": "First opened",
+          "empty": "Records appear once this book has sessions."
+        },
+        "band": {
+          "curve": "Curve",
+          "trace": "Trace",
+          "switchAria": "Chart view",
+          "curveTitle": "Progress over time",
+          "traceTitle": "Where you were in the book",
+          "curveSubDays": "{active} active days across {total}",
+          "curveSubSitting": "one sitting, session by session",
+          "traceSub": "each bar is the stretch one session covered",
+          "traceSubWithBacktracks": "{count, plural, one {each bar is one session, # jumped back} other {each bar is one session, # jumped back}}",
+          "legendPosition": "Position reached",
+          "legendMinutes": "Minutes read",
+          "legendBacktrack": "Jumped back",
+          "traceEmpty": "No trace yet",
+          "traceEmptyHint": "Once sessions exist this shows the stretch of the book each one covered, and where you doubled back.",
+          "tooltipCovered": "Covered {from}% to {to}%",
+          "tooltipMinutes": "{minutes} min"
+        },
+        "emptyStage": {
+          "title": "Nothing logged for this book yet",
+          "description": "A reading log is built from sessions. BookOrbit records one every time you read in the web reader, and picks up the rest from the devices you sync.",
+          "readerTitle": "Read it here",
+          "readerBody": "Every minute in the BookOrbit reader is logged automatically.",
+          "koreaderTitle": "Sync KOReader",
+          "koreaderBody": "The plugin pushes each sitting back, with the page you reached.",
+          "koboTitle": "Sync a Kobo",
+          "koboBody": "Plug the device in and BookOrbit reads its own reading-time counter.",
+          "addSession": "Add a session by hand",
+          "recordPast": "Record a past reading"
+        },
         "moreActionsAria": "More reading log actions",
         "export": {
           "button": "Export"
@@ -4722,6 +5182,7 @@
           "colProgressChangeMobile": "Delta",
           "colEndProgress": "End Progress",
           "colEndProgressMobile": "End",
+          "jumpToProgress": "Jump to {progress}%",
           "empty": "No reading sessions recorded yet.",
           "emptyHint": "Add a session to start building this book's reading history.",
           "colPace": "Pace",
@@ -4771,6 +5232,7 @@
         "moveDown": "Move down",
         "removeSeries": "Remove series",
         "seriesIndexLabel": "Position in series",
+        "invalidSeriesIndex": "Enter digits with at most one decimal point, such as 5.10.",
         "totalLabel": "Books in series",
         "totalPlaceholder": "of",
         "totalHint": "Total books in this series. Shared with everyone who has this series."
@@ -4989,6 +5451,7 @@
     "apply": "Apply",
     "done": "Done",
     "discard": "Discard",
+    "deselect": "Deselect",
     "finalize": "Finalize",
     "rescan": "Rescan",
     "uploadAction": "Upload",
@@ -4998,12 +5461,19 @@
     "bulkEditAction": "Bulk Edit",
     "applyFetched": "Apply Fetched",
     "retryErrors": "Retry Errors",
+    "discardDialog": {
+      "title": "{count, plural, =0 {Discard no files?} one {Discard the selected file?} other {Discard the # selected files?}}",
+      "description": "{count, plural, =0 {No files are selected.} one {This permanently deletes the selected file from disk. This action cannot be undone.} other {This permanently deletes the # selected files from disk. This action cannot be undone.}}",
+      "confirm": "{count, plural, one {Delete file} other {Delete # files}}",
+      "failed": "The selected files could not be deleted. Try again."
+    },
     "commaSeparated": "comma-separated",
     "destinationLibrary": "Destination Library",
     "destinationFolder": "Destination Folder",
     "nFailed": "{count} failed",
     "updatedOfFiles": "Updated {updated} of {total} files",
     "errorStatus": "Error {status}",
+    "invalidSeriesIndex": "Enter digits with at most one decimal point, such as 5.10.",
     "tab": {
       "all": "All",
       "pending": "Pending",
@@ -5381,7 +5851,17 @@
         "columnsHint": "Use the column visibility panel in the table header to show or hide columns.",
         "coverShape": "Cover shape",
         "circle": "Circle",
-        "square": "Square"
+        "square": "Square",
+        "rowDensity": "Row height",
+        "densityCompact": "Compact",
+        "densityComfortable": "Cosy",
+        "densityRoomy": "Roomy",
+        "coverFallback": "Use book covers for missing portraits"
+      },
+      "viewModes": {
+        "grid": "Grid view",
+        "list": "List view",
+        "table": "Table view"
       }
     },
     "iconPicker": {
@@ -6708,6 +7188,9 @@
     "clear": "Clear",
     "empty": "No notifications yet",
     "loadMore": "Load more notifications",
+    "dismiss": "Dismiss notification",
+    "occurrences": "Happened {count} times",
+    "occurrencesShort": "x{count}",
     "preferences": {
       "title": "Notifications",
       "subtitle": "Choose which notification categories you want to receive.",
@@ -6726,6 +7209,20 @@
         "app": "App updates"
       },
       "enabledCount": "{enabled} of {total} enabled",
+      "levels": {
+        "off": {
+          "short": "Off",
+          "description": "Never notify me about this."
+        },
+        "problems": {
+          "short": "Problems",
+          "description": "Only notify me when something fails or needs attention."
+        },
+        "all": {
+          "short": "All",
+          "description": "Notify me every time, including successes."
+        }
+      },
       "categories": {
         "scanning": {
           "label": "Library scanning",
@@ -6749,7 +7246,7 @@
         },
         "bulkRename": {
           "label": "Bulk rename",
-          "description": "When a bulk rename across many books completes or fails."
+          "description": "When a bulk rename or a move of books between libraries completes or fails."
         },
         "migration": {
           "label": "Data migration",
@@ -6757,7 +7254,7 @@
         },
         "bookDock": {
           "label": "Book Dock",
-          "description": "When files dropped into the dock are ready to review or finalized."
+          "description": "When Book Dock finalization completes or encounters problems."
         },
         "koboSync": {
           "label": "Kobo sync",
@@ -6974,6 +7471,9 @@
       "scrollMode": "Scroll mode",
       "scrollModeHint": "Use \"No gaps\" for webtoons and vertical strips.",
       "readingDirection": "Reading direction",
+      "autoAdvance": "Auto-advance",
+      "autoAdvanceHint": "Turning past the last page opens the next book in the series.",
+      "autoAdvancePagedOnly": "Auto-advance applies in paged mode only.",
       "pageView": "Page view",
       "twoPagePagedOnly": "Two pages are shown only in paged mode.",
       "spreadSection": "Two-page spread",
@@ -7019,6 +7519,14 @@
         "black": "Black",
         "gray": "Gray",
         "white": "White"
+      },
+      "nextIssue": {
+        "eyebrow": "Next in series",
+        "action": "Read next",
+        "open": "Read next: {title}",
+        "numbered": "#{index} {title}",
+        "untitled": "Untitled",
+        "autoAdvanceHint": "Turn the page again to continue"
       }
     },
     "audiobook": {
@@ -7061,7 +7569,10 @@
       "ownedOfExpected": "{owned} of {expected} in library"
     },
     "gaps": {
-      "label": "Possible gaps:"
+      "label": "Possible gaps:",
+      "missingCount": "{count, plural, one {# missing} other {# missing}}",
+      "missingList": "Missing {list}",
+      "previewMore": "{shown} +{count}"
     },
     "filters": {
       "title": "Series Filters",
@@ -7091,7 +7602,10 @@
         "bookCount": "Book Count",
         "recentAdditions": "Recent Additions",
         "readingProgress": "Reading Progress"
-      }
+      },
+      "clearSearch": "Clear search",
+      "noMatchHint": "Try another library, or clear what is set.",
+      "emptyHint": "Series appear once your books carry series metadata."
     },
     "detail": {
       "pageTitle": "Series",
@@ -7132,6 +7646,66 @@
         "ascending": "Ascending",
         "descending": "Descending"
       }
+    },
+    "authorsPlus": "{authors} +{count}",
+    "track": {
+      "readCount": "{count, plural, one {# read} other {# read}}",
+      "readingCount": "{count, plural, one {# in progress} other {# in progress}}",
+      "unreadCount": "{count, plural, one {# unread} other {# unread}}",
+      "missingCount": "{count, plural, one {# missing} other {# missing}}",
+      "slotMissing": "{number} not in library",
+      "untitled": "Untitled"
+    },
+    "legend": {
+      "read": "Read",
+      "reading": "Reading",
+      "unread": "In library",
+      "missing": "Missing"
+    },
+    "status": {
+      "label": "Filter series by reading status",
+      "all": "All",
+      "reading": "Reading",
+      "unread": "Unread",
+      "complete": "Complete",
+      "gaps": "Gaps",
+      "read": "Read",
+      "inProgress": "In progress",
+      "hasGaps": "Has gaps",
+      "notStarted": "Not started"
+    },
+    "index": {
+      "columnSeries": "Series",
+      "columnVolumes": "Volumes",
+      "columnRead": "Read",
+      "columnNext": "Up next",
+      "columnAdded": "Added",
+      "percent": "{value}%",
+      "captionReading": "{base} · {count, plural, one {# in progress} other {# in progress}}",
+      "finished": "Read end to end",
+      "reading": "Reading",
+      "next": "Next",
+      "start": "Start"
+    },
+    "grouping": {
+      "label": "Group by",
+      "none": "No grouping",
+      "letter": "By letter",
+      "library": "By library",
+      "status": "By status"
+    },
+    "libraries": {
+      "more": "+{count}"
+    },
+    "card": {
+      "oneVolume": "One volume",
+      "oneVolumeShort": "1 vol",
+      "volumeCount": "{count, plural, one {# volume} other {# volumes}}",
+      "readSummary": "{base} · {read} read",
+      "publishedOf": "{owned} of {total} published",
+      "complete": "Complete",
+      "moreVolumes": "{count, plural, one {# more volume} other {# more volumes}}",
+      "label": "{name}, {read} of {total} volumes read"
     }
   },
   "smartScope": {
@@ -7365,7 +7939,8 @@
     "header": {
       "entityManager": "Entity Manager",
       "bulkRename": "Bulk Rename",
-      "duplicateBooks": "Duplicate Books"
+      "duplicateBooks": "Duplicate Books",
+      "missingResources": "Missing Resources"
     },
     "entityTypes": {
       "authors": "Authors",
@@ -7607,6 +8182,77 @@
         "title": "Merge Entities",
         "description": "Select which entity to keep. The others will be merged into it and removed."
       }
+    },
+    "missingResources": {
+      "title": "Missing Resources",
+      "accessDenied": "You do not have permission to clean up missing resources.",
+      "categoriesLabel": "Cleanup category",
+      "untitled": "Untitled",
+      "clearSelection": "Clear selection",
+      "cleanSelected": "Clean {count} selected",
+      "selectAllMatching": "Select all {count} matching entries",
+      "allSelected": "All {count} matching entries are selected.",
+      "sweep": {
+        "title": "Cover check",
+        "description": "Checks every book that claims a cover against the files on disk, and looks for cover folders left behind by deleted books. Nothing is removed during the check.",
+        "run": "Run check",
+        "running": "Checking",
+        "progress": "Checked {processed} of {total} books",
+        "lastRun": "Last checked {at}",
+        "truncated": "Only the first results are listed. Clean these, then run the check again to see the rest."
+      },
+      "categories": {
+        "missing_books": "Missing books",
+        "broken_covers": "Broken covers",
+        "orphaned_cover_dirs": "Orphaned cover folders"
+      },
+      "found": {
+        "missing_books": "{count, plural, =0 {No books with missing files} one {One book with missing files} other {# books with missing files}}",
+        "broken_covers": "{count, plural, =0 {No broken cover references} one {One broken cover reference} other {# broken cover references}}",
+        "orphaned_cover_dirs": "{count, plural, =0 {No orphaned cover folders} one {One orphaned cover folder} other {# orphaned cover folders}}"
+      },
+      "empty": {
+        "missing_books": "No missing books",
+        "broken_covers": "No broken cover references",
+        "orphaned_cover_dirs": "No orphaned cover folders",
+        "description": "Everything in this category is accounted for."
+      },
+      "needsSweep": {
+        "title": "Run the cover check first",
+        "description": "Cover results come from a disk check. Run it to see broken references and orphaned folders."
+      },
+      "coverSource": {
+        "extracted": "Extracted",
+        "custom": "Custom"
+      },
+      "table": {
+        "selectPage": "Select everything on this page",
+        "coverFolder": "Cover folder for book #{bookId}",
+        "fileCount": "{count, plural, one {# file} other {# files}}"
+      },
+      "confirm": {
+        "title": "Clean missing resources?",
+        "action": "Clean",
+        "missing_books": "{count, plural, one {Deletes the database record for one book whose files are gone. The book, its metadata, reading progress, and cover are removed. This cannot be undone.} other {Deletes the database records for # books whose files are gone. The books, their metadata, reading progress, and covers are removed. This cannot be undone.}}",
+        "broken_covers": "{count, plural, one {Clears the cover reference for one book so it shows as having no cover. Metadata is not otherwise changed.} other {Clears the cover references for # books so they show as having no cover. Metadata is not otherwise changed.}}",
+        "orphaned_cover_dirs": "{count, plural, one {Deletes one cover folder from disk. Its book is no longer in the database. This cannot be undone.} other {Deletes # cover folders from disk. Their books are no longer in the database. This cannot be undone.}}"
+      },
+      "cleaned": {
+        "missing_books": "{count, plural, =0 {Nothing to clean} one {Removed one missing book} other {Removed # missing books}}",
+        "broken_covers": "{count, plural, =0 {Nothing to clean} one {Cleared one broken cover reference} other {Cleared # broken cover references}}",
+        "orphaned_cover_dirs": "{count, plural, =0 {Nothing to clean} one {Removed one orphaned cover folder} other {Removed # orphaned cover folders}}"
+      },
+      "pagination": {
+        "label": "Missing resource pages",
+        "page": "Page {page} of {total}"
+      },
+      "errors": {
+        "summary": "Could not load the missing resource summary.",
+        "sweepStart": "Could not start the cover check.",
+        "sweep": "The cover check failed.",
+        "list": "Could not load these entries.",
+        "clean": "Cleanup failed."
+      }
     }
   },
   "views": {
@@ -7623,6 +8269,9 @@
       "sort": "Sort",
       "sortOn": "On",
       "resetSort": "Reset sort to default",
+      "shuffle": "Shuffle",
+      "shuffleAria": "Shuffle the book order",
+      "shuffleHint": "Draw a new random order",
       "filters": "Filters",
       "clear": "Clear",
       "clearAllFilters": "Clear all filters",
@@ -7883,6 +8532,7 @@
       "restrictions": "Content Restrictions"
     },
     "smartScopes": "Smart Scopes",
-    "collections": "Collections"
+    "collections": "Collections",
+    "missingResources": "Missing Resources"
   }
 }

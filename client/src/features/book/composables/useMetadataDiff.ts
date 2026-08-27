@@ -1,4 +1,4 @@
-import { computed, reactive, toValue, type MaybeRefOrGetter } from 'vue'
+import { computed, reactive, ref, toValue, type MaybeRefOrGetter } from 'vue'
 import type {
   BookCommunityRating,
   BookMetadataLockField,
@@ -87,7 +87,7 @@ export interface MetadataPatch {
   pageCount?: number | null
   communityRatings?: Array<Pick<BookCommunityRating, 'provider' | 'rating' | 'ratingCount'>>
   seriesName?: string | null
-  seriesIndex?: number | null
+  seriesIndex?: string | null
   seriesMemberships?: MetadataSeriesMembership[] | null
   isbn10?: string | null
   isbn13?: string | null
@@ -112,6 +112,23 @@ export interface MetadataPatch {
   aladinId?: string | null
   comicMetadata?: ComicMetadataFields
   customMetadata?: CustomMetadataBookValueInput[]
+}
+
+export type GenreWriteMode = 'merge' | 'replace'
+
+export function mergeGenreLists(existing: readonly string[], incoming: readonly string[]): string[] {
+  const merged: string[] = []
+  const seen = new Set<string>()
+
+  for (const raw of [...existing, ...incoming]) {
+    const genre = raw.trim()
+    const token = genre.toLowerCase()
+    if (!genre || seen.has(token)) continue
+    seen.add(token)
+    merged.push(genre)
+  }
+
+  return merged
 }
 
 export const FIELD_DEFS: { key: DiffFieldKey; label: string }[] = [
@@ -249,7 +266,7 @@ function normalizeSeriesMemberships(values: readonly MetadataSeriesMembership[] 
     seen.add(key)
     out.push({
       seriesName,
-      seriesIndex: typeof value.seriesIndex === 'number' && Number.isFinite(value.seriesIndex) ? value.seriesIndex : null,
+      seriesIndex: value.seriesIndex ?? null,
     })
   }
   return out
@@ -266,6 +283,7 @@ export function useMetadataDiff(
 ) {
   const pickedSources = reactive(new Map<DiffFieldKey, MetadataProviderKey>())
   const pickedCommunityRatingProviders = reactive(new Set<MetadataProviderKey>())
+  const genreWriteMode = ref<GenreWriteMode>('merge')
   const lockedFieldSet = computed(() => new Set(toValue(lockedFields) ?? []))
 
   function resolveLockField(key: DiffFieldKey): BookMetadataLockField | null {
@@ -352,7 +370,11 @@ export function useMetadataDiff(
             .join(', ')
         : (() => {
             const pickedCandidate = isPicked ? allCandidates.find((c) => c.provider === pickedProvider) : null
-            return pickedCandidate ? getCandidateValueFrom(pickedCandidate, key) : ''
+            if (!pickedCandidate) return ''
+            if (key === 'genres' && genreWriteMode.value === 'merge') {
+              return mergeGenreLists(current.genres, pickedCandidate.genres ?? []).join(', ')
+            }
+            return getCandidateValueFrom(pickedCandidate, key)
           })()
     const lockField = resolveLockField(key)
 
@@ -522,7 +544,8 @@ export function useMetadataDiff(
         continue
       }
       if (key === 'genres') {
-        formPatch.genres = candidate.genres ?? []
+        formPatch.genres =
+          genreWriteMode.value === 'merge' ? mergeGenreLists(current.genres, candidate.genres ?? []) : mergeGenreLists([], candidate.genres ?? [])
         continue
       }
       if (key === 'narrators') {
@@ -639,6 +662,10 @@ export function useMetadataDiff(
 
   const hasCopied = computed(() => pickedSources.size > 0 || pickedCommunityRatingProviders.size > 0)
 
+  function setGenreWriteMode(mode: GenreWriteMode) {
+    genreWriteMode.value = mode
+  }
+
   return {
     fields,
     pickedSources,
@@ -650,5 +677,7 @@ export function useMetadataDiff(
     copyMissing,
     buildPatch,
     hasCopied,
+    genreWriteMode,
+    setGenreWriteMode,
   }
 }

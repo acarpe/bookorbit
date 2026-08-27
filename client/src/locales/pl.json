@@ -1043,9 +1043,9 @@
         "syncMetadataToFiles": "Synchronizuj metadane z plikami",
         "deleteLibrary": "Usuń bibliotekę",
         "bookCount": "{count, plural, =0 {żadnych książek} one {# książka} other {# książki} few {# książki} many {# książek}}",
+        "folderCount": "{count, plural, =0 {żadnych folderów} one {# folderze} other {# foldery} few {# foldery} many {# folderów}}",
         "fileMode": "Tryb plików",
         "folderMode": "Tryb folderu",
-        "folderCount": "{count, plural, =0 {żadnych folderów} one {# folderze} other {# foldery} few {# foldery} many {# folderów}}",
         "emptyTitle": "Nie ma jeszcze bibliotek",
         "emptyHint": "Dodaj bibliotekę, aby rozpocząć porządkowanie książek.",
         "addFirstLibrary": "Dodaj swoją pierwszą bibliotekę",
@@ -3011,19 +3011,8 @@
       "refreshMetadata": "Odśwież metadane",
       "deleteAuthor": "Usuń autora"
     },
-    "listRow": {
-      "noRecentAdditions": "Brak nowych dodatków",
-      "portraitAlt": "{name} portret"
-    },
     "filters": {
-      "title": "Filtry autorskie",
-      "clearAll": "Wyczyść wszystko",
-      "allLibraries": "Wszystkie biblioteki",
-      "allAuthors": "Wszyscy autorzy",
-      "hasPhoto": "Ma zdjęcie",
-      "missingPhoto": "Brakujące zdjęcie",
-      "minBooks": "Min. książki",
-      "anyPlaceholder": "Dowolny"
+      "allLibraries": "Wszystkie biblioteki"
     },
     "header": {
       "never": "Nigdy",

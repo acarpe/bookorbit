@@ -1035,9 +1035,9 @@
         "syncMetadataToFiles": "Συγχρονισμός μεταδεδομένων σε αρχεία",
         "deleteLibrary": "Διαγραφή βιβλιοθήκης",
         "bookCount": "{count, plural, =0 {Δεν υπάρχουν βιβλία} one {# βιβλίο} other {# βιβλία}}",
+        "folderCount": "{count, plural, =0 {Δεν υπάρχουν φάκελοι} one {# φάκελος} other {# φάκελοι}}",
         "fileMode": "Λειτουργία αρχείου",
         "folderMode": "Λειτουργία φακέλου",
-        "folderCount": "{count, plural, =0 {Δεν υπάρχουν φάκελοι} one {# φάκελος} other {# φάκελοι}}",
         "emptyTitle": "Δεν υπάρχουν ακόμη βιβλιοθήκες",
         "emptyHint": "Προσθέστε μια βιβλιοθήκη για να ξεκινήσετε την οργάνωση των βιβλίων σας.",
         "addFirstLibrary": "Προσθέστε την πρώτη σας βιβλιοθήκη",
@@ -3096,18 +3096,8 @@
       "refreshMetadata": "Ανανέωση Μεταδεδομένων",
       "deleteAuthor": "Διαγραφή Συγγραφέα"
     },
-    "listRow": {
-      "noRecentAdditions": "Καμία πρόσφατη προσθήκη"
-    },
     "filters": {
-      "title": "Φίλτρα Συγγραφέων",
-      "clearAll": "Εκκαθάριση όλων",
-      "allLibraries": "Όλες Οι Βιβλιοθήκες",
-      "allAuthors": "Όλοι οι συγγραφείς",
-      "hasPhoto": "Έχει φωτογραφία",
-      "missingPhoto": "Λείπει φωτογραφία",
-      "minBooks": "Ελάχιστα βιβλία",
-      "anyPlaceholder": "Οποιαδήποτε"
+      "allLibraries": "Όλες Οι Βιβλιοθήκες"
     },
     "header": {
       "never": "Ποτέ",

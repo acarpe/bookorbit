@@ -978,6 +978,114 @@ describe('MetadataFetchPipeline', () => {
     expect(sources.genres).toBe(MetadataProviderKey.GOOGLE);
   });
 
+  it('merges fetched genres into stored genres without changing stored spelling or order', async () => {
+    const prefs = createPreferences((fields) => {
+      fields.genres = {
+        enabled: true,
+        providers: [MetadataProviderKey.GOOGLE, MetadataProviderKey.OPEN_LIBRARY],
+        mergeStrategy: 'mergeExisting',
+      };
+    });
+    prefs.options = {
+      genres: { mode: 'merge', blocklist: [], maxCount: null },
+      saveProviderIds: false,
+    };
+
+    preferencesService.getGlobal.mockResolvedValue(prefs);
+    resolver.resolve.mockReturnValue(prefs);
+    resolver.withForwardCompatibility.mockReturnValue(prefs);
+    registry.all.mockReturnValue([{ key: MetadataProviderKey.GOOGLE }, { key: MetadataProviderKey.OPEN_LIBRARY }] as never);
+    fetchService.searchCandidates.mockReturnValue(
+      of(
+        candidate(MetadataProviderKey.GOOGLE, 'g1', { genres: ['romance', 'Magic'] }),
+        candidate(MetadataProviderKey.OPEN_LIBRARY, 'ol1', { genres: ['Dark Academia', 'MAGIC'] }),
+      ),
+    );
+
+    const { resolved, sources } = await pipeline.runWithSources(
+      { title: 'Query' },
+      { genres: ['Romance', 'Literary Fiction', 'Contemporary', 'Fantasy'] },
+    );
+
+    expect(resolved.genres).toEqual(['Romance', 'Literary Fiction', 'Contemporary', 'Fantasy', 'Magic', 'Dark Academia']);
+    expect(sources.genres).toBe(MetadataProviderKey.GOOGLE);
+  });
+
+  it('preserves stored blocklisted genres and limits only new merged additions', async () => {
+    const prefs = createPreferences((fields) => {
+      fields.genres = {
+        enabled: true,
+        providers: [MetadataProviderKey.GOOGLE],
+        mergeStrategy: 'mergeExisting',
+      };
+    });
+    prefs.options = {
+      genres: { mode: 'firstProvider', blocklist: ['Adult'], maxCount: 3 },
+      saveProviderIds: false,
+    };
+
+    preferencesService.getGlobal.mockResolvedValue(prefs);
+    resolver.resolve.mockReturnValue(prefs);
+    resolver.withForwardCompatibility.mockReturnValue(prefs);
+    registry.all.mockReturnValue([{ key: MetadataProviderKey.GOOGLE }] as never);
+    fetchService.searchCandidates.mockReturnValue(
+      of(candidate(MetadataProviderKey.GOOGLE, 'g1', { genres: ['Adult', 'Fantasy', 'Mystery', 'Classic'] })),
+    );
+
+    const { resolved } = await pipeline.runWithSources({ title: 'Query' }, { genres: ['Adult', 'Romance'] });
+
+    expect(resolved.genres).toEqual(['Adult', 'Romance', 'Fantasy']);
+  });
+
+  it('does not write genres when merge-with-existing finds no new values', async () => {
+    const prefs = createPreferences((fields) => {
+      fields.genres = {
+        enabled: true,
+        providers: [MetadataProviderKey.GOOGLE],
+        mergeStrategy: 'mergeExisting',
+      };
+    });
+    prefs.options = {
+      genres: { mode: 'firstProvider', blocklist: [], maxCount: null },
+      saveProviderIds: false,
+    };
+
+    preferencesService.getGlobal.mockResolvedValue(prefs);
+    resolver.resolve.mockReturnValue(prefs);
+    resolver.withForwardCompatibility.mockReturnValue(prefs);
+    registry.all.mockReturnValue([{ key: MetadataProviderKey.GOOGLE }] as never);
+    fetchService.searchCandidates.mockReturnValue(of(candidate(MetadataProviderKey.GOOGLE, 'g1', { genres: ['romance', 'FANTASY'] })));
+
+    const { resolved, sources } = await pipeline.runWithSources({ title: 'Query' }, { genres: ['Romance', 'Fantasy'] });
+
+    expect(resolved.genres).toBeUndefined();
+    expect(sources.genres).toBeUndefined();
+  });
+
+  it('does not trim stored genres when they already exceed the configured maximum', async () => {
+    const prefs = createPreferences((fields) => {
+      fields.genres = {
+        enabled: true,
+        providers: [MetadataProviderKey.GOOGLE],
+        mergeStrategy: 'mergeExisting',
+      };
+    });
+    prefs.options = {
+      genres: { mode: 'firstProvider', blocklist: [], maxCount: 2 },
+      saveProviderIds: false,
+    };
+
+    preferencesService.getGlobal.mockResolvedValue(prefs);
+    resolver.resolve.mockReturnValue(prefs);
+    resolver.withForwardCompatibility.mockReturnValue(prefs);
+    registry.all.mockReturnValue([{ key: MetadataProviderKey.GOOGLE }] as never);
+    fetchService.searchCandidates.mockReturnValue(of(candidate(MetadataProviderKey.GOOGLE, 'g1', { genres: ['New Genre'] })));
+
+    const { resolved } = await pipeline.runWithSources({ title: 'Query' }, { genres: ['One', 'Two', 'Three'] });
+
+    expect(resolved.genres).toBeUndefined();
+  });
+
   it('filters blocklisted genres before merging selected providers', async () => {
     const prefs = createPreferences((fields) => {
       fields.genres = {
@@ -1257,6 +1365,34 @@ describe('MetadataFetchPipeline', () => {
     expect(resolved.description).toBe('First description');
   });
 
+  // A WAF-blocked Goodreads detail page used to leave the goodreads-first description rule holding
+  // the ellipsised autocomplete snippet, which then overwrote a full description from further down
+  // the provider order.
+  it('falls through to the next provider when the leading provider yields no description', async () => {
+    const prefs = createPreferences((fields) => {
+      fields.description = {
+        enabled: true,
+        providers: [MetadataProviderKey.GOODREADS, MetadataProviderKey.GOOGLE],
+        mergeStrategy: 'overwriteIfProvided',
+      };
+    });
+
+    preferencesService.getGlobal.mockResolvedValue(prefs);
+    resolver.resolve.mockReturnValue(prefs);
+    resolver.withForwardCompatibility.mockReturnValue(prefs);
+    registry.all.mockReturnValue([{ key: MetadataProviderKey.GOODREADS }, { key: MetadataProviderKey.GOOGLE }] as never);
+    fetchService.searchCandidates.mockReturnValue(
+      of(
+        candidate(MetadataProviderKey.GOODREADS, 'gr1', { pageCount: 404 }),
+        candidate(MetadataProviderKey.GOOGLE, 'g1', { description: 'The whole blurb, all the way to the end.' }),
+      ),
+    );
+
+    const resolved = await pipeline.run({ title: 'Query' }, {});
+
+    expect(resolved.description).toBe('The whole blurb, all the way to the end.');
+  });
+
   it('passes through series memberships when series name and index resolve from the same provider', async () => {
     const prefs = createPreferences((fields) => {
       fields.seriesName = {
@@ -1279,11 +1415,11 @@ describe('MetadataFetchPipeline', () => {
       of(
         candidate(MetadataProviderKey.AUDIBLE, 'B002V1NSN2', {
           seriesName: 'Sword of Truth',
-          seriesIndex: 11,
+          seriesIndex: '11',
           seriesMemberships: [
-            { seriesName: '  Sword   of Truth ', seriesIndex: 11 },
-            { seriesName: 'sword of truth', seriesIndex: 12 },
-            { seriesName: 'Chainfire\tTrilogy', seriesIndex: 3 },
+            { seriesName: '  Sword   of Truth ', seriesIndex: '11' },
+            { seriesName: 'sword of truth', seriesIndex: '12' },
+            { seriesName: 'Chainfire\tTrilogy', seriesIndex: '3' },
           ],
         }),
       ),
@@ -1292,10 +1428,10 @@ describe('MetadataFetchPipeline', () => {
     const resolved = await pipeline.run({ title: 'Confessor', isAudiobook: true }, {});
 
     expect(resolved.seriesName).toBe('Sword of Truth');
-    expect(resolved.seriesIndex).toBe(11);
+    expect(resolved.seriesIndex).toBe('11');
     expect(resolved.seriesMemberships).toEqual([
-      { seriesName: 'Sword of Truth', seriesIndex: 11 },
-      { seriesName: 'Chainfire Trilogy', seriesIndex: 3 },
+      { seriesName: 'Sword of Truth', seriesIndex: '11' },
+      { seriesName: 'Chainfire Trilogy', seriesIndex: '3' },
     ]);
   });
 
@@ -1321,20 +1457,20 @@ describe('MetadataFetchPipeline', () => {
       of(
         candidate(MetadataProviderKey.AUDIBLE, 'B002V1NSN2', {
           seriesName: 'Sword of Truth',
-          seriesIndex: 11,
+          seriesIndex: '11',
           seriesMemberships: [
-            { seriesName: 'Sword of Truth', seriesIndex: 11 },
-            { seriesName: 'Chainfire Trilogy', seriesIndex: 3 },
+            { seriesName: 'Sword of Truth', seriesIndex: '11' },
+            { seriesName: 'Chainfire Trilogy', seriesIndex: '3' },
           ],
         }),
-        candidate(MetadataProviderKey.GOOGLE, 'g1', { seriesIndex: 12 }),
+        candidate(MetadataProviderKey.GOOGLE, 'g1', { seriesIndex: '12' }),
       ),
     );
 
     const resolved = await pipeline.run({ title: 'Confessor', isAudiobook: true }, {});
 
     expect(resolved.seriesName).toBe('Sword of Truth');
-    expect(resolved.seriesIndex).toBe(12);
+    expect(resolved.seriesIndex).toBe('12');
     expect(resolved.seriesMemberships).toBeUndefined();
   });
 
@@ -1360,16 +1496,16 @@ describe('MetadataFetchPipeline', () => {
       of(
         candidate(MetadataProviderKey.AUDIBLE, 'B002V1NSN2', {
           seriesName: 'Sword of Truth',
-          seriesIndex: 11,
+          seriesIndex: '11',
           seriesMemberships: [
-            { seriesName: 'Sword of Truth', seriesIndex: 11 },
-            { seriesName: 'Chainfire Trilogy', seriesIndex: 3 },
+            { seriesName: 'Sword of Truth', seriesIndex: '11' },
+            { seriesName: 'Chainfire Trilogy', seriesIndex: '3' },
           ],
         }),
       ),
     );
 
-    const resolved = await pipeline.run({ title: 'Confessor', isAudiobook: true }, { seriesIndex: 99 });
+    const resolved = await pipeline.run({ title: 'Confessor', isAudiobook: true }, { seriesIndex: '99' });
 
     expect(resolved.seriesName).toBe('Sword of Truth');
     expect(resolved.seriesIndex).toBeUndefined();

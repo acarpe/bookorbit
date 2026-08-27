@@ -10,7 +10,7 @@ vi.mock('fs/promises', () => ({
 import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { access, lstat, readdir, readFile, stat, unlink } from 'fs/promises';
 
-import type { BookDockMetadata } from '@bookorbit/types';
+import { NotificationType, type BookDockMetadata } from '@bookorbit/types';
 import { BookDockFinalizeService } from './book-dock-finalize.service';
 
 const mockAccess = vi.mocked(access);
@@ -82,6 +82,9 @@ function makeService() {
     replaceForBook: vi.fn().mockResolvedValue(undefined),
     syncPrimaryFromMetadata: vi.fn().mockResolvedValue(undefined),
   };
+  const notificationService = {
+    notify: vi.fn().mockResolvedValue(undefined),
+  };
 
   const service = new BookDockFinalizeService(
     db as never,
@@ -96,7 +99,7 @@ function makeService() {
     processor as never,
     events as never,
     gateway as never,
-    { notify: vi.fn().mockResolvedValue(undefined) } as never,
+    notificationService as never,
     processingState as never,
     undefined as never,
     seriesMemberships as never,
@@ -118,6 +121,7 @@ function makeService() {
     gateway,
     processingState,
     seriesMemberships,
+    notificationService,
   };
 }
 
@@ -403,7 +407,7 @@ describe('BookDockFinalizeService', () => {
 
   describe('finalize', () => {
     it('returns missing-row failures for explicit ids not found in repository', async () => {
-      const { service, repo } = makeService();
+      const { service, repo, notificationService } = makeService();
       const rowOne = makeRow({ id: 1 });
       repo.findByIds.mockResolvedValue([rowOne]);
       vi.spyOn(service as never, 'prepareFinalizeBatch').mockResolvedValue({
@@ -428,6 +432,12 @@ describe('BookDockFinalizeService', () => {
           fileId: 2,
           success: false,
           message: 'Book Dock file not found',
+        }),
+      );
+      expect(notificationService.notify).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: NotificationType.BookDockFinalizedWithErrors,
+          title: 'Book Dock finalization completed with errors',
         }),
       );
     });
@@ -1097,7 +1107,7 @@ describe('BookDockFinalizeService', () => {
         language: 'en-US',
         pageCount: 300,
         seriesName: 'Saga',
-        seriesIndex: 2.5,
+        seriesIndex: '2.5',
         authors: ['Author A'],
         genres: ['Fantasy'],
       } as BookDockMetadata,
@@ -1117,7 +1127,7 @@ describe('BookDockFinalizeService', () => {
         language: 'en-US',
         pageCount: 300,
         seriesName: 'Saga',
-        seriesIndex: 2.5,
+        seriesIndex: '2.5',
       }),
     );
     expect(metadataService.replaceAuthors).toHaveBeenCalledWith(15, [{ name: 'Author A', sortName: null }]);
@@ -1217,8 +1227,8 @@ describe('BookDockFinalizeService', () => {
           durationSeconds: 1200,
           abridged: false,
           seriesMemberships: [
-            { seriesName: 'Dune', seriesIndex: 1 },
-            { seriesName: 'Dune Chronicles', seriesIndex: 1 },
+            { seriesName: 'Dune', seriesIndex: '1' },
+            { seriesName: 'Dune Chronicles', seriesIndex: '1' },
           ],
           communityRatings: [{ provider: 'hardcover', rating: 4.5, ratingCount: 1000 }],
           googleBooksId: 'google-id',
@@ -1262,8 +1272,8 @@ describe('BookDockFinalizeService', () => {
       }),
     );
     expect(seriesMemberships.replaceForBook).toHaveBeenCalledWith(19, [
-      { seriesName: 'Dune', seriesIndex: 1 },
-      { seriesName: 'Dune Chronicles', seriesIndex: 1 },
+      { seriesName: 'Dune', seriesIndex: '1' },
+      { seriesName: 'Dune Chronicles', seriesIndex: '1' },
     ]);
     expect(bookReadService.replaceCommunityRatings).toHaveBeenCalledWith(19, [{ provider: 'hardcover', rating: 4.5, ratingCount: 1000 }]);
     expect(metadataService.upsertComicMetadata).toHaveBeenCalledWith(19, { issueNumber: '1', pencillers: ['Artist'] });
@@ -1570,7 +1580,7 @@ describe('BookDockFinalizeService', () => {
     appSettings.getUploadPattern.mockResolvedValue(null);
     const rowWithMeta = makeRow({
       fileName: 'original.epub',
-      selectedMetadata: { title: 'Dune', seriesIndex: 2.5 } as BookDockMetadata,
+      selectedMetadata: { title: 'Dune', seriesIndex: '2.5' } as BookDockMetadata,
     });
 
     await expect((service as any).resolveDestination({ fileNamingPattern: '{title}-{seriesIndex}' }, '/library', rowWithMeta, 'epub')).resolves.toBe(

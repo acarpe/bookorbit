@@ -18,6 +18,7 @@ import { isAudioFormat, isComicFormat, normalizeCoverAspectRatio } from '@bookor
 import { buildContentFilterClauses } from '../../common/utils/content-filter-sql.utils';
 import { accentInsensitiveIlike } from '../../common/utils/accent-insensitive-search.utils';
 import { advanceIsoTimestamp } from '../../common/utils/iso-timestamp.utils';
+import { seriesIndexSortKeySql } from '../../common/utils/series-index-sql.utils';
 import { SeriesIdentityService } from '../../common/services/series-identity.service';
 import { SeriesMembershipService } from '../../common/services/series-membership.service';
 import { BookQueryBuilder } from './book-query-builder.service';
@@ -73,7 +74,7 @@ type CollapsedRawRow = {
   title: string | null;
   series_id: number | null;
   series_name: string | null;
-  series_index: number | null;
+  series_index: string | null;
   published_date: string | null;
   published_year: number | null;
   language: string | null;
@@ -109,9 +110,10 @@ type PatternMetadataRow = {
   language: string | null;
   seriesId: number | null;
   seriesName: string | null;
-  seriesIndex: number | null;
+  seriesIndex: string | null;
   isbn13: string | null;
   authors: string[];
+  narrators: string[];
 };
 
 function parseDateByBookId(value: JsonObj | null | undefined): Record<number, Date | null> {
@@ -140,7 +142,8 @@ const PROGRESS_EPSILON = 0.0001;
 // drift from listing offsets. Guarded by the jump-buckets invariant e2e test.
 const COLLAPSE_GROUP_KEY_SQL = `base.library_id, COALESCE(base.series_id::text, 'book_' || base.id::text)`;
 const COLLAPSE_REPRESENTATIVE_PICK_SQL = `${COLLAPSE_GROUP_KEY_SQL},
-          base.series_index ASC NULLS LAST,
+          ${seriesIndexSortKeySql('base.series_index')} ASC NULLS LAST,
+          base.series_index COLLATE "C" ASC NULLS LAST,
           base.added_at ASC,
           base.id ASC`;
 
@@ -623,7 +626,7 @@ export class BookRepository {
           bookId: number;
           seriesId: number;
           seriesName: string;
-          seriesIndex: number | null;
+          seriesIndex: string | null;
           displayOrder: number;
           expectedBookCount: number | null;
         }[],
@@ -757,6 +760,7 @@ export class BookRepository {
     userId: number;
     customFieldTypes?: CustomMetadataFieldTypeMap;
     defaultCollectionId?: number;
+    randomSeed?: number;
   }): Promise<{
     rows: Array<{
       id: number;
@@ -769,7 +773,7 @@ export class BookRepository {
       title: string | null;
       seriesName: string | null;
       seriesId: number | null;
-      seriesIndex: number | null;
+      seriesIndex: string | null;
       publishedDate: string | null;
       publishedYear: number | null;
       language: string | null;
@@ -810,7 +814,7 @@ export class BookRepository {
       bookId: number;
       seriesId: number;
       seriesName: string;
-      seriesIndex: number | null;
+      seriesIndex: string | null;
       displayOrder: number;
       expectedBookCount: number | null;
     }[];
@@ -821,7 +825,7 @@ export class BookRepository {
       throw new BadRequestException('Invalid default collection id');
     }
     const whereFragment = this.visibleWhere(where);
-    const orderBy = BookQueryBuilder.buildCollapseOrderBy(sort, userId, opts.customFieldTypes);
+    const orderBy = BookQueryBuilder.buildCollapseOrderBy(sort, userId, opts.customFieldTypes, { randomSeed: opts.randomSeed });
     // The collectionOrder branch of the order by names sort_collection_position, so the column has
     // to exist even for the library and smart scope queries that can never sort on it.
     const collectionPosition =
@@ -891,7 +895,8 @@ export class BookRepository {
           base.added_at,
           ROW_NUMBER() OVER (
             PARTITION BY base.series_id, base.library_id
-            ORDER BY base.series_index ASC NULLS LAST, base.added_at ASC, base.id ASC
+            ORDER BY ${sql.raw(seriesIndexSortKeySql('base.series_index'))} ASC NULLS LAST,
+              base.series_index COLLATE "C" ASC NULLS LAST, base.added_at ASC, base.id ASC
           ) AS rn
         FROM base_rows base
         WHERE base.series_id IS NOT NULL
@@ -901,7 +906,8 @@ export class BookRepository {
           scc.series_id,
           scc.library_id,
           COALESCE(
-            ARRAY_AGG(scc.id ORDER BY scc.series_index ASC NULLS LAST, scc.added_at ASC, scc.id ASC) FILTER (WHERE scc.rn <= 4),
+            ARRAY_AGG(scc.id ORDER BY ${sql.raw(seriesIndexSortKeySql('scc.series_index'))} ASC NULLS LAST,
+              scc.series_index COLLATE "C" ASC NULLS LAST, scc.added_at ASC, scc.id ASC) FILTER (WHERE scc.rn <= 4),
             ARRAY[]::int[]
           ) AS cover_book_ids
         FROM series_cover_candidates scc
@@ -921,7 +927,8 @@ export class BookRepository {
             base.id,
             ROW_NUMBER() OVER (
               PARTITION BY base.series_id, base.library_id
-              ORDER BY base.series_index DESC NULLS LAST, base.added_at DESC, base.id DESC
+              ORDER BY ${sql.raw(seriesIndexSortKeySql('base.series_index'))} DESC NULLS LAST,
+                base.series_index COLLATE "C" DESC NULLS LAST, base.added_at DESC, base.id DESC
             ) AS rn
           FROM base_rows base
           WHERE base.series_id IS NOT NULL
@@ -937,7 +944,8 @@ export class BookRepository {
             base.id,
             ROW_NUMBER() OVER (
               PARTITION BY base.series_id, base.library_id
-              ORDER BY base.series_index ASC NULLS LAST, base.added_at ASC, base.id ASC
+              ORDER BY ${sql.raw(seriesIndexSortKeySql('base.series_index'))} ASC NULLS LAST,
+                base.series_index COLLATE "C" ASC NULLS LAST, base.added_at ASC, base.id ASC
             ) AS rn
           FROM base_rows base
           LEFT JOIN user_book_status ubs ON ubs.book_id = base.id AND ubs.user_id = ${userId}
@@ -1160,11 +1168,12 @@ export class BookRepository {
     userId: number;
     maxBuckets: number;
     customFieldTypes?: CustomMetadataFieldTypeMap;
+    randomSeed?: number;
   }): Promise<JumpBucketsResponse> {
     const source = collapsedDiscreteSourceParts(opts.field, opts.userId);
     if (!source) return { buckets: [], total: 0, kind: opts.kind, granularity: null };
     const whereFragment = this.visibleWhere(opts.where);
-    const orderBy = BookQueryBuilder.buildCollapseOrderBy(opts.sort, opts.userId, opts.customFieldTypes);
+    const orderBy = BookQueryBuilder.buildCollapseOrderBy(opts.sort, opts.userId, opts.customFieldTypes, { randomSeed: opts.randomSeed });
     const bucketExpr = opts.kind === 'letter' ? letterJumpBucketExpr(source.value) : sql`coalesce((${source.value})::text, '__unknown__')`;
     const isUnknownExpr = opts.kind === 'category' ? sql`${source.value} IS NULL` : sql`false`;
     const result = await this.db.execute<DiscreteJumpBucketRawRow>(
@@ -1753,7 +1762,7 @@ export class BookRepository {
   async findPatternMetadataByBookIds(bookIds: number[]): Promise<PatternMetadataRow[]> {
     if (bookIds.length === 0) return [];
 
-    const [metaRows, authorRows] = await Promise.all([
+    const [metaRows, authorRows, narratorRows] = await Promise.all([
       this.db
         .select({
           bookId: books.id,
@@ -1779,16 +1788,32 @@ export class BookRepository {
         .innerJoin(authors, eq(authors.id, bookAuthors.authorId))
         .where(inArray(bookAuthors.bookId, bookIds))
         .orderBy(bookAuthors.displayOrder),
+      this.db
+        .select({ bookId: bookNarrators.bookId, name: narrators.name })
+        .from(bookNarrators)
+        .innerJoin(narrators, eq(narrators.id, bookNarrators.narratorId))
+        .where(inArray(bookNarrators.bookId, bookIds))
+        .orderBy(bookNarrators.displayOrder),
     ]);
 
-    const authorsByBookId = new Map<number, string[]>();
-    for (const row of authorRows) {
-      const list = authorsByBookId.get(row.bookId) ?? [];
-      list.push(row.name);
-      authorsByBookId.set(row.bookId, list);
-    }
+    const groupByBookId = (rows: { bookId: number; name: string }[]): Map<number, string[]> => {
+      const byBookId = new Map<number, string[]>();
+      for (const row of rows) {
+        const list = byBookId.get(row.bookId) ?? [];
+        list.push(row.name);
+        byBookId.set(row.bookId, list);
+      }
+      return byBookId;
+    };
 
-    return metaRows.map((row) => ({ ...row, authors: authorsByBookId.get(row.bookId) ?? [] }));
+    const authorsByBookId = groupByBookId(authorRows);
+    const narratorsByBookId = groupByBookId(narratorRows);
+
+    return metaRows.map((row) => ({
+      ...row,
+      authors: authorsByBookId.get(row.bookId) ?? [],
+      narrators: narratorsByBookId.get(row.bookId) ?? [],
+    }));
   }
 
   async findAllIds(): Promise<number[]> {

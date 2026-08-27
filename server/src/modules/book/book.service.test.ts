@@ -2733,7 +2733,7 @@ describe('BookService', () => {
       } as never);
 
       expect(libraryService.verifyUserAccess).toHaveBeenCalledWith(42, 7, false);
-      expect(queryBuilder.buildOrderBy).toHaveBeenCalledWith([{ field: 'title', dir: 'asc' }], 42, undefined);
+      expect(queryBuilder.buildOrderBy).toHaveBeenCalledWith([{ field: 'title', dir: 'asc' }], 42, undefined, {});
       expect(bookRepo.findJumpBuckets).toHaveBeenCalledWith(
         expect.objectContaining({ where: 'WHERE', field: 'title', kind: 'letter', userId: 42, maxBuckets: 24, orderBy: ['ORDER'] }),
       );
@@ -3908,7 +3908,7 @@ describe('BookService', () => {
       await expect(service.getDetail(9, user)).rejects.toThrow(NotFoundException);
     });
 
-    it('maps detail payload and synthesizes audiobook chapters from file durations', async () => {
+    it('naturally orders stale audiobook file rows before mapping files and synthesizing chapters', async () => {
       const { service, bookRepo, userBookStatusService, comicMetadataService, fileWriteService } = makeService();
       const user = makeUser();
       vi.spyOn(service, 'verifyBookAccess').mockResolvedValue(undefined);
@@ -3974,22 +3974,22 @@ describe('BookService', () => {
         tagRows: [{ name: 'classic' }],
         fileRows: [
           {
-            id: 100,
-            format: 'mp3',
-            role: 'content',
-            sizeBytes: 10,
-            absolutePath: '/audio/01-intro.mp3',
-            createdAt: new Date('2026-01-01T00:00:00.000Z'),
-            durationSeconds: 30,
-          },
-          {
             id: 101,
             format: 'm4b',
             role: 'content',
             sizeBytes: 20,
-            absolutePath: '/audio/02-main.m4b',
+            absolutePath: '/audio/Part 02.m4b',
             createdAt: new Date('2026-01-01T00:00:00.000Z'),
             durationSeconds: 60,
+          },
+          {
+            id: 100,
+            format: 'mp3',
+            role: 'content',
+            sizeBytes: 10,
+            absolutePath: '/audio/Part 01.mp3',
+            createdAt: new Date('2026-01-01T00:00:00.000Z'),
+            durationSeconds: 30,
           },
         ],
         narratorRows: [{ id: 4, name: 'Narrator Name', sortName: null, displayOrder: 0 }],
@@ -4023,9 +4023,10 @@ describe('BookService', () => {
         { provider: MetadataProviderKey.HARDCOVER, rating: 4.25, ratingCount: 12345, updatedAt: '2026-06-24T00:00:00.000Z' },
       ]);
       expect(result.audioMetadata?.chapters).toEqual([
-        { title: '01-intro', startMs: 0 },
-        { title: '02-main', startMs: 30_000 },
+        { title: 'Part 01', startMs: 0 },
+        { title: 'Part 02', startMs: 30_000 },
       ]);
+      expect(result.files.map((file) => file.filename)).toEqual(['Part 01.mp3', 'Part 02.m4b']);
       expect(result.readStatus).toEqual({
         status: 'reading',
         source: 'manual',
@@ -4470,7 +4471,7 @@ describe('BookService', () => {
 
       const result = await service.executeBooksQuery(12, undefined, query);
 
-      expect(queryBuilder.buildOrderBy).toHaveBeenCalledWith(query.sort, 12, undefined);
+      expect(queryBuilder.buildOrderBy).toHaveBeenCalledWith(query.sort, 12, undefined, {});
       expect(bookRepo.findCards).toHaveBeenCalledWith({
         where: undefined,
         orderBy: 'order-by',
@@ -4595,7 +4596,7 @@ describe('BookService', () => {
       await service.executeBooksQuery(12, undefined, query);
 
       expect(customMetadataService.getActiveFieldTypes).toHaveBeenCalledWith([7]);
-      expect(queryBuilder.buildOrderBy).toHaveBeenCalledWith(query.sort, 12, fieldTypes);
+      expect(queryBuilder.buildOrderBy).toHaveBeenCalledWith(query.sort, 12, fieldTypes, {});
     });
 
     it('does not query custom metadata field types when no custom sort is used', async () => {
