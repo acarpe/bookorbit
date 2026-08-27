@@ -404,7 +404,7 @@ describe('Crowdin translation synchronization', () => {
     const outputDirectory = path.join(catalogDirectory, 'output')
     const catalogs = new Map([[targetCatalogs[0].languageId, { common: { save: 'Ulozit \u2014 hned' } }]])
 
-    const { rejections, losses, normalizations } = await syncCrowdinTranslations({
+    const { rejections, losses, repairs } = await syncCrowdinTranslations({
       token: 'secret',
       fetchImpl: createSynchronizationFetch({ catalogs }),
       catalogDirectory,
@@ -416,9 +416,35 @@ describe('Crowdin translation synchronization', () => {
 
     expect(rejections).toEqual([])
     expect(losses).toEqual([])
-    expect(normalizations).toEqual([{ locale: targetCatalogs[0].locale, key: 'common.save', message: 'Ulozit - hned' }])
+    expect(repairs).toEqual([{ locale: targetCatalogs[0].locale, key: 'common.save', message: 'Ulozit - hned', kinds: ['typography'] }])
     expect(JSON.parse(await readFile(path.join(outputDirectory, `${targetCatalogs[0].locale}.json`), 'utf8'))).toEqual({
       common: { save: 'Ulozit - hned' },
+    })
+  })
+
+  it('completes a plural category the target locale needs and Crowdin omitted', async () => {
+    const targetCatalogs = [TARGET_CATALOGS.find(({ locale }) => locale === 'ro')]
+    const referenceCatalog = { books: { count: '{count, plural, one {# book} other {# books}}' } }
+    const catalogDirectory = await createCatalogFixture(targetCatalogs, new Map(), referenceCatalog)
+    const outputDirectory = path.join(catalogDirectory, 'output')
+    const catalogs = new Map([['ro', { books: { count: '{count, plural, one {# carte} other {# de carti}}' } }]])
+
+    const { rejections, repairs } = await syncCrowdinTranslations({
+      token: 'secret',
+      fetchImpl: createSynchronizationFetch({ identifiers: ['books.count'], catalogs }),
+      catalogDirectory,
+      outputDirectory,
+      targetCatalogs,
+      assertTargetConfiguration: async () => {},
+      protectedTerms: [],
+    })
+
+    expect(rejections).toEqual([])
+    expect(repairs).toEqual([
+      { locale: 'ro', key: 'books.count', message: expect.stringContaining('few {# de carti}'), kinds: ['plural categories'] },
+    ])
+    expect(JSON.parse(await readFile(path.join(outputDirectory, 'ro.json'), 'utf8'))).toEqual({
+      books: { count: '{count, plural, one {# carte} other {# de carti} few {# de carti}}' },
     })
   })
 
@@ -462,7 +488,7 @@ describe('Crowdin translation synchronization', () => {
         assertTargetConfiguration: async () => {},
         protectedTerms: [],
       }),
-    ).resolves.toEqual({ rejections: [], corrections: [], normalizations: [], losses: [] })
+    ).resolves.toEqual({ rejections: [], corrections: [], repairs: [], losses: [] })
     expect(JSON.parse(await readFile(path.join(outputDirectory, `${targetCatalogs[0].locale}.json`), 'utf8'))).toEqual({
       common: { save: 'Save' },
     })
