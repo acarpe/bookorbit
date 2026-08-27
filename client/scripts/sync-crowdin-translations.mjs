@@ -7,7 +7,7 @@ import { TARGET_CATALOGS, assertCrowdinTargetConfiguration } from './locale-conf
 import { findInvalidTargetMessages, flattenCatalog, validateCatalogs } from './locale-catalog-validation.mjs'
 import { collectSourceMessageKeys } from './locale-source-keys.mjs'
 import { PROTECTED_SOURCE_TERMS, findProtectedTermDrift } from './locale-protected-terms.mjs'
-import { findTypographyDrift } from './locale-typography.mjs'
+import { findExportRepairs } from './locale-export-repairs.mjs'
 
 const API = 'https://api.crowdin.com/api/v2'
 const SOURCE_PATH_SUFFIX = '/client/src/locales/en.json'
@@ -372,9 +372,11 @@ export function formatTranslationLossReport(losses) {
   return `${lines.join('\n')}\n`
 }
 
-async function reportSyncIssues({ rejections, corrections, normalizations, losses, reportPath }) {
-  if (normalizations.length > 0) {
-    console.log(`Normalized punctuation in ${normalizations.length} Crowdin messages`)
+async function reportSyncIssues({ rejections, corrections, repairs, losses, reportPath }) {
+  if (repairs.length > 0) {
+    const kinds = repairs.flatMap(({ kinds: repaired }) => repaired)
+    const counts = [...new Set(kinds)].map((kind) => `${kind}=${kinds.filter((entry) => entry === kind).length}`)
+    console.log(`Repaired ${repairs.length} Crowdin messages before validation: ${counts.join(' ')}`)
   }
 
   if (losses.length > 0) {
@@ -447,13 +449,13 @@ export async function syncCrowdinTranslations({
   const corrections = findProtectedTermDrift({ catalogs, terms: protectedTerms })
   for (const { locale, key, source } of corrections) catalogs.get(locale).set(key, source)
 
-  const normalizations = findTypographyDrift({ catalogs })
-  for (const { locale, key, message } of normalizations) catalogs.get(locale).set(key, message)
+  const repairs = findExportRepairs({ catalogs })
+  for (const { locale, key, message } of repairs) catalogs.get(locale).set(key, message)
 
   const { slotCountKeys } = await collectMessageKeys()
   const rejections = findInvalidTargetMessages({ catalogs, slotCountKeys })
   for (const { locale, key } of rejections) catalogs.get(locale).delete(key)
-  const rewrittenLocales = new Set([...rejections, ...corrections, ...normalizations].map(({ locale }) => locale))
+  const rewrittenLocales = new Set([...rejections, ...corrections, ...repairs].map(({ locale }) => locale))
   for (const entry of downloaded) {
     if (rewrittenLocales.has(entry.locale)) entry.catalog = orderedSparseCatalog(reference, catalogs.get(entry.locale))
   }
@@ -473,9 +475,9 @@ export async function syncCrowdinTranslations({
   await Promise.all(
     downloaded.map(({ locale, catalog }) => writeFile(path.join(outputDirectory, `${locale}.json`), `${JSON.stringify(catalog, null, 2)}\n`)),
   )
-  await reportSyncIssues({ rejections, corrections, normalizations, losses, reportPath })
+  await reportSyncIssues({ rejections, corrections, repairs, losses, reportPath })
   console.log(`Synchronized ${downloaded.length} sparse translation catalogs from Crowdin`)
-  return { rejections, corrections, normalizations, losses }
+  return { rejections, corrections, repairs, losses }
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
