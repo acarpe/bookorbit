@@ -7569,7 +7569,10 @@
       "ownedOfExpected": "{owned} of {expected} in library"
     },
     "gaps": {
-      "label": "Possible gaps:"
+      "label": "Possible gaps:",
+      "missingCount": "{count, plural, one {# missing} other {# missing}}",
+      "missingList": "Missing {list}",
+      "previewMore": "{shown} +{count}"
     },
     "filters": {
       "title": "Series Filters",
@@ -7599,7 +7602,10 @@
         "bookCount": "Book Count",
         "recentAdditions": "Recent Additions",
         "readingProgress": "Reading Progress"
-      }
+      },
+      "clearSearch": "Clear search",
+      "noMatchHint": "Try another library, or clear what is set.",
+      "emptyHint": "Series appear once your books carry series metadata."
     },
     "detail": {
       "pageTitle": "Series",
@@ -7640,6 +7646,66 @@
         "ascending": "Ascending",
         "descending": "Descending"
       }
+    },
+    "authorsPlus": "{authors} +{count}",
+    "track": {
+      "readCount": "{count, plural, one {# read} other {# read}}",
+      "readingCount": "{count, plural, one {# in progress} other {# in progress}}",
+      "unreadCount": "{count, plural, one {# unread} other {# unread}}",
+      "missingCount": "{count, plural, one {# missing} other {# missing}}",
+      "slotMissing": "{number} not in library",
+      "untitled": "Untitled"
+    },
+    "legend": {
+      "read": "Read",
+      "reading": "Reading",
+      "unread": "In library",
+      "missing": "Missing"
+    },
+    "status": {
+      "label": "Filter series by reading status",
+      "all": "All",
+      "reading": "Reading",
+      "unread": "Unread",
+      "complete": "Complete",
+      "gaps": "Gaps",
+      "read": "Read",
+      "inProgress": "In progress",
+      "hasGaps": "Has gaps",
+      "notStarted": "Not started"
+    },
+    "index": {
+      "columnSeries": "Series",
+      "columnVolumes": "Volumes",
+      "columnRead": "Read",
+      "columnNext": "Up next",
+      "columnAdded": "Added",
+      "percent": "{value}%",
+      "captionReading": "{base} · {count, plural, one {# in progress} other {# in progress}}",
+      "finished": "Read end to end",
+      "reading": "Reading",
+      "next": "Next",
+      "start": "Start"
+    },
+    "grouping": {
+      "label": "Group by",
+      "none": "No grouping",
+      "letter": "By letter",
+      "library": "By library",
+      "status": "By status"
+    },
+    "libraries": {
+      "more": "+{count}"
+    },
+    "card": {
+      "oneVolume": "One volume",
+      "oneVolumeShort": "1 vol",
+      "volumeCount": "{count, plural, one {# volume} other {# volumes}}",
+      "readSummary": "{base} · {read} read",
+      "publishedOf": "{owned} of {total} published",
+      "complete": "Complete",
+      "moreVolumes": "{count, plural, one {# more volume} other {# more volumes}}",
+      "label": "{name}, {read} of {total} volumes read"
     }
   },
   "smartScope": {
