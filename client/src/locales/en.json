@@ -8155,7 +8155,20 @@
         "percentSimilar": "{percent}% similar",
         "pairDetails": "Pair details",
         "dismissEntityTitle": "Dismiss all pairs for this entity",
-        "dismissPairTitle": "Dismiss this pair"
+        "dismissPairTitle": "Dismiss this pair",
+        "groupsLabel": "Possible duplicate groups",
+        "keepThisOne": "Keep this one",
+        "mergeAway": "Merge away",
+        "notAMatch": "Not a match",
+        "notAMatchTitle": "Dismiss every pair in this group",
+        "selectPromptTitle": "Select a group to review",
+        "selectPromptDescription": "Choose a group from the list to compare its entities side by side.",
+        "backToList": "Back to groups",
+        "noBookTitles": "No books linked to this record",
+        "thresholdLabel": "Minimum similarity",
+        "thresholdValue": "{percent}%+",
+        "willBeMerged": "{count, plural, one {# entity will be merged and removed} other {# entities will be merged and removed}}",
+        "chooseTargetHint": "Select the entity to keep. Everything else in the group merges into it."
       },
       "dismissed": {
         "loading": "Loading dismissed pairs...",
