@@ -435,6 +435,11 @@ const {
 
 const personalNoteUpdatedLabel = computed(() => (props.book.personalNoteUpdatedAt ? formatDateTime(props.book.personalNoteUpdatedAt) : null))
 
+function startVisiblePersonalNoteEdit() {
+  showPersonalReview.value = true
+  startPersonalNoteEdit()
+}
+
 watch(
   () => props.book.id,
   () => {
@@ -1852,7 +1857,7 @@ watch(
           <button
             type="button"
             class="ml-auto inline-flex h-7 shrink-0 items-center gap-1.5 rounded-md border border-input px-2.5 text-xs font-medium transition-colors hover:bg-muted"
-            @click="startPersonalNoteEdit"
+            @click="startVisiblePersonalNoteEdit"
           >
             <Pencil class="size-3" />
             {{ t('book.detail.details.writeReview') }}
