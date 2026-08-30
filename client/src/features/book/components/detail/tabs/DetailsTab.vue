@@ -1825,7 +1825,6 @@ watch(
       </div>
 
       <section class="rounded-xl border border-border bg-card px-4 py-3.5">
-        <!-- Synopsis. Expanding scrolls inside this block, never the column. -->
         <div>
           <div class="flex items-baseline gap-3">
             <p class="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
@@ -1833,7 +1832,10 @@ watch(
             </p>
             <button
               v-if="book.description"
+              type="button"
               class="ml-auto shrink-0 text-[11px] font-semibold text-primary transition-colors hover:underline"
+              :aria-controls="`book-${book.id}-synopsis`"
+              :aria-expanded="descriptionExpanded"
               @click="toggleDescription"
             >
               {{ descriptionExpanded ? t('book.detail.details.showLess') : t('book.detail.details.showMore') }}
@@ -1841,8 +1843,9 @@ watch(
           </div>
           <div
             v-if="book.description"
+            :id="`book-${book.id}-synopsis`"
             class="mt-2 text-sm leading-relaxed text-foreground"
-            :class="descriptionExpanded ? 'max-h-44 overflow-y-auto pr-2' : 'line-clamp-4'"
+            :class="{ 'line-clamp-4': !descriptionExpanded }"
             v-html="safeDescription"
           />
           <p v-else class="mt-2 text-sm italic text-muted-foreground">{{ t('book.detail.details.noDescription') }}</p>
