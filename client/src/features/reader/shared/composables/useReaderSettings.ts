@@ -8,6 +8,8 @@ import {
   CBX_READER_DEFAULTS,
   EPUB_FONT_SIZE_MAX,
   EPUB_FONT_SIZE_MIN,
+  EPUB_PARAGRAPH_SPACING_MAX,
+  EPUB_PARAGRAPH_SPACING_MIN,
   EPUB_READER_DEFAULTS,
   PDF_READER_DEFAULTS,
   type CbxReaderSettings,
@@ -83,6 +85,9 @@ function sanitizeEpubPartialSettings(settings: unknown): Partial<EpubReaderSetti
   }
   if (isNumberInRange(settings.lineHeight, 0.8, 3)) {
     out.lineHeight = settings.lineHeight
+  }
+  if (isNumberInRange(settings.paragraphSpacing, EPUB_PARAGRAPH_SPACING_MIN, EPUB_PARAGRAPH_SPACING_MAX)) {
+    out.paragraphSpacing = settings.paragraphSpacing
   }
   if (isIntegerInRange(settings.maxColumnCount, 1, 10)) {
     out.maxColumnCount = settings.maxColumnCount

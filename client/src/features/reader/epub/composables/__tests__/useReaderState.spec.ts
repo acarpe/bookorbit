@@ -7,6 +7,7 @@ describe('useReaderState', () => {
 
     state.setFontSize(100)
     state.setLineHeight(0.71)
+    state.setParagraphSpacing(3)
     state.setMaxColumnCount(0)
     state.setGap(0.9)
     state.setMaxInlineSize(200)
@@ -14,13 +15,16 @@ describe('useReaderState', () => {
 
     expect(state.fontSize.value).toBe(32)
     expect(state.lineHeight.value).toBe(0.8)
+    expect(state.paragraphSpacing.value).toBe(2)
     expect(state.maxColumnCount.value).toBe(1)
     expect(state.gap.value).toBe(0.5)
     expect(state.maxInlineSize.value).toBe(400)
     expect(state.maxBlockSize.value).toBe(2400)
 
     state.setFontSize(1)
+    state.setParagraphSpacing(-1)
     expect(state.fontSize.value).toBe(6)
+    expect(state.paragraphSpacing.value).toBe(0)
   })
 
   it('selects default theme when unknown theme name is set', () => {
@@ -130,6 +134,24 @@ describe('useReaderState', () => {
     expect(css).toContain('font-size: 20px;')
     expect(css).toContain('text-align: start !important;')
     expect(css).toContain('hyphens: none;')
+  })
+
+  it('preserves publisher paragraph margins at the default spacing', () => {
+    const state = useReaderState()
+
+    expect(state.paragraphSpacing.value).toBe(0)
+    expect(state.generateCSS()).not.toContain('margin-block:')
+  })
+
+  it('generates logical paragraph margins for positive spacing', () => {
+    const state = useReaderState()
+    state.setParagraphSpacing(1.6)
+
+    const css = state.generateCSS()
+
+    expect(css).toContain('margin-block: 0 1.6em !important;')
+    expect(css).toContain(':is(hgroup, header) p')
+    expect(css).toContain('margin-block: unset !important;')
   })
 
   describe('font style', () => {

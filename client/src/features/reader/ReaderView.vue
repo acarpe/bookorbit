@@ -82,6 +82,7 @@ const {
   applyToRenderer,
   setFontSize,
   setLineHeight,
+  setParagraphSpacing,
   setFontFamily,
   setFontWeight,
   setFontStyle,
@@ -342,6 +343,7 @@ onMounted(async () => {
 const epubSetters: Record<string, (v: unknown) => void> = {
   fontSize: (v) => setFontSize(v as number),
   lineHeight: (v) => setLineHeight(v as number),
+  paragraphSpacing: (v) => setParagraphSpacing(v as number),
   fontFamily: (v) => setFontFamily(v as string | null),
   fontWeight: (v) => setFontWeight(v as number),
   fontStyle: (v) => setFontStyle(v as EpubReaderSettings['fontStyle']),

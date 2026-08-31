@@ -90,6 +90,17 @@ describe('useReaderSettings - load() with valid localStorage epub delta', () => 
     expect(s.bookDelta.value).toEqual({ fontWeight: 350, fontStyle: 'italic' })
   })
 
+  it('preserves publisher paragraph spacing as an explicit per-book override', async () => {
+    localStorage.setItem('reader:default:epub', JSON.stringify({ ...READER_GROUP_DEFAULTS.epub, paragraphSpacing: 1.2 }))
+    localStorage.setItem(`reader:book:${BOOK_FILE_ID}`, JSON.stringify({ paragraphSpacing: 0 }))
+
+    const s = useReaderSettings(BOOK_FILE_ID, 'epub')
+    await s.load()
+
+    expect(s.bookDelta.value).toEqual({ paragraphSpacing: 0 })
+    expect(s.effective.value).toMatchObject({ paragraphSpacing: 0 })
+  })
+
   it('filters invalid EPUB spread settings from localStorage deltas', async () => {
     const raw = { fontSize: 20, fixedLayoutSpread: 'two-page' }
     localStorage.setItem(`reader:book:${BOOK_FILE_ID}`, JSON.stringify(raw))
@@ -114,6 +125,16 @@ describe('useReaderSettings - load() with invalid localStorage value', () => {
 
   it('removes an EPUB font size below the supported minimum', async () => {
     localStorage.setItem(`reader:book:${BOOK_FILE_ID}`, JSON.stringify({ fontSize: 5 }))
+
+    const s = useReaderSettings(BOOK_FILE_ID, 'epub')
+    await s.load()
+
+    expect(s.bookDelta.value).toBeNull()
+    expect(localStorage.getItem(`reader:book:${BOOK_FILE_ID}`)).toBeNull()
+  })
+
+  it('removes paragraph spacing outside the supported range', async () => {
+    localStorage.setItem(`reader:book:${BOOK_FILE_ID}`, JSON.stringify({ paragraphSpacing: 2.1 }))
 
     const s = useReaderSettings(BOOK_FILE_ID, 'epub')
     await s.load()
@@ -445,6 +466,18 @@ describe('useReaderDefaultSettings - load() with localStorage', () => {
 
     expect(s.effective.value).toMatchObject({ fontSize: 20, fixedLayoutSpread: 'auto' })
     expect(JSON.parse(localStorage.getItem('reader:default:epub') ?? '{}')).toMatchObject({ fixedLayoutSpread: 'auto' })
+  })
+
+  it('fills publisher paragraph spacing for older epub defaults in localStorage', async () => {
+    const stored = { ...READER_GROUP_DEFAULTS.epub, fontSize: 20 }
+    delete (stored as Record<string, unknown>).paragraphSpacing
+    localStorage.setItem('reader:default:epub', JSON.stringify(stored))
+
+    const s = useReaderDefaultSettings('epub')
+    await s.load()
+
+    expect(s.effective.value).toMatchObject({ fontSize: 20, paragraphSpacing: 0 })
+    expect(JSON.parse(localStorage.getItem('reader:default:epub') ?? '{}')).toMatchObject({ paragraphSpacing: 0 })
   })
 
   it('merges cbx localStorage settings with CBX_READER_DEFAULTS', async () => {

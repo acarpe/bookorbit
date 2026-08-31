@@ -1,5 +1,13 @@
 import { computed, ref } from 'vue'
-import { EPUB_FONT_SIZE_MAX, EPUB_FONT_SIZE_MIN, EPUB_READER_DEFAULTS, type EpubReaderSettings, type FontStyle } from '@bookorbit/types'
+import {
+  EPUB_FONT_SIZE_MAX,
+  EPUB_FONT_SIZE_MIN,
+  EPUB_PARAGRAPH_SPACING_MAX,
+  EPUB_PARAGRAPH_SPACING_MIN,
+  EPUB_READER_DEFAULTS,
+  type EpubReaderSettings,
+  type FontStyle,
+} from '@bookorbit/types'
 import { themes } from '../constants/themes'
 import type { Theme, ThemeMode } from '../constants/themes'
 import type { FoliateRenderer } from './useFoliate'
@@ -7,6 +15,7 @@ import type { FoliateRenderer } from './useFoliate'
 export interface ReaderState {
   fontSize: number
   lineHeight: number
+  paragraphSpacing: number
   fontFamily: string | null
   fontWeight: number
   fontStyle: FontStyle
@@ -29,6 +38,7 @@ export interface ApplyReaderStateOptions {
 const defaults: ReaderState = {
   fontSize: 16,
   lineHeight: 1.5,
+  paragraphSpacing: EPUB_READER_DEFAULTS.paragraphSpacing,
   fontFamily: null,
   fontWeight: EPUB_READER_DEFAULTS.fontWeight,
   fontStyle: EPUB_READER_DEFAULTS.fontStyle,
@@ -47,6 +57,7 @@ const defaults: ReaderState = {
 export function useReaderState() {
   const fontSize = ref(defaults.fontSize)
   const lineHeight = ref(defaults.lineHeight)
+  const paragraphSpacing = ref(defaults.paragraphSpacing)
   const fontFamily = ref<string | null>(defaults.fontFamily)
   const fontWeight = ref(defaults.fontWeight)
   const fontStyle = ref<FontStyle>(defaults.fontStyle)
@@ -66,6 +77,7 @@ export function useReaderState() {
   const state = computed<ReaderState>(() => ({
     fontSize: fontSize.value,
     lineHeight: lineHeight.value,
+    paragraphSpacing: paragraphSpacing.value,
     fontFamily: fontFamily.value,
     fontWeight: fontWeight.value,
     fontStyle: fontStyle.value,
@@ -89,7 +101,16 @@ export function useReaderState() {
   })
 
   function generateCSS(): string {
-    const { lineHeight: lh, justify: j, hyphenate: h, fontSize: fs, fontFamily: ff, fontWeight: fw, fontStyle: fst } = state.value
+    const {
+      lineHeight: lh,
+      paragraphSpacing: ps,
+      justify: j,
+      hyphenate: h,
+      fontSize: fs,
+      fontFamily: ff,
+      fontWeight: fw,
+      fontStyle: fst,
+    } = state.value
     const mode = activeMode.value
     const theme = currentTheme.value
     const lightMode = theme.light
@@ -126,6 +147,16 @@ export function useReaderState() {
       : ''
 
     const fontFaceBlock = fontFaceCSS.value
+    const paragraphSpacingRule =
+      ps === EPUB_PARAGRAPH_SPACING_MIN
+        ? ''
+        : `
+      p {
+          margin-block: 0 ${ps}em !important;
+      }
+      :is(hgroup, header) p {
+          margin-block: unset !important;
+      }`
 
     return `
       ${fontFaceBlock}
@@ -208,6 +239,7 @@ export function useReaderState() {
           text-align: ${j ? 'justify' : 'start'} !important;
           hyphens: ${h ? 'auto' : 'none'};
       }
+      ${paragraphSpacingRule}
       ::selection {
           background-color: rgba(128, 128, 128, 0.3);
       }
@@ -241,6 +273,9 @@ export function useReaderState() {
   }
   function setLineHeight(v: number) {
     lineHeight.value = Math.max(0.8, Math.min(3, Math.round(v * 10) / 10))
+  }
+  function setParagraphSpacing(v: number) {
+    paragraphSpacing.value = Math.max(EPUB_PARAGRAPH_SPACING_MIN, Math.min(EPUB_PARAGRAPH_SPACING_MAX, Math.round(v * 10) / 10))
   }
   function setFontFamily(v: string | null) {
     fontFamily.value = v
@@ -290,6 +325,7 @@ export function useReaderState() {
     state,
     fontSize,
     lineHeight,
+    paragraphSpacing,
     fontFamily,
     fontWeight,
     fontStyle,
@@ -310,6 +346,7 @@ export function useReaderState() {
     applyToRenderer,
     setFontSize,
     setLineHeight,
+    setParagraphSpacing,
     setFontFamily,
     setFontWeight,
     setFontStyle,

@@ -11,6 +11,7 @@ function makeState(overrides: Partial<ReaderState> = {}): ReaderState {
   return {
     fontSize: 16,
     lineHeight: 1.5,
+    paragraphSpacing: 0,
     fontFamily: null,
     fontWeight: 400,
     fontStyle: 'normal',
@@ -118,6 +119,7 @@ describe('ReaderSettingsPanel', () => {
     expect(wrapper.text()).toContain('Page color')
     expect(wrapper.text()).toContain('Font')
     expect(wrapper.text()).toContain('Line spacing')
+    expect(wrapper.text()).toContain('Paragraph spacing')
     expect(wrapper.text()).toContain('Page width')
     expect(wrapper.text()).toContain('Reading flow')
     expect(wrapper.text()).toContain('Advanced layout')
@@ -178,6 +180,18 @@ describe('ReaderSettingsPanel', () => {
     await slider.setValue('1.8')
 
     expect(wrapper.emitted('update')?.[0]).toEqual([{ lineHeight: 1.8 }])
+  })
+
+  it('labels and emits paragraph spacing from the slider', async () => {
+    const publisherDefault = mountPanel()
+    expect(rangeByLabel(publisherDefault, 'Paragraph spacing')!.attributes('aria-valuetext')).toBe('Default')
+
+    const wrapper = mountPanel({ state: makeState({ paragraphSpacing: 1.4 }) })
+    const slider = rangeByLabel(wrapper, 'Paragraph spacing')!
+    expect(slider.attributes('aria-valuetext')).toBe('1.4 em')
+
+    await slider.setValue('1.7')
+    expect(wrapper.emitted('update')?.[0]).toEqual([{ paragraphSpacing: 1.7 }])
   })
 
   it('describes page width in words rather than pixels', async () => {

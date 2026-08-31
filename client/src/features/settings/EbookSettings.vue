@@ -1,13 +1,19 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref, useId, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import type { EpubReaderSettings, FontNamedInstance } from '@bookorbit/types'
-import { isCustomFontCssFamily } from '@bookorbit/types'
+import {
+  EPUB_PARAGRAPH_SPACING_MAX,
+  EPUB_PARAGRAPH_SPACING_MIN,
+  isCustomFontCssFamily,
+  type EpubReaderSettings,
+  type FontNamedInstance,
+} from '@bookorbit/types'
 import { useReaderDefaultSettings } from '@/features/reader/shared/composables/useReaderSettings'
 import { useCustomFonts } from '@/features/reader/epub/composables/useCustomFonts'
 import { themes } from '@/features/reader/epub/constants/themes'
 import { BUILTIN_READER_FONT_OPTIONS } from '@/features/reader/shared/constants/font-options'
 import { formatFontFamilyLabel } from '@/features/reader/shared/lib/font-display'
+import { formatNumber } from '@/i18n/formatters'
 import {
   FONT_WEIGHT_LABEL_KEYS,
   builtInVariants,
@@ -32,6 +38,7 @@ const props = withDefaults(
 
 const { t } = useI18n()
 const fontStyleSelectId = `ebook-font-style-${useId()}`
+const paragraphSpacingInputId = `ebook-paragraph-spacing-${useId()}`
 
 const { effective, load, update, reset } = useReaderDefaultSettings<EpubReaderSettings>('epub')
 
@@ -78,10 +85,21 @@ function fontStyleLabel(variant: FontNamedInstance): string {
 }
 
 const selectedFontStyle = computed(() => variantKey({ weight: effective.value.fontWeight, style: effective.value.fontStyle }))
+const paragraphSpacingLabel = computed(() =>
+  effective.value.paragraphSpacing === EPUB_PARAGRAPH_SPACING_MIN
+    ? t('settings.reader.ebook.paragraphSpacingDefault')
+    : t('settings.reader.ebook.paragraphSpacingValue', {
+        value: formatNumber(effective.value.paragraphSpacing, { minimumFractionDigits: 1, maximumFractionDigits: 1 }),
+      }),
+)
 
 function selectFontStyle(event: Event) {
   const chosen = fontStyleOptions.value.find((option) => option.value === (event.target as HTMLSelectElement).value)
   if (chosen) update({ fontWeight: chosen.variant.weight, fontStyle: chosen.variant.style })
+}
+
+function setParagraphSpacing(event: Event) {
+  update({ paragraphSpacing: Number((event.target as HTMLInputElement).value) })
 }
 
 /**
@@ -498,6 +516,32 @@ function setFixedLayoutSpreadNone() {
                 lineHeight: Number(($event.target as HTMLInputElement).value),
               })
             "
+          />
+        </div>
+
+        <!-- Paragraph spacing -->
+        <div class="px-4 py-3.5 md:px-5 md:py-4 bg-card">
+          <div class="mb-3">
+            <div class="flex items-center justify-between gap-3">
+              <label :for="paragraphSpacingInputId" class="settings-label">
+                {{ t('settings.reader.ebook.paragraphSpacing') }}
+              </label>
+              <span class="settings-value">{{ paragraphSpacingLabel }}</span>
+            </div>
+            <p class="settings-hint">
+              {{ t('settings.reader.ebook.paragraphSpacingHint') }}
+            </p>
+          </div>
+          <input
+            :id="paragraphSpacingInputId"
+            type="range"
+            :min="EPUB_PARAGRAPH_SPACING_MIN"
+            :max="EPUB_PARAGRAPH_SPACING_MAX"
+            step="0.1"
+            class="w-full accent-primary cursor-pointer"
+            :value="effective.paragraphSpacing"
+            :aria-valuetext="paragraphSpacingLabel"
+            @input="setParagraphSpacing"
           />
         </div>
 

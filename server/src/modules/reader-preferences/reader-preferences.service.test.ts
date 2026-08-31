@@ -223,6 +223,7 @@ describe('ReaderPreferencesService', () => {
       fontStyle: 'normal' as const,
       fontSize: 16,
       lineHeight: 1.5,
+      paragraphSpacing: 0,
       maxColumnCount: 2,
       gap: 0.05,
       maxInlineSize: 720,
@@ -255,6 +256,12 @@ describe('ReaderPreferencesService', () => {
       await expect(service.upsertDefault(1, 'epub', missingFontStyle)).rejects.toThrow(BadRequestException);
     });
 
+    it('rejects a full epub default that omits paragraph spacing', async () => {
+      const missingParagraphSpacing = Object.fromEntries(Object.entries(validEpubDefaults).filter(([key]) => key !== 'paragraphSpacing'));
+
+      await expect(service.upsertDefault(1, 'epub', missingParagraphSpacing)).rejects.toThrow(BadRequestException);
+    });
+
     it('accepts a full epub default carrying a font weight and style', async () => {
       await service.upsertDefault(1, 'epub', { ...validEpubDefaults, fontWeight: 700, fontStyle: 'italic' });
 
@@ -282,6 +289,22 @@ describe('ReaderPreferencesService', () => {
       await service.upsertPreference(user, 26, { fontWeight: 300, fontStyle: 'italic' });
 
       expect(mockRepo.upsertPreference).toHaveBeenCalledWith(7, 26, { fontWeight: 300, fontStyle: 'italic' });
+    });
+
+    it.each([[0], [0.8], [2]])('accepts paragraph spacing %s em', async (paragraphSpacing) => {
+      const user = makeUser();
+      mockBookService.verifyFileAccess.mockResolvedValueOnce({ format: 'epub' });
+
+      await service.upsertPreference(user, 27, { paragraphSpacing });
+
+      expect(mockRepo.upsertPreference).toHaveBeenCalledWith(7, 27, { paragraphSpacing });
+    });
+
+    it.each([[-0.1], [2.1]])('rejects paragraph spacing %s em', async (paragraphSpacing) => {
+      const user = makeUser();
+      mockBookService.verifyFileAccess.mockResolvedValueOnce({ format: 'epub' });
+
+      await expect(service.upsertPreference(user, 27, { paragraphSpacing })).rejects.toThrow(BadRequestException);
     });
 
     it('accepts partial epub per-book settings with footerDisplayMode', async () => {

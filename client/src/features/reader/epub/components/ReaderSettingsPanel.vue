@@ -1,7 +1,15 @@
 <script setup lang="ts">
 import { computed, onUnmounted, ref, useId, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { EPUB_FONT_SIZE_MAX, EPUB_FONT_SIZE_MIN, isCustomFontCssFamily, type FontNamedInstance, type FontVariant } from '@bookorbit/types'
+import {
+  EPUB_FONT_SIZE_MAX,
+  EPUB_FONT_SIZE_MIN,
+  EPUB_PARAGRAPH_SPACING_MAX,
+  EPUB_PARAGRAPH_SPACING_MIN,
+  isCustomFontCssFamily,
+  type FontNamedInstance,
+  type FontVariant,
+} from '@bookorbit/types'
 import {
   BookOpen,
   ChevronDown,
@@ -20,6 +28,7 @@ import type { FontFamily, useCustomFonts } from '../composables/useCustomFonts'
 import { themes } from '../constants/themes'
 import { BUILTIN_READER_FONT_OPTIONS, type ReaderBuiltInFontOption } from '@/features/reader/shared/constants/font-options'
 import { formatFontFamilyLabel } from '@/features/reader/shared/lib/font-display'
+import { formatNumber } from '@/i18n/formatters'
 import { FONT_WEIGHT_LABEL_KEYS, builtInVariants, closestVariant, familyVariants, isSameVariant } from '@/features/reader/shared/lib/font-variants'
 import ReaderRangeField from '@/features/reader/shared/components/ReaderRangeField.vue'
 import ReaderSegmentedControl from '@/features/reader/shared/components/ReaderSegmentedControl.vue'
@@ -82,6 +91,14 @@ const pageWidthLabel = computed(() => {
   return t('reader.settings.pageWidthFull')
 })
 
+const paragraphSpacingLabel = computed(() =>
+  props.state.paragraphSpacing === EPUB_PARAGRAPH_SPACING_MIN
+    ? t('reader.settings.paragraphSpacingDefault')
+    : t('reader.settings.paragraphSpacingValue', {
+        value: formatNumber(props.state.paragraphSpacing, { minimumFractionDigits: 1, maximumFractionDigits: 1 }),
+      }),
+)
+
 const columnGapPercent = computed(() => Math.round(props.state.gap * 100))
 
 function setMode(value: string) {
@@ -106,6 +123,10 @@ function selectBuiltInFont(font: ReaderBuiltInFontOption) {
 
 function setLineHeight(value: number) {
   emit('update', { lineHeight: Math.round(value * 10) / 10 })
+}
+
+function setParagraphSpacing(value: number) {
+  emit('update', { paragraphSpacing: Math.round(value * 10) / 10 })
 }
 
 function setPageWidth(value: number) {
@@ -421,6 +442,20 @@ const cardBaseClass =
             :min-icon="Rows4"
             :max-icon="Rows2"
             @update:model-value="setLineHeight"
+          />
+        </div>
+
+        <div class="border-b border-border px-4 py-3.5">
+          <ReaderRangeField
+            :model-value="state.paragraphSpacing"
+            :min="EPUB_PARAGRAPH_SPACING_MIN"
+            :max="EPUB_PARAGRAPH_SPACING_MAX"
+            :step="0.1"
+            :label="t('reader.settings.paragraphSpacing')"
+            :display-value="paragraphSpacingLabel"
+            :min-icon="Rows4"
+            :max-icon="Rows2"
+            @update:model-value="setParagraphSpacing"
           />
         </div>
 

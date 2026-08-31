@@ -14,6 +14,7 @@ const readerSettingsMock = vi.hoisted(() => ({
       fontStyle: 'normal',
       fontSize: 16,
       lineHeight: 1.5,
+      paragraphSpacing: 0,
       maxColumnCount: 2,
       gap: 0.05,
       maxInlineSize: 720,
@@ -80,6 +81,18 @@ describe('EbookSettings', () => {
 
     const select = wrapper.get('select[id^="ebook-font-style-"]')
     expect(wrapper.get(`label[for="${select.attributes('id')}"]`).text()).toBe('Font style')
+  })
+
+  it('shows and updates the paragraph spacing default', async () => {
+    const wrapper = mount(EbookSettings, { props: { embedded: true } })
+    await flushPromises()
+
+    const slider = wrapper.get('input[id^="ebook-paragraph-spacing-"]')
+    expect(wrapper.get(`label[for="${slider.attributes('id')}"]`).text()).toBe('Paragraph spacing')
+    expect(slider.attributes('aria-valuetext')).toBe('Book default')
+
+    await slider.setValue('1.2')
+    expect(readerSettingsMock.update).toHaveBeenCalledWith({ paragraphSpacing: 1.2 })
   })
 
   it('waits for both font catalogs before resetting an unavailable saved family', async () => {
