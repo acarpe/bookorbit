@@ -6,6 +6,7 @@ import { hash } from 'bcryptjs';
 import { randomBytes } from 'crypto';
 import { Permission } from '@bookorbit/types';
 
+import { USER_DELETING, UserEventsService, type UserDeletingEvent } from './user-events.service';
 import { UserService } from './user.service';
 
 const mockHash = hash as MockedFunction<typeof hash>;
@@ -60,12 +61,14 @@ describe('UserService', () => {
   };
 
   let service: UserService;
+  let events: UserEventsService;
 
   beforeEach(() => {
     vi.resetAllMocks();
     vi.spyOn(Logger.prototype, 'log').mockImplementation(() => undefined);
     vi.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
-    service = new UserService(userRepo as any, config as any, contentFilterRepo as any, appSettingsService as any, userStatistics as any);
+    events = new UserEventsService();
+    service = new UserService(userRepo as any, config as any, contentFilterRepo as any, appSettingsService as any, userStatistics as any, events);
 
     mockHash.mockResolvedValue('hashed-secret');
     mockRandomBytes.mockReturnValue(Buffer.from('abcd', 'hex'));
@@ -465,7 +468,53 @@ describe('UserService', () => {
 
   it('deleteUser deletes non-superuser targets', async () => {
     await expect(service.deleteUser(2, reqUser({ isSuperuser: false }))).resolves.toBeUndefined();
-    expect(userRepo.deleteManagedUser).toHaveBeenCalledWith(1, 2);
+    expect(userRepo.deleteManagedUser).toHaveBeenCalledWith(1, 2, expect.any(Function));
+  });
+
+  /**
+   * The cascade removes the only rows saying a torrent or a staged file belonged to this account,
+   * so anything holding work on their behalf has to be able to stop it while it is still findable.
+   */
+  it("deleteUser lets listeners stop the account's work before the row goes", async () => {
+    const order: string[] = [];
+    userRepo.deleteManagedUser.mockImplementation(async (_requestingUserId: number, _targetUserId: number, beforeDelete: () => Promise<void>) => {
+      await beforeDelete();
+      order.push('delete');
+      return 'updated';
+    });
+    events.on(USER_DELETING, (event: UserDeletingEvent) => {
+      event.waitFor(Promise.resolve().then(() => void order.push('detach')));
+    });
+
+    await service.deleteUser(2, reqUser({ isSuperuser: false }));
+
+    expect(order).toEqual(['detach', 'delete']);
+  });
+
+  /** An account the operator asked to remove has to go, whatever a listener makes of it. */
+  it('deleteUser deletes anyway when stopping that work fails', async () => {
+    userRepo.deleteManagedUser.mockImplementation(async (_requestingUserId: number, _targetUserId: number, beforeDelete: () => Promise<void>) => {
+      await beforeDelete();
+      return 'updated';
+    });
+    events.on(USER_DELETING, (event: UserDeletingEvent) => event.waitFor(Promise.reject(new Error('the client is unreachable'))));
+
+    await expect(service.deleteUser(2, reqUser({ isSuperuser: false }))).resolves.toBeUndefined();
+    expect(userRepo.deleteManagedUser).toHaveBeenCalledWith(1, 2, expect.any(Function));
+  });
+
+  /** A listener throwing before it registers anything reaches the emit call itself. */
+  it('deleteUser deletes anyway when a listener throws outright', async () => {
+    userRepo.deleteManagedUser.mockImplementation(async (_requestingUserId: number, _targetUserId: number, beforeDelete: () => Promise<void>) => {
+      await beforeDelete();
+      return 'updated';
+    });
+    events.on(USER_DELETING, () => {
+      throw new Error('the listener is broken');
+    });
+
+    await expect(service.deleteUser(2, reqUser({ isSuperuser: false }))).resolves.toBeUndefined();
+    expect(userRepo.deleteManagedUser).toHaveBeenCalledWith(1, 2, expect.any(Function));
   });
 
   it('setPermissions blocks modifying own permissions', async () => {
@@ -726,7 +775,14 @@ describe('UserService.updateSeriesCollapsePreferences', () => {
     vi.resetAllMocks();
     config.get.mockReturnValue('http://localhost:5173');
     appSettingsService.getDefaultLibraryAccessLibraryIds.mockResolvedValue([]);
-    service = new UserService(userRepo as any, config as any, contentFilterRepo as any, appSettingsService as any, userStatistics as any);
+    service = new UserService(
+      userRepo as any,
+      config as any,
+      contentFilterRepo as any,
+      appSettingsService as any,
+      userStatistics as any,
+      new UserEventsService(),
+    );
   });
 
   it('throws NotFoundException when user does not exist', async () => {
