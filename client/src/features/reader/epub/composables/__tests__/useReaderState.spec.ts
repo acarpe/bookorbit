@@ -8,6 +8,9 @@ describe('useReaderState', () => {
     state.setFontSize(100)
     state.setLineHeight(0.71)
     state.setParagraphSpacing(3)
+    state.setLetterSpacing(0.3)
+    state.setWordSpacing(0.8)
+    state.setTextIndent(8)
     state.setMaxColumnCount(0)
     state.setGap(0.9)
     state.setMaxInlineSize(200)
@@ -16,6 +19,9 @@ describe('useReaderState', () => {
     expect(state.fontSize.value).toBe(32)
     expect(state.lineHeight.value).toBe(0.8)
     expect(state.paragraphSpacing.value).toBe(2)
+    expect(state.letterSpacing.value).toBe(0.2)
+    expect(state.wordSpacing.value).toBe(0.5)
+    expect(state.textIndent.value).toBe(4)
     expect(state.maxColumnCount.value).toBe(1)
     expect(state.gap.value).toBe(0.5)
     expect(state.maxInlineSize.value).toBe(400)
@@ -23,8 +29,14 @@ describe('useReaderState', () => {
 
     state.setFontSize(1)
     state.setParagraphSpacing(-1)
+    state.setLetterSpacing(-1)
+    state.setWordSpacing(-1)
+    state.setTextIndent(-1)
     expect(state.fontSize.value).toBe(6)
     expect(state.paragraphSpacing.value).toBe(0)
+    expect(state.letterSpacing.value).toBe(0)
+    expect(state.wordSpacing.value).toBe(0)
+    expect(state.textIndent.value).toBe(0)
   })
 
   it('selects default theme when unknown theme name is set', () => {
@@ -152,6 +164,51 @@ describe('useReaderState', () => {
     expect(css).toContain('margin-block: 0 1.6em !important;')
     expect(css).toContain(':is(hgroup, header) p')
     expect(css).toContain('margin-block: unset !important;')
+  })
+
+  it('preserves publisher typography when nullable controls are unset', () => {
+    const state = useReaderState()
+
+    expect(state.letterSpacing.value).toBeNull()
+    expect(state.wordSpacing.value).toBeNull()
+    expect(state.textIndent.value).toBeNull()
+    expect(state.generateCSS()).not.toContain('letter-spacing:')
+    expect(state.generateCSS()).not.toContain('word-spacing:')
+    expect(state.generateCSS()).not.toContain('text-indent:')
+  })
+
+  it('emits explicit zero typography overrides and can return to publisher styles', () => {
+    const state = useReaderState()
+    state.setLetterSpacing(0)
+    state.setWordSpacing(0)
+    state.setTextIndent(0)
+
+    const css = state.generateCSS()
+    expect(css).toContain('letter-spacing: 0em !important;')
+    expect(css).toContain('word-spacing: 0em !important;')
+    expect(css).toContain('text-indent: 0em !important;')
+
+    state.setLetterSpacing(null)
+    state.setWordSpacing(null)
+    state.setTextIndent(null)
+    expect(state.state.value).toMatchObject({
+      letterSpacing: null,
+      wordSpacing: null,
+      textIndent: null,
+    })
+  })
+
+  it('generates em-based typography CSS for positive values', () => {
+    const state = useReaderState()
+    state.setLetterSpacing(0.12)
+    state.setWordSpacing(0.35)
+    state.setTextIndent(1.75)
+
+    const css = state.generateCSS()
+    expect(css).toContain('letter-spacing: 0.12em !important;')
+    expect(css).toContain('word-spacing: 0.35em !important;')
+    expect(css).toContain('text-indent: 1.75em !important;')
+    expect(css).toContain(':is(hgroup, header, figure, figcaption, blockquote, li) > p')
   })
 
   describe('font style', () => {

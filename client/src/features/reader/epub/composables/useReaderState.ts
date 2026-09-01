@@ -2,9 +2,15 @@ import { computed, ref } from 'vue'
 import {
   EPUB_FONT_SIZE_MAX,
   EPUB_FONT_SIZE_MIN,
+  EPUB_LETTER_SPACING_MAX,
+  EPUB_LETTER_SPACING_MIN,
   EPUB_PARAGRAPH_SPACING_MAX,
   EPUB_PARAGRAPH_SPACING_MIN,
   EPUB_READER_DEFAULTS,
+  EPUB_TEXT_INDENT_MAX,
+  EPUB_TEXT_INDENT_MIN,
+  EPUB_WORD_SPACING_MAX,
+  EPUB_WORD_SPACING_MIN,
   type EpubReaderSettings,
   type FontStyle,
 } from '@bookorbit/types'
@@ -16,6 +22,9 @@ export interface ReaderState {
   fontSize: number
   lineHeight: number
   paragraphSpacing: number
+  letterSpacing: number | null
+  wordSpacing: number | null
+  textIndent: number | null
   fontFamily: string | null
   fontWeight: number
   fontStyle: FontStyle
@@ -39,6 +48,9 @@ const defaults: ReaderState = {
   fontSize: 16,
   lineHeight: 1.5,
   paragraphSpacing: EPUB_READER_DEFAULTS.paragraphSpacing,
+  letterSpacing: EPUB_READER_DEFAULTS.letterSpacing,
+  wordSpacing: EPUB_READER_DEFAULTS.wordSpacing,
+  textIndent: EPUB_READER_DEFAULTS.textIndent,
   fontFamily: null,
   fontWeight: EPUB_READER_DEFAULTS.fontWeight,
   fontStyle: EPUB_READER_DEFAULTS.fontStyle,
@@ -58,6 +70,9 @@ export function useReaderState() {
   const fontSize = ref(defaults.fontSize)
   const lineHeight = ref(defaults.lineHeight)
   const paragraphSpacing = ref(defaults.paragraphSpacing)
+  const letterSpacing = ref<number | null>(defaults.letterSpacing)
+  const wordSpacing = ref<number | null>(defaults.wordSpacing)
+  const textIndent = ref<number | null>(defaults.textIndent)
   const fontFamily = ref<string | null>(defaults.fontFamily)
   const fontWeight = ref(defaults.fontWeight)
   const fontStyle = ref<FontStyle>(defaults.fontStyle)
@@ -78,6 +93,9 @@ export function useReaderState() {
     fontSize: fontSize.value,
     lineHeight: lineHeight.value,
     paragraphSpacing: paragraphSpacing.value,
+    letterSpacing: letterSpacing.value,
+    wordSpacing: wordSpacing.value,
+    textIndent: textIndent.value,
     fontFamily: fontFamily.value,
     fontWeight: fontWeight.value,
     fontStyle: fontStyle.value,
@@ -104,6 +122,9 @@ export function useReaderState() {
     const {
       lineHeight: lh,
       paragraphSpacing: ps,
+      letterSpacing: ls,
+      wordSpacing: ws,
+      textIndent: ti,
       justify: j,
       hyphenate: h,
       fontSize: fs,
@@ -156,6 +177,26 @@ export function useReaderState() {
       }
       :is(hgroup, header) p {
           margin-block: unset !important;
+      }`
+    const inlineSpacingDeclarations = [
+      ls === null ? '' : `letter-spacing: ${ls}em !important;`,
+      ws === null ? '' : `word-spacing: ${ws}em !important;`,
+    ].filter(Boolean)
+    const inlineSpacingRule = inlineSpacingDeclarations.length
+      ? `
+      p, li, blockquote, dd {
+          ${inlineSpacingDeclarations.join('\n          ')}
+      }`
+      : ''
+    const textIndentRule =
+      ti === null
+        ? ''
+        : `
+      p {
+          text-indent: ${ti}em !important;
+      }
+      :is(hgroup, header, figure, figcaption, blockquote, li) > p {
+          text-indent: unset !important;
       }`
 
     return `
@@ -240,6 +281,8 @@ export function useReaderState() {
           hyphens: ${h ? 'auto' : 'none'};
       }
       ${paragraphSpacingRule}
+      ${inlineSpacingRule}
+      ${textIndentRule}
       ::selection {
           background-color: rgba(128, 128, 128, 0.3);
       }
@@ -276,6 +319,15 @@ export function useReaderState() {
   }
   function setParagraphSpacing(v: number) {
     paragraphSpacing.value = Math.max(EPUB_PARAGRAPH_SPACING_MIN, Math.min(EPUB_PARAGRAPH_SPACING_MAX, Math.round(v * 10) / 10))
+  }
+  function setLetterSpacing(v: number | null) {
+    letterSpacing.value = clampNullable(v, EPUB_LETTER_SPACING_MIN, EPUB_LETTER_SPACING_MAX, 100)
+  }
+  function setWordSpacing(v: number | null) {
+    wordSpacing.value = clampNullable(v, EPUB_WORD_SPACING_MIN, EPUB_WORD_SPACING_MAX, 20)
+  }
+  function setTextIndent(v: number | null) {
+    textIndent.value = clampNullable(v, EPUB_TEXT_INDENT_MIN, EPUB_TEXT_INDENT_MAX, 4)
   }
   function setFontFamily(v: string | null) {
     fontFamily.value = v
@@ -326,6 +378,9 @@ export function useReaderState() {
     fontSize,
     lineHeight,
     paragraphSpacing,
+    letterSpacing,
+    wordSpacing,
+    textIndent,
     fontFamily,
     fontWeight,
     fontStyle,
@@ -347,6 +402,9 @@ export function useReaderState() {
     setFontSize,
     setLineHeight,
     setParagraphSpacing,
+    setLetterSpacing,
+    setWordSpacing,
+    setTextIndent,
     setFontFamily,
     setFontWeight,
     setFontStyle,
@@ -362,4 +420,10 @@ export function useReaderState() {
     setFixedLayoutSpread,
     setFontFaceCSS,
   }
+}
+
+function clampNullable(value: number | null, min: number, max: number, precision: number): number | null {
+  if (value === null) return null
+  const finiteValue = Number.isFinite(value) ? value : min
+  return Math.max(min, Math.min(max, Math.round(finiteValue * precision) / precision))
 }
