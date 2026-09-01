@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { computed } from 'vue'
 import { flushPromises, mount, shallowMount } from '@vue/test-utils'
 import UsersPage from '../UsersPage.vue'
+import UserRosterTable from '../components/UserRosterTable.vue'
 
 const { apiMock, authState, permState } = vi.hoisted(() => ({
   apiMock: vi.fn<(input: string, init?: RequestInit) => Promise<unknown>>(),
@@ -10,6 +11,13 @@ const { apiMock, authState, permState } = vi.hoisted(() => ({
 }))
 
 vi.mock('@/lib/api', () => ({ api: apiMock }))
+
+vi.mock('@/components/ui/sheet', () => ({
+  Sheet: { template: '<div><slot /></div>' },
+  SheetContent: { template: '<div><slot /></div>' },
+  SheetTitle: { template: '<h2><slot /></h2>' },
+  SheetDescription: { template: '<p><slot /></p>' },
+}))
 
 vi.mock('@/features/auth/composables/usePermissions', () => ({
   usePermissions: () => ({
@@ -100,10 +108,10 @@ function stateButton(wrapper: ReturnType<typeof mount>, label: string) {
 }
 
 async function openUserAccess(wrapper: ReturnType<typeof mount>) {
-  const edit = wrapper.findAll('button').find((button) => button.text().trim() === 'Edit')
-  await edit?.trigger('click')
+  const roster = wrapper.findComponent(UserRosterTable)
+  roster.vm.$emit('edit', roster.props('users')[0])
   await flushPromises()
-  const access = wrapper.findAll('button').find((button) => button.text().trim() === 'access')
+  const access = wrapper.findAll('button').find((button) => button.text().trim().startsWith('Permissions'))
   await access?.trigger('click')
   await flushPromises()
 }
