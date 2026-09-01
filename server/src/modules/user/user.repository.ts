@@ -5,7 +5,7 @@ import type { SQL } from 'drizzle-orm';
 import { NodePgDatabase } from 'drizzle-orm/node-postgres';
 import { hash } from 'bcryptjs';
 
-import { Permission } from '@bookorbit/types';
+import { Permission, withRequiredPermissions } from '@bookorbit/types';
 import type { UserAttentionReason, UserListSortDirection, UserListSortField, UserListState, UserListSummary } from '@bookorbit/types';
 import { RequestUser } from '../../common/types/request-user';
 import { DB } from '../../db';
@@ -319,6 +319,7 @@ export class UserRepository {
           avatarSource: schema.users.avatarSource,
           avatarVersion: schema.users.avatarVersion,
           provisioningMethod: schema.users.provisioningMethod,
+          seeOwnRequestedBooks: schema.users.seeOwnRequestedBooks,
           permissionName: schema.userPermissions.permissionName,
         })
         .from(schema.users)
@@ -365,6 +366,7 @@ export class UserRepository {
         excludeTagIds: tagFilterRows.filter((r) => r.filterType === 'exclude').map((r) => r.tagId),
         includeGenreIds: genreFilterRows.filter((r) => r.filterType === 'include').map((r) => r.genreId),
         excludeGenreIds: genreFilterRows.filter((r) => r.filterType === 'exclude').map((r) => r.genreId),
+        ...(first.seeOwnRequestedBooks ? { exemptRequestsFromUserId: first.id } : {}),
       },
     };
   }
@@ -379,7 +381,7 @@ export class UserRepository {
     return user;
   }
 
-  async update(id: number, data: Partial<Pick<typeof schema.users.$inferInsert, 'name' | 'email' | 'active' | 'settings'>>) {
+  async update(id: number, data: Partial<Pick<typeof schema.users.$inferInsert, 'name' | 'email' | 'active' | 'settings' | 'seeOwnRequestedBooks'>>) {
     const { settings, ...rest } = data;
     const setData: Record<string, unknown> = { ...rest, updatedAt: new Date() };
     if (settings !== undefined) {
@@ -436,7 +438,7 @@ export class UserRepository {
     await this.db.delete(schema.users).where(eq(schema.users.id, id));
   }
 
-  async deleteManagedUser(requestingUserId: number, targetUserId: number): Promise<ManagedUserMutationStatus> {
+  async deleteManagedUser(requestingUserId: number, targetUserId: number, beforeDelete?: () => Promise<void>): Promise<ManagedUserMutationStatus> {
     return this.db.transaction(async (tx) => {
       await this.lockSuperuserLifecycle(tx);
       const { requester, target } = await this.findLifecycleUsers(tx, requestingUserId, targetUserId);
@@ -444,16 +446,25 @@ export class UserRepository {
       if (target.isSuperuser && !this.isActiveSuperuser(requester)) return 'requester_not_superuser';
       if (target.isSuperuser && (await this.countOtherActiveSuperusers(tx, targetUserId)) === 0) return 'last_superuser';
 
+      if (beforeDelete) await beforeDelete();
       await tx.delete(schema.users).where(eq(schema.users.id, targetUserId));
       return 'updated';
     });
   }
 
+  /**
+   * The one chokepoint every assignment path reaches, which is why the dependency rule lives here
+   * rather than in the service: user creation, shared-user creation, the permissions endpoint and
+   * OIDC auto-provisioning all end up on this line, and the OIDC one skips the service's own
+   * normalisation entirely. A permission that is inert without another is granted with it.
+   */
   async setPermissions(userId: number, permissionNames: Permission[]) {
+    const resolved = withRequiredPermissions(permissionNames);
+
     await this.db.transaction(async (tx) => {
       await tx.delete(schema.userPermissions).where(eq(schema.userPermissions.userId, userId));
-      if (permissionNames.length > 0) {
-        await tx.insert(schema.userPermissions).values(permissionNames.map((permissionName) => ({ userId, permissionName })));
+      if (resolved.length > 0) {
+        await tx.insert(schema.userPermissions).values(resolved.map((permissionName) => ({ userId, permissionName })));
       }
     });
   }
